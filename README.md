@@ -1,2 +1,2 @@
 # octopus
-Octopus is a note taking and PDF markup application
+Octopus will be a note taking and PDF markup application
