@@ -1,5 +1,5 @@
-#ifndef OC_BASE_DEFS_H
-#define OC_BASE_DEFS_H
+#ifndef BASE_DEFS_H
+#define BASE_DEFS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -52,5 +52,5 @@ static_assert(sizeof(f64) == 8, "Size of double must be 8");
     ((f) = (l) = NULL) :                  \
     ((f) = (f)->next))                    \
 
-#endif // OC_BASE_DEFS_H
+#endif // BASE_DEFS_H
 

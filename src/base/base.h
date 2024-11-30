@@ -1,7 +1,8 @@
-#ifndef OC_BASE_H
-#define OC_BASE_H
+#ifndef BASE_H
+#define BASE_H
 
 #include "base_defs.h"
+#include "base_math.h"
 
-#endif // OC_BASE_H
+#endif // BASE_H
 
