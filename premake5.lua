@@ -30,6 +30,10 @@ project "Octopus"
         symbols "On"
         defines { "DEBUG" }
 
+    filter { "action:not vs*", "configurations:debug" }
+    	buildoptions { "-fsanitize=address" }
+    	linkoptions { "-fsanitize=address" }
+
     filter "configurations:release"
         optimize "On"
         defines { "NDEBUG" }
