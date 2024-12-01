@@ -5,20 +5,17 @@
 #include "platform/platform.h"
 
 int main(void) {
-    u32 page_size = plat_mem_page_size();
-    printf("page_size: %u\n", page_size);
+    mem_arena* perm_arena = arena_create(MiB(1), KiB(64));
 
-    u8* mem = plat_mem_reserve(page_size * 4);
-    plat_mem_commit(mem, page_size);
+    u8* buffer_a = (u8*)arena_push(perm_arena, KiB(900));
+    u8* buffer_b = (u8*)arena_push(perm_arena, MiB(5));
+    u64 pos = arena_get_pos(perm_arena);
+    u8* buffer_c = (u8*)arena_push(perm_arena, MiB(10));
+    arena_pop_to(perm_arena, pos);
+    u8* buffer_d = (u8*)arena_push(perm_arena, KiB(10));
+    buffer_d = (u8*)arena_push(perm_arena, KiB(1));
 
-    memcpy(mem, "Hello World", sizeof("Hello World"));
-
-    printf("%s\n", mem);
-
-    plat_mem_commit(mem + page_size, page_size * 3);
-    mem[page_size + 1] = '1';
-
-    plat_mem_release(mem, page_size * 4);
+    arena_destroy(perm_arena);
 
     return 0;
 }

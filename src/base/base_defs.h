@@ -6,6 +6,24 @@
 #include <stddef.h>
 #include <assert.h>
 
+#if defined(_WIN32)
+#   define PLATFORM_WIN32
+#elif defined(__EMSCRIPTEN__)
+#   define PLATFORM_WASM
+#elif defined(__linux__)
+#   define PLATFORM_LINUX
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#    define THREAD_LOCAL __thread
+#elif defined(_MSC_VER)
+#    define THREAD_LOCAL __declspec(thread)
+#elif (__STDC_VERSION__ >= 201112L)
+#    define THREAD_LOCAL _Thread_local
+#else
+#    error "Invalid compiler/version for thead variable; Use Clang, GCC, or MSVC, or use C11 or greater"
+#endif
+
 typedef int8_t  i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -24,13 +42,11 @@ typedef double f64;
 static_assert(sizeof(f32) == 4, "Size of float must be 4");
 static_assert(sizeof(f64) == 8, "Size of double must be 8");
 
-#if defined(_WIN32)
-#   define PLATFORM_WIN32
-#elif defined(__EMSCRIPTEN__)
-#   define PLATFORM_WASM
-#elif defined(__linux__)
-#   define PLATFORM_LINUX
-#endif
+#define KiB(n) ((u64)(n) << 10)
+#define MiB(n) ((u64)(n) << 20)
+#define GiB(n) ((u64)(n) << 30)
+
+#define ALIGN_UP_POW2(n, p) (((u64)(n) + ((u64)(p) - 1)) & (~((u64)(p) - 1)))
 
 #define UNUSED(x) (void)(x)
 
