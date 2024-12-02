@@ -1,8 +1,20 @@
 #include "platform.h"
 #ifdef PLATFORM_LINUX
 
+#include <time.h>
 #include <unistd.h>
 #include <sys/mman.h>
+
+void plat_init(void) { }
+
+u64 plat_time_usec(void) {
+    struct timespec ts = { 0 };
+    if (-1 == clock_gettime(CLOCK_MONOTONIC, &ts)) {
+        return 0;
+    }
+
+    return ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
 
 void* plat_mem_reserve(u64 size) {
     void* out = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
