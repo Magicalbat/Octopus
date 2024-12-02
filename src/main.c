@@ -7,23 +7,20 @@
 int main(void) {
     plat_init();
 
-    u64 start = plat_time_usec();
-
     mem_arena* perm_arena = arena_create(MiB(1), KiB(64));
 
-    u8* buffer_a = (u8*)arena_push(perm_arena, KiB(900));
-    u8* buffer_b = (u8*)arena_push(perm_arena, MiB(5));
-    u64 pos = arena_get_pos(perm_arena);
-    u8* buffer_c = (u8*)arena_push(perm_arena, MiB(10));
-    arena_pop_to(perm_arena, pos);
-    u8* buffer_d = (u8*)arena_push(perm_arena, KiB(10));
-    buffer_d = (u8*)arena_push(perm_arena, KiB(1));
+    string8_list list = { 0 };
+
+    str8_list_push(perm_arena, &list, STR8_LIT("String 1\n"));
+    str8_list_push(perm_arena, &list, STR8_LIT("String 2\n"));
+    str8_list_push(perm_arena, &list, STR8_LIT("String 3\n"));
+    str8_list_push(perm_arena, &list, STR8_LIT("String 4"));
+
+    string8 out = str8_concat(perm_arena, &list);
+    
+    printf("%.*s\n", (int)out.size, out.str);
 
     arena_destroy(perm_arena);
-
-    u64 end = plat_time_usec();
-
-    printf("Main took %lu us\n", end-start);
 
     return 0;
 }
