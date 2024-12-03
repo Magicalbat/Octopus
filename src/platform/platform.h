@@ -7,6 +7,10 @@ void plat_init(void);
 
 u64 plat_time_usec(void);
 
+u64 plat_file_size(string8 file_name);
+string8 plat_file_read(mem_arena* arena, string8 file_name);
+void plat_file_write(mem_arena* arena, string8 file_name, const string8_list* list);
+
 // returns NULL on failure
 void* plat_mem_reserve(u64 size);
 b32 plat_mem_commit(void* mem, u64 size);

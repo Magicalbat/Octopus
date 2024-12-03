@@ -6,26 +6,17 @@
 int main(void) {
     plat_init();
 
-    u64 start_time = plat_time_usec();
-
     mem_arena* perm_arena = arena_create(MiB(1), KiB(64));
-
-    string8_list list = { 0 };
-
-    str8_list_push(perm_arena, &list, STR8_LIT("String 1\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("String 2\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("String 3\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("String 4"));
-
-    string8 out = str8_concat(perm_arena, &list);
     
-    printf("%.*s\n", (int)out.size, out.str);
+    string8 file_name = STR8_LIT("README.md");
+    u64 file_size = plat_file_size(file_name);
+    string8 file = plat_file_read(perm_arena, file_name);
+
+    printf("%lu\n", file_size);
+    printf("%.*s\n", (int)file.size, file.str);
 
     arena_destroy(perm_arena);
 
-    u64 end_time = plat_time_usec();
-
-    printf("main took %llu us\n", end_time - start_time);
 
     return 0;
 }
