@@ -40,7 +40,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    u8* name_cstr = str8_to_cstr(arena, file_name);
+    u8* name_cstr = str8_to_cstr(scratch.arena, file_name);
     fd = open((char*)name_cstr, O_RDONLY);
 
     arena_scratch_release(scratch);
@@ -85,7 +85,37 @@ end:
 }
 
 // TODO: benchmark multiple small writes vs one large write
-void plat_file_write(mem_arena* arena, string8 file_name, const string8_list* list);
+void plat_file_write(string8 file_name, const string8_list* list) {
+    i32 fd = -1;
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u8* name_cstr = str8_to_cstr(scratch.arena, file_name);
+    fd = open((char*)name_cstr, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+
+    arena_scratch_release(scratch);
+
+    if (fd == -1) {
+        return;
+    }
+
+    for (string8_node* node = list->first; node != NULL; node = node->next) {
+        u64 total_written = 0;
+
+        while (total_written < node->str.size) {
+            i64 written = write(fd, node->str.str + total_written, node->str.size - total_written);
+
+            if (written == -1) {
+                goto end;
+            }
+
+            total_written += written;
+        }
+    }
+
+end:
+    close(fd);
+}
 
 void* plat_mem_reserve(u64 size) {
     void* out = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
