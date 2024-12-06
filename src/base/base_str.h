@@ -4,6 +4,8 @@
 #include "base_defs.h"
 #include "base_arena.h"
 
+#include <stdarg.h>
+
 typedef struct {
     u8* str;
     u64 size;
@@ -32,6 +34,9 @@ b32 str8_equals(string8 a, string8 b);
 
 string8 str8_substr(string8 str, u64 start, u64 end);
 string8 str8_substr_size(string8 str, u64 start, u64 size);
+
+string8 str8_createfv(mem_arena* arena, const char* fmt, va_list args);
+string8 str8_createf(mem_arena* arena, const char* fmt, ...);
 
 void str8_list_push(mem_arena* arena, string8_list* list, string8 str);
 

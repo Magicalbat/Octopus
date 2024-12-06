@@ -1,10 +1,10 @@
 #include "base_str.h"
 
+#include <stdio.h>
 #include <string.h>
 
 string8 str8_from_cstr(u8* cstr) {
-    if (cstr == NULL) {
-        return (string8){ 0 };
+    if (cstr == NULL) { return (string8){ 0 };
     }
 
     u64 size = 0;
@@ -65,6 +65,47 @@ void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
 
     list->size++;
     list->total_length += str.size;
+}
+
+string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
+    va_list args1, args2 = { 0 };
+    va_copy(args1, in_args);
+    va_copy(args2, in_args);
+
+    string8 out = { 0 };
+
+    i32 size = vsnprintf(NULL, 0, fmt, args1);
+    if (size <= 0) {
+        goto end;
+    }
+
+    mem_arena_temp maybe_temp = arena_temp_begin(arena);
+
+    out.size = size;
+    // +1 is because vsnprintf HAS to add a null terminator
+    // Very dumb, but necessary
+    out.str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, size + 1);
+
+    if (size != vsnprintf((char*)out.str, size + 1, fmt, args2)) {
+        arena_temp_end(maybe_temp);
+        out = (string8){ 0 };
+        goto end;
+    }
+
+end:
+    va_end(args1);
+    va_end(args2);
+    return out;
+}
+string8 str8_createf(mem_arena* arena, const char* fmt, ...) {
+    va_list args = { 0 };
+    va_start(args, fmt);
+
+    string8 out = str8_createfv(arena, fmt, args);
+
+    va_end(args);
+    
+    return out;
 }
 
 string8 str8_concat(mem_arena* arena, const string8_list* list) {

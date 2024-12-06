@@ -8,15 +8,10 @@ int main(void) {
 
     mem_arena* perm_arena = arena_create(MiB(1), KiB(64));
 
-    string8_list list = { 0 };
-    str8_list_push(perm_arena, &list, STR8_LIT("Line 1\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("Line 2\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("Line 3\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("Line 4\n"));
-    str8_list_push(perm_arena, &list, STR8_LIT("Line 5\n"));
+    string8 test_str = str8_createf(perm_arena, "Hello %d, and hello %s", 123, "asdf");
 
-    plat_file_write(STR8_LIT("out.txt"), &list);
-    
+    printf("'%.*s'\n", (int)test_str.size, test_str.str);
+
     arena_destroy(perm_arena);
 
     return 0;
