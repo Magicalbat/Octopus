@@ -9,7 +9,7 @@ u64 plat_time_usec(void);
 
 u64 plat_file_size(string8 file_name);
 string8 plat_file_read(mem_arena* arena, string8 file_name);
-void plat_file_write(string8 file_name, const string8_list* list);
+void plat_file_write(string8 file_name, const string8_list* list, b32 append);
 
 // returns NULL on failure
 void* plat_mem_reserve(u64 size);

@@ -84,14 +84,14 @@ end:
     return out;
 }
 
-// TODO: benchmark multiple small writes vs one large write
-void plat_file_write(string8 file_name, const string8_list* list) {
+void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     i32 fd = -1;
 
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     u8* name_cstr = str8_to_cstr(scratch.arena, file_name);
-    fd = open((char*)name_cstr, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+    i32 append_flag = append ? O_APPEND : O_TRUNC;
+    fd = open((char*)name_cstr, O_CREAT | append_flag | O_WRONLY, S_IRUSR | S_IWUSR);
 
     arena_scratch_release(scratch);
 
