@@ -53,6 +53,7 @@ u64 arena_get_pos(mem_arena* arena) {
 
     return current->base_pos + current->pos;
 }
+
 void* arena_push_no_zero(mem_arena* arena, u64 size) {
     mem_arena* current = arena->current;
 
@@ -69,14 +70,16 @@ void* arena_push_no_zero(mem_arena* arena, u64 size) {
     out = NULL;
 
     // Need a new arena?
-    if (new_pos > current->base_pos + current->reserve_size) {
+    if (new_pos > current->reserve_size) {
         mem_arena* new_arena = arena_create(
             // Make sure there is enough space in this arena
             ALIGN_UP_POW2(size + sizeof(mem_arena), current->reserve_size),
             current->block_size
         );
 
-        if (new_arena == NULL) { return NULL; }
+        if (new_arena == NULL) {
+            return NULL;
+        }
 
         new_arena->base_pos = current->base_pos + current->reserve_size;
         new_arena->prev = current;
