@@ -1,5 +1,5 @@
 workspace "Octopus"
-    configurations { "debug", "release" }
+    configurations { "debug", "release", "profile" }
     startproject "Octopus"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
@@ -38,6 +38,9 @@ project "Octopus"
         optimize "On"
         defines { "NDEBUG" }
 
+    filter "configurations:profile"
+        optimize "On"
+        defines { "NDEBUG", "PROFILE_MODE" }
 
     filter "system:linux"
         links {

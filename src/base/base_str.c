@@ -29,6 +29,21 @@ u8* str8_to_cstr(mem_arena* arena, string8 str) {
     return out;
 }
 
+u64 str8_to_u64(string8 str) {
+    u64 out = 0;
+
+    for (u64 i = 0; i < str.size; i++) {
+        if (str.str[i] < '0' || str.str[i] > '9') {
+            break;
+        }
+
+        out *= 10;
+        out += str.str[i] - '0';
+    }
+
+    return out;
+}
+
 b32 str8_equals(string8 a, string8 b) {
     if (a.size != b.size) {
         return false;
