@@ -14,27 +14,35 @@ int main(int argc, char** argv) {
     UNUSED(argv);
 
     plat_init();
+    srand(plat_time_usec());
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    u32 size = 1 << 19;
-    u32* A = ARENA_PUSH_ARRAY(perm_arena, u32, size);
-    u32* B = ARENA_PUSH_ARRAY(perm_arena, u32, size);
-    volatile u32* C = ARENA_PUSH_ARRAY(perm_arena, u32, size);
+    string8 strings[10] = {
+        STR8_LIT("String 0\n"),
+        STR8_LIT("String String 1\n"),
+        STR8_LIT("String String String 2\n"),
+        STR8_LIT("String String String String 3\n"),
+        STR8_LIT("String String String String String 4\n"),
+        STR8_LIT("String String String String String String 5\n"),
+        STR8_LIT("String String String String String String String 6\n"),
+        STR8_LIT("String String String String String String String String 7\n"),
+        STR8_LIT("String String String String String String String String String 8\n"),
+        STR8_LIT("String String String String String String String String String String 9\n"),
+    };
+    string8_list output = { 0 };
 
-    srand(plat_time_usec());
-    for (u32 i = 0; i < size; i++) {
-        A[i] = rand();
-        B[i] = rand();
+    for (u32 i = 0; i < 1 << 14; i++) {
+        str8_list_push(perm_arena, &output, strings[rand() % 10]);
     }
 
-    u64 start = plat_time_usec();
-    for (u32 i = 0; i < size; i++) {
-        C[i] = MIN(A[i], B[i]);
-    }
-    u64 end = plat_time_usec();
+    for (u32 i = 0; i < 10; i++) {
+        u64 start = plat_time_usec();
+        plat_file_write(STR8_LIT("test.txt"), &output, false);
+        u64 end = plat_time_usec();
 
-    printf("%lu\n", end-start);
+        printf("%f ms\n", (f32)(end - start) * 1e-3);
+    }
 
     arena_destroy(perm_arena);
 
