@@ -72,16 +72,6 @@ string8 str8_substr_size(string8 str, u64 start, u64 size) {
     return str8_substr(str, start, start + size);
 }
 
-void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
-    string8_node* node = ARENA_PUSH(arena, string8_node);
-    node->str = str;
-
-    SLL_PUSH_BACK(list->first, list->last, node);
-
-    list->size++;
-    list->total_length += str.size;
-}
-
 string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
     va_list args1, args2 = { 0 };
     va_copy(args1, in_args);
@@ -123,6 +113,23 @@ string8 str8_createf(mem_arena* arena, const char* fmt, ...) {
     return out;
 }
 
+void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
+    if (list->last == NULL || list->last->size == STR8_LIST_BUCKET_SIZE) {
+        // Need to create a new bucket
+        string8_bucket* bucket = ARENA_PUSH(arena, string8_bucket);
+
+        SLL_PUSH_BACK(list->first, list->last, bucket);
+    } else {
+        // Push string onto existing bucket
+        string8_bucket* cur_bucket = list->last;
+
+        cur_bucket->strs[cur_bucket->size++] = str;
+    }
+
+    list->size++;
+    list->total_length += str.size;
+}
+
 string8 str8_concat(mem_arena* arena, const string8_list* list) {
     if (list == NULL) {
         return (string8){ 0 };
@@ -134,9 +141,11 @@ string8 str8_concat(mem_arena* arena, const string8_list* list) {
     };
     u64 pos = 0;
 
-    for (string8_node* node = list->first; node != NULL; node = node->next) {
-        memcpy(out.str + pos, node->str.str, node->str.size);
-        pos += node->str.size;
+    for (string8_bucket* bucket = list->first; bucket != NULL; bucket = bucket->next) {
+        for (u32 i = 0; i < bucket->size; i++) {
+            memcpy(out.str + pos, bucket->strs[i].str, bucket->strs[i].size);
+            pos += bucket->strs[i].size;
+        }
     }
 
     return out;

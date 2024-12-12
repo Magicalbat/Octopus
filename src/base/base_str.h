@@ -11,14 +11,18 @@ typedef struct {
     u64 size;
 } string8;
 
-typedef struct string8_node {
-    struct string8_node* next;
-    string8 str;
-} string8_node;
+#define STR8_LIST_BUCKET_SIZE 16
+
+typedef struct string8_bucket {
+    struct string8_bucket* next;
+
+    string8 strs[STR8_LIST_BUCKET_SIZE];
+    u32 size;
+} string8_bucket;
 
 typedef struct {
-    string8_node* first;
-    string8_node* last;
+    string8_bucket* first;
+    string8_bucket* last;
 
     u64 size;
     u64 total_length;
