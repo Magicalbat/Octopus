@@ -44,6 +44,10 @@ u64 str8_to_u64(string8 str) {
     return out;
 }
 
+b32 str8_to_b32(string8 str) {
+    return str8_equals(str, STR8_LIT("true"));
+}
+
 b32 str8_equals(string8 a, string8 b) {
     if (a.size != b.size) {
         return false;
@@ -119,12 +123,12 @@ void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
         string8_bucket* bucket = ARENA_PUSH(arena, string8_bucket);
 
         SLL_PUSH_BACK(list->first, list->last, bucket);
-    } else {
-        // Push string onto existing bucket
-        string8_bucket* cur_bucket = list->last;
-
-        cur_bucket->strs[cur_bucket->size++] = str;
     }
+
+    // Push string onto bucket
+    string8_bucket* cur_bucket = list->last;
+
+    cur_bucket->strs[cur_bucket->size++] = str;
 
     list->size++;
     list->total_length += str.size;

@@ -30,18 +30,25 @@ int main(int argc, char** argv) {
         STR8_LIT("String String String String String String String String String 8\n"),
         STR8_LIT("String String String String String String String String String String 9\n"),
     };
-    string8_list output = { 0 };
-
-    for (u32 i = 0; i < 1 << 14; i++) {
-        str8_list_push(perm_arena, &output, strings[rand() % 10]);
-    }
 
     for (u32 i = 0; i < 10; i++) {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
         u64 start = plat_time_usec();
+
+        string8_list output = { 0 };
+
+        for (u32 i = 0; i < 1 << 16; i++) {
+            str8_list_push(scratch.arena, &output, strings[rand() % 10]);
+        }
+
         plat_file_write(STR8_LIT("test.txt"), &output, false);
+
         u64 end = plat_time_usec();
 
-        printf("%f ms\n", (f32)(end - start) * 1e-3);
+        printf("%f ms, %lu bytes\n", (f32)(end - start) * 1e-3, arena_get_pos(scratch.arena));
+
+        arena_scratch_release(scratch);
     }
 
     arena_destroy(perm_arena);
