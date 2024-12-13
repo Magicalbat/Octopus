@@ -2,12 +2,17 @@
 #ifdef PLATFORM_LINUX
 
 #include <time.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
 void plat_init(void) { }
+
+string8 plat_get_name(void) {
+    return STR8_LIT("linux");
+}
 
 u64 plat_time_usec(void) {
     struct timespec ts = { 0 };
@@ -121,6 +126,17 @@ void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     }
 
     close(fd);
+}
+
+b32 plat_file_delete(string8 file_name) {
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u8* name_cstr = str8_to_cstr(scratch.arena, file_name);
+    i32 ret = remove((char*)name_cstr);
+
+    arena_scratch_release(scratch);
+
+    return ret == 0;
 }
 
 void* plat_mem_reserve(u64 size) {

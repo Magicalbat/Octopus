@@ -31,8 +31,8 @@ typedef struct {
 #define STR8_LIT(s) (string8){ (u8*)(s), sizeof(s) - 1 }
 
 string8 str8_from_cstr(u8* cstr);
-string8 str8_copy(mem_arena* arena, string8 str);
 u8* str8_to_cstr(mem_arena* arena, string8 str);
+string8 str8_copy(mem_arena* arena, string8 str);
 
 // Will parse as many valid characters at the start of the string
 // e.g. str8_to_u64(STR8_LIT("123asdf")) will return 123

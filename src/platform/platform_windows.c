@@ -14,6 +14,10 @@ void plat_init(void) {
     }
 }
 
+string8 plat_get_name(void) {
+    return STR8_LIT("windows");
+}
+
 u64 plat_time_usec(void) {
     LARGE_INTEGER ticks = { 0 };
 
