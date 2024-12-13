@@ -92,41 +92,6 @@ profiler prof_init(u32 num_args, string8* args) {
 }
 
 void prof_run(mem_arena* arena, profiler* prof) {
-
-#define PROF_WRITE(s) str8_list_push(arena, &prof->output, STR8_LIT(s))
-#define PROF_WRITE_EXISTING(s) str8_list_push(arena, &prof->output, (s))
-#define PROF_INDENT(n) for (u32 __i = 0; __i < (n) + prof->base_indent; __i++) {\
-    PROF_WRITE_EXISTING(indent_str); }
-
-    string8 indent_str = {
-        .size = prof->indent_num_spaces,
-        .str = ARENA_PUSH_ARRAY(arena, u8, prof->indent_num_spaces)
-    };
-    memset(indent_str.str, ' ', indent_str.size);
-
-    // Initial JSON Setup
-    PROF_INDENT(0);
-    PROF_WRITE("{\n");
-    PROF_INDENT(1);
-    PROF_WRITE("\"commit\": \"");
-    PROF_WRITE_EXISTING(prof->commit);
-    PROF_WRITE("\",\n");
-    PROF_INDENT(1);
-    PROF_WRITE("\"categories\": {\n");
-
-    // Running Profiles
-    {
-    }
-
-    // Closing JSON Object
-    PROF_INDENT(1);
-    PROF_WRITE("}\n"); // Closing categories
-    PROF_INDENT(0);
-    PROF_WRITE("}"); // Closing main object
-    if (prof->trailing_comma) {
-        PROF_WRITE(",");
-    }
-    PROF_WRITE("\n");
 }
 
 void prof_save_out(profiler* prof) {
