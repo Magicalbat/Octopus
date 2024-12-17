@@ -139,6 +139,10 @@ b32 plat_file_delete(string8 file_name) {
     return ret == 0;
 }
 
+void plat_get_entropy(void* data, u64 size) {
+    getentropy(data, size);
+}
+
 void* plat_mem_reserve(u64 size) {
     void* out = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (out == MAP_FAILED) {

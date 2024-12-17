@@ -15,6 +15,8 @@ string8 plat_file_read(mem_arena* arena, string8 file_name);
 void plat_file_write(string8 file_name, const string8_list* list, b32 append);
 b32 plat_file_delete(string8 file_name);
 
+void plat_get_entropy(void* data, u64 size);
+
 // returns NULL on failure
 void* plat_mem_reserve(u64 size);
 b32 plat_mem_commit(void* mem, u64 size);
