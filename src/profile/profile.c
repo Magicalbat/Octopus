@@ -27,6 +27,10 @@ void prof_save_out(profiler* prof);
 int profile_main(int argc, char** argv) {
     plat_init();
 
+    u64 seeds[2] = { 0 };
+    plat_get_entropy(seeds, sizeof(seeds));
+    prng_seed(seeds[0], seeds[1]);
+
     mem_arena* perm_arena = arena_create(MiB(64), KiB(256));
 
     u32 num_args = (u32)MAX(0, argc);
@@ -117,7 +121,7 @@ void prof_run_base(mem_arena* arena, profiler* prof) {
         }
 
         PROF_RECORD("push_basic") {
-            arena_push(test_arena, KiB(1));
+            arena_push(test_arena, prng_rand() & 0xff + 1);
         }
         PROF_RECORD("push_commit") {
             arena_push(test_arena, commit_size * 4);
@@ -144,7 +148,7 @@ void prof_run_base(mem_arena* arena, profiler* prof) {
             scratch = arena_scratch_get(NULL, 0);
         }
 
-        arena_push(scratch.arena, MiB(1));
+        arena_push(scratch.arena, KiB(1) * (prng_rand() & 0xf + 1));
 
         PROF_RECORD("scratch_release") {
             arena_scratch_release(scratch);
