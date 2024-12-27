@@ -8,17 +8,20 @@
 #include "gfx/opengl/opengl_defs.h"
 
 int main(int argc, char** argv) {
-
     UNUSED(argc);
     UNUSED(argv);
 
     plat_init();
 
     u64 seeds[2] = { 0 };
-    //plat_get_entropy(seeds, sizeof(seeds));
+    plat_get_entropy(seeds, sizeof(seeds));
     prng_seed(seeds[0], seeds[1]);
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
+
+    for (u32 i = 0; i < 10; i++) {
+        printf("%u\n", prng_rand());
+    }
 
     /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 

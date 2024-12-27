@@ -28,6 +28,10 @@ u64 plat_time_usec(void) {
     return (u64)ticks.QuadPart * 1000000 / ticks_per_sec;
 }
 
+void plat_get_entropy(void* data, u64 size) {
+    BCryptGenRandom(NULL, data, size, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+}
+
 // returns NULL on failure
 void* plat_mem_reserve(u64 size) {
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE);

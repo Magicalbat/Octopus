@@ -51,6 +51,6 @@ project "Octopus"
         systemversion "latest"
     
         links {
-            "gdi32", "kernel32", "user32", "opengl32"
+            "gdi32", "kernel32", "user32", "opengl32", "Bcrypt"
         }
 
