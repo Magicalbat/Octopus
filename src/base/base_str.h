@@ -11,6 +11,11 @@ typedef struct {
     u64 size;
 } string8;
 
+typedef struct {
+    u16* str;
+    u64 size;
+} string16;
+
 #define STR8_LIST_BUCKET_SIZE 16
 
 typedef struct string8_bucket {

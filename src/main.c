@@ -19,9 +19,14 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    for (u32 i = 0; i < 10; i++) {
-        printf("%u\n", prng_rand());
-    }
+    string8 file_name = STR8_LIT("tmp.txt");
+
+    printf("%llu\n", plat_file_size(file_name));
+
+    string8 file = plat_file_read(perm_arena, file_name);
+    printf("%.*s\n", (int)file.size, file.str);
+
+    plat_file_delete(file_name);
 
     /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 
