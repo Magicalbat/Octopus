@@ -89,7 +89,7 @@ end:
     return out;
 }
 
-void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
+b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     i32 fd = -1;
 
     {
@@ -103,8 +103,10 @@ void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     }
 
     if (fd == -1) {
-        return;
+        return false;
     }
+
+    b32 out = true;
 
     {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -116,6 +118,7 @@ void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
             i64 written = write(fd, full_file.str + total_written, full_file.size - total_written);
 
             if (written == -1) {
+                out = false;
                 break;
             }
 
@@ -126,6 +129,8 @@ void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     }
 
     close(fd);
+
+    return out;
 }
 
 b32 plat_file_delete(string8 file_name) {

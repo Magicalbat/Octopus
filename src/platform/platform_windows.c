@@ -5,6 +5,8 @@
 #define UNICODE
 #include <Windows.h>
 
+#define _DWORD_MAX (~(DWORD)0)
+
 static u64 ticks_per_sec = 1;
 
 static string16 _utf16_from_utf8(mem_arena* arena, string8 str) {
@@ -95,13 +97,14 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     u64 total_read = 0;
     while (total_read < out.size) {
         u64 to_read = out.size - total_read;
-        DWORD to_read_clamped = (DWORD)MIN(to_read, (u64)(~(DWORD)0));
+        DWORD to_read_capped = (DWORD)MIN(to_read, (u64)_DWORD_MAX);
 
         DWORD cur_read = 0;
-        if (!ReadFile(file_handle, out.str + total_read, to_read_clamped, &cur_read, NULL)) {
-            CloseHandle(file_handle);
+        if (!ReadFile(file_handle, out.str + total_read, to_read_capped, &cur_read, NULL)) {
             arena_temp_end(maybe_temp);
-            return (string8){ 0 };
+            out = (string8){ 0 };
+
+            break;
         }
 
         total_read += cur_read;
@@ -112,12 +115,52 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     return out;
 }
 
-void plat_file_write(string8 file_name, const string8_list* list, b32 append) {
+b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     string16 file_name16 = _utf16_from_utf8(scratch.arena, file_name);
+    HANDLE file_handle = CreateFileW(
+        (LPCWSTR)file_name16.str,
+        append ? FILE_APPEND_DATA : GENERIC_WRITE,
+        0, NULL,
+        append ? OPEN_ALWAYS : CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL, NULL
+    );
 
     arena_scratch_release(scratch);
+
+    if (file_handle == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    b32 out = true;
+
+    {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+        string8 full_file = str8_concat(scratch.arena, list);
+
+        u64 total_written = 0;
+        while (total_written < full_file.size) {
+            u64 to_write = full_file.size - total_written;
+            DWORD to_write_capped = (DWORD)MIN(to_write, (u64)_DWORD_MAX);
+
+            DWORD written = 0;
+            if (!WriteFile(file_handle, full_file.str + total_written, to_write_capped, &written, NULL)) {
+                out = false;
+
+                break;
+            }
+
+            total_written += written;
+        }
+
+        arena_scratch_release(scratch);
+    }
+
+    CloseHandle(file_handle);
+
+    return out;
 }
 
 b32 plat_file_delete(string8 file_name) {

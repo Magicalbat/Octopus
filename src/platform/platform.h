@@ -12,7 +12,7 @@ u64 plat_time_usec(void);
 
 u64 plat_file_size(string8 file_name);
 string8 plat_file_read(mem_arena* arena, string8 file_name);
-void plat_file_write(string8 file_name, const string8_list* list, b32 append);
+b32 plat_file_write(string8 file_name, const string8_list* list, b32 append);
 b32 plat_file_delete(string8 file_name);
 
 void plat_get_entropy(void* data, u64 size);
