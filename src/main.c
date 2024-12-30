@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    string8 file_name = STR8_LIT("tmp.txt");
+    string8 file_name = STR8_LIT("tmpüü.txt");
 
     string8_list strs = { 0 };
     for (u32 i = 0; i < 1000; i++) {
@@ -29,9 +29,6 @@ int main(int argc, char** argv) {
     plat_file_write(file_name, &strs, argc < 3);
 
     printf("%llu\n", plat_file_size(file_name));
-
-    string8 file = plat_file_read(perm_arena, file_name);
-    printf("%.*s\n", (int)file.size, file.str);
 
     /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 

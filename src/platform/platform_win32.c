@@ -9,26 +9,6 @@
 
 static u64 ticks_per_sec = 1;
 
-static string16 _utf16_from_utf8(mem_arena* arena, string8 str) {
-    i32 out_size = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, (LPCCH)str.str, str.size, NULL, 0);
-
-    if (out_size <= 0) {
-        return (string16) { 0 };
-    }
-
-    mem_arena_temp maybe_temp = arena_temp_begin(arena);
-    // +1 for null terminator
-    u16* out_data = ARENA_PUSH_ARRAY(maybe_temp.arena, u16, out_size + 1);
-    i32 ret = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, (LPCCH)str.str, str.size, out_data, out_size);
-    
-    if (ret != out_size) {
-        arena_temp_end(maybe_temp);
-        return (string16){ 0 };
-    }
-
-    return (string16){ .str = out_data, .size = out_size };
-}
-
 void plat_init(void) {
     LARGE_INTEGER perf_freq = { 0 };
 
@@ -38,7 +18,7 @@ void plat_init(void) {
 }
 
 string8 plat_get_name(void) {
-    return STR8_LIT("windows");
+    return STR8_LIT("win32");
 }
 
 u64 plat_time_usec(void) {
@@ -54,7 +34,7 @@ u64 plat_time_usec(void) {
 u64 plat_file_size(string8 file_name) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    string16 file_name16 = _utf16_from_utf8(scratch.arena, file_name);
+    string16 file_name16 = str16_from_str8(scratch.arena, file_name, true);
     WIN32_FILE_ATTRIBUTE_DATA attribs = { 0 };
     b32 ret = GetFileAttributesExW(file_name16.str, GetFileExInfoStandard, &attribs);
 
@@ -70,7 +50,7 @@ u64 plat_file_size(string8 file_name) {
 string8 plat_file_read(mem_arena* arena, string8 file_name) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    string16 file_name16 = _utf16_from_utf8(scratch.arena, file_name);
+    string16 file_name16 = str16_from_str8(scratch.arena, file_name, true);
 
     HANDLE file_handle = CreateFileW(
         (LPCWSTR)file_name16.str, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
@@ -118,7 +98,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    string16 file_name16 = _utf16_from_utf8(scratch.arena, file_name);
+    string16 file_name16 = str16_from_str8(scratch.arena, file_name, true);
     HANDLE file_handle = CreateFileW(
         (LPCWSTR)file_name16.str,
         append ? FILE_APPEND_DATA : GENERIC_WRITE,
@@ -166,7 +146,7 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
 b32 plat_file_delete(string8 file_name) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    string16 file_name16 = _utf16_from_utf8(scratch.arena, file_name);
+    string16 file_name16 = str16_from_str8(scratch.arena, file_name, true);
     b32 ret = DeleteFileW((LPCWSTR)file_name16.str);
 
     arena_scratch_release(scratch);
