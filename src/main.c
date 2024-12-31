@@ -19,13 +19,11 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    if (prng_rand_f32() < 0.5f) {
-        plat_fatal_error("Skill Issue");
-    }
+    gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 
-    /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
+    gfx_win_make_current(win);
 
-    glClearColor(0, 0.5, 0.5, 1);
+    gfx_win_clear_color(win, (vec4f){ 0.0f, 0.5f, 0.5f, 1.0f });
     while (!win->should_close) {
         gfx_win_process_events(win);
 
@@ -34,7 +32,7 @@ int main(int argc, char** argv) {
         gfx_win_swap_buffers(win);
     }
 
-    gfx_win_destroy(win);*/
+    gfx_win_destroy(win);
 
     arena_destroy(perm_arena);
 

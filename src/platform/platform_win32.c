@@ -23,7 +23,7 @@ string8 plat_get_name(void) {
 
 void plat_fatal_error(const char* msg) {
     MessageBoxA(NULL, msg, "Error", MB_OK | MB_ICONERROR);
-    ExitProcess(0);
+    ExitProcess(1);
 }
 
 u64 plat_time_usec(void) {

@@ -31,7 +31,7 @@ typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLX
 
 static gfx_key x11_translate_key(XKeyEvent* e);
 
-// TODO: Make a better error system (read ryan fleury's article)
+// TODO: Make a better error system
 
 gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     gfx_window* win = ARENA_PUSH(arena, gfx_window);

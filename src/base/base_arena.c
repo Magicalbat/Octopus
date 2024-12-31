@@ -27,6 +27,8 @@ mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size) {
     u64 base_commit = ALIGN_UP_POW2(sizeof(mem_arena), block_size);
 
     if (out == NULL || !plat_mem_commit(out, base_commit)) {
+        plat_fatal_error("Failed to allocate memory for arena");
+
         return NULL;
     }
 
@@ -78,7 +80,7 @@ void* arena_push_no_zero(mem_arena* arena, u64 size) {
         );
 
         if (new_arena == NULL) {
-            return NULL;
+            goto fail;
         }
 
         new_arena->base_pos = current->base_pos + current->reserve_size;
@@ -93,14 +95,20 @@ void* arena_push_no_zero(mem_arena* arena, u64 size) {
     u64 new_commit_size = ALIGN_UP_POW2(new_pos, current->block_size);
     new_commit_size = MIN(new_commit_size, current->reserve_size);
     if (!plat_mem_commit((u8*)current + current->commit_size, new_commit_size - current->commit_size)) {
-        return NULL;
+        goto fail;
     }
 
     out = (u8*)current + pos_aligned;
     current->pos = new_pos;
     current->commit_size = new_commit_size;
 
-    return out;
+    if (out != NULL) {
+        return out;
+    }
+
+fail:
+    plat_fatal_error("Failed to allocate memory");
+    return NULL;
 }
 void* arena_push(mem_arena* arena, u64 size) {
     void* out = arena_push_no_zero(arena, size);

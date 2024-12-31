@@ -57,6 +57,21 @@ b32 str8_equals(string8 a, string8 b);
 string8 str8_substr(string8 str, u64 start, u64 end);
 string8 str8_substr_size(string8 str, u64 start, u64 size);
 
+/* Returns str.size if c is not in str
+   Can be used to split a string by a character like so:
+
+   string8 str = STR8_LIT("foo bar baz");
+
+   while (str.size) {
+       u64 index = str8_index_char(str, (u8)' ');
+       string8 part = str8_substr(str, 0, index);
+       str = str8_substr(str, index + 1, str.size);
+
+       printf("%.*s\n", (int)part.size, part.str);
+   }
+*/
+u64 str8_index_char(string8 str, u8 c);
+
 string8 str8_createfv(mem_arena* arena, const char* fmt, va_list args);
 string8 str8_createf(mem_arena* arena, const char* fmt, ...);
 

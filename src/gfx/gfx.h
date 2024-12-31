@@ -3,49 +3,14 @@
 
 #include "base/base.h"
 
-#define GFX_NUM_KEYS          256
-#define GFX_NUM_MOUSE_BUTTONS 5
-
-typedef struct {
-    string8 title;
-    u32 width, height;
-
-    b32 should_close;
-
-    vec2f mouse_pos;
-    i32 mouse_scroll;
-    b8 mouse_buttons[GFX_NUM_MOUSE_BUTTONS];
-    b8 prev_mouse_buttons[GFX_NUM_MOUSE_BUTTONS];
-
-    b8 keys[GFX_NUM_KEYS];
-    b8 prev_keys[GFX_NUM_KEYS];
-
-    struct _gfx_win_backend* backend;
-} gfx_window;
-
-gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title);
-void gfx_win_destroy(gfx_window* win);
-
-void gfx_win_process_events(gfx_window* win);
-
-void gfx_win_make_current(gfx_window* win);
-void gfx_win_clear(gfx_window* win);
-void gfx_win_swap_buffers(gfx_window* win);
-
-#define GFX_IS_MOUSE_DOWN(win, mb) ( win->mouse_buttons[mb])
-#define GFX_IS_MOUSE_UP(win, mb)   (!win->mouse_buttons[mb])
-#define GFX_IS_MOUSE_JUST_DOWN(win, mb) (win->mouse_buttons[mb] && !win->prev_mouse_buttons[mb])
-#define GFX_IS_MOUSE_JUST_UP(win, mb) (!win->mouse_buttons[mb] && win->prev_mouse_buttons[mb])
-
-#define GFX_IS_KEY_DOWN(win, key) (win->keys[key])
-#define GFX_IS_KEY_UP(win, key) (!win->keys[key])
-#define GFX_IS_KEY_JUST_DOWN(win, key) (win->keys[key] && !win->prev_keys[key])
-#define GFX_IS_KEY_JUST_UP(win, key) (!win->keys[key] && win->prev_keys[key])
-
 typedef enum {
     GFX_MB_LEFT,
     GFX_MB_MIDDLE,
-    GFX_MB_RIGHT 
+    GFX_MB_RIGHT, 
+    GFX_MB_4,
+    GFX_MB_5,
+
+    GFX_MB_COUNT
 } gfx_mouse_button;
 
 #define GFX_KEY_XLIST \
@@ -154,7 +119,48 @@ typedef enum {
 #define X(key, value) GFX_KEY_##key value,
     GFX_KEY_XLIST
 #undef X
+
+    GFX_KEY_COUNT
 } gfx_key;
+
+typedef struct {
+    string8 title;
+    u32 width, height;
+
+    b32 should_close;
+
+    vec2f mouse_pos;
+    i32 mouse_scroll;
+    b8 mouse_buttons[GFX_MB_COUNT];
+    b8 prev_mouse_buttons[GFX_MB_COUNT];
+
+    b8 keys[GFX_KEY_COUNT];
+    b8 prev_keys[GFX_KEY_COUNT];
+
+    struct _gfx_win_backend* backend;
+} gfx_window;
+
+gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title);
+void gfx_win_destroy(gfx_window* win);
+
+b32 gfx_win_make_current(gfx_window* win);
+
+void gfx_win_process_events(gfx_window* win);
+
+void gfx_win_clear_color(gfx_window* win, vec4f col);
+void gfx_win_clear(gfx_window* win);
+
+void gfx_win_swap_buffers(gfx_window* win);
+
+#define GFX_IS_MOUSE_DOWN(win, mb) ( win->mouse_buttons[mb])
+#define GFX_IS_MOUSE_UP(win, mb)   (!win->mouse_buttons[mb])
+#define GFX_IS_MOUSE_JUST_DOWN(win, mb) (win->mouse_buttons[mb] && !win->prev_mouse_buttons[mb])
+#define GFX_IS_MOUSE_JUST_UP(win, mb) (!win->mouse_buttons[mb] && win->prev_mouse_buttons[mb])
+
+#define GFX_IS_KEY_DOWN(win, key) (win->keys[key])
+#define GFX_IS_KEY_UP(win, key) (!win->keys[key])
+#define GFX_IS_KEY_JUST_DOWN(win, key) (win->keys[key] && !win->prev_keys[key])
+#define GFX_IS_KEY_JUST_UP(win, key) (!win->keys[key] && win->prev_keys[key])
 
 
 #endif // GFX_H

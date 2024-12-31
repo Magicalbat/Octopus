@@ -4,11 +4,13 @@
 #include <string.h>
 
 string8 str8_from_cstr(u8* cstr) {
-    if (cstr == NULL) { return (string8){ 0 };
+    if (cstr == NULL) {
+        return (string8){ 0 };
     }
 
+    u8* ptr = cstr;
     u64 size = 0;
-    while (*(cstr++)) {
+    while (*(ptr++)) {
         size++;
     }
 
@@ -74,6 +76,18 @@ string8 str8_substr(string8 str, u64 start, u64 end) {
 
 string8 str8_substr_size(string8 str, u64 start, u64 size) {
     return str8_substr(str, start, start + size);
+}
+
+u64 str8_index_char(string8 str, u8 c) {
+    u64 i = 0;
+
+    for (; i < str.size; i++) {
+        if (str.str[i] == c) {
+            break;
+        }
+    }
+
+    return i;
 }
 
 string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
