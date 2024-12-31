@@ -14,6 +14,11 @@ string8 plat_get_name(void) {
     return STR8_LIT("linux");
 }
 
+void plat_fatal_error(const char* msg) {
+    fprintf(stderr, "\x1b[31mFatal Error: %s\x1b[0m\n", msg);
+    exit(0);
+}
+
 u64 plat_time_usec(void) {
     struct timespec ts = { 0 };
     if (-1 == clock_gettime(CLOCK_MONOTONIC, &ts)) {

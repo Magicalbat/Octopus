@@ -21,6 +21,11 @@ string8 plat_get_name(void) {
     return STR8_LIT("win32");
 }
 
+void plat_fatal_error(const char* msg) {
+    MessageBoxA(NULL, msg, "Error", MB_OK | MB_ICONERROR);
+    ExitProcess(0);
+}
+
 u64 plat_time_usec(void) {
     LARGE_INTEGER ticks = { 0 };
 

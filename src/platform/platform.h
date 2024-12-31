@@ -8,6 +8,8 @@ void plat_init(void);
 // Do not modify the string 
 string8 plat_get_name(void);
 
+void plat_fatal_error(const char* msg);
+
 u64 plat_time_usec(void);
 
 u64 plat_file_size(string8 file_name);
