@@ -13,112 +13,107 @@ typedef enum {
     GFX_MB_COUNT
 } gfx_mouse_button;
 
-#define GFX_KEY_XLIST \
-    X(NONE, = 0) \
-    X(BACKSPACE, ) \
-    X(TAB, ) \
-    X(ENTER, ) \
-    X(CAPSLOCK, ) \
-    X(ESCAPE, ) \
-    X(SPACE, ) \
-    X(PAGEUP, ) \
-    X(PAGEDOWN, ) \
-    X(END, ) \
-    X(HOME, ) \
-    X(LEFT, ) \
-    X(UP, ) \
-    X(RIGHT, ) \
-    X(DOWN, ) \
-    X(INSERT, ) \
-    X(DELETE, ) \
-    X(0, = '0') \
-    X(1, = '1') \
-    X(2, = '2') \
-    X(3, = '3') \
-    X(4, = '4') \
-    X(5, = '5') \
-    X(6, = '6') \
-    X(7, = '7') \
-    X(8, = '8') \
-    X(9, = '9') \
-    X(A, = 'A') \
-    X(B, = 'B') \
-    X(C, = 'C') \
-    X(D, = 'D') \
-    X(E, = 'E') \
-    X(F, = 'F') \
-    X(G, = 'G') \
-    X(H, = 'H') \
-    X(I, = 'I') \
-    X(J, = 'J') \
-    X(K, = 'K') \
-    X(L, = 'L') \
-    X(M, = 'M') \
-    X(N, = 'N') \
-    X(O, = 'O') \
-    X(P, = 'P') \
-    X(Q, = 'Q') \
-    X(R, = 'R') \
-    X(S, = 'S') \
-    X(T, = 'T') \
-    X(U, = 'U') \
-    X(V, = 'V') \
-    X(W, = 'W') \
-    X(X, = 'X') \
-    X(Y, = 'Y') \
-    X(Z, = 'Z') \
-    X(NUMPAD_0, ) \
-    X(NUMPAD_1, ) \
-    X(NUMPAD_2, ) \
-    X(NUMPAD_3, ) \
-    X(NUMPAD_4, ) \
-    X(NUMPAD_5, ) \
-    X(NUMPAD_6, ) \
-    X(NUMPAD_7, ) \
-    X(NUMPAD_8, ) \
-    X(NUMPAD_9, ) \
-    X(NUMPAD_MULTIPLY, ) \
-    X(NUMPAD_ADD, ) \
-    X(NUMPAD_SUBTRACT, ) \
-    X(NUMPAD_DECIMAL, ) \
-    X(NUMPAD_DIVIDE, ) \
-    X(NUMPAD_ENTER, ) \
-    X(F1, ) \
-    X(F2, ) \
-    X(F3, ) \
-    X(F4, ) \
-    X(F5, ) \
-    X(F6, ) \
-    X(F7, ) \
-    X(F8, ) \
-    X(F9, ) \
-    X(F10, ) \
-    X(F11, ) \
-    X(F12, ) \
-    X(NUM_LOCK, ) \
-    X(SCROLL_LOCK, ) \
-    X(LSHIFT, ) \
-    X(RSHIFT, ) \
-    X(LCONTROL, ) \
-    X(RCONTROL, ) \
-    X(LALT, ) \
-    X(RALT, ) \
-    X(SEMICOLON, ) \
-    X(EQUAL, ) \
-    X(COMMA, ) \
-    X(PERIOD, ) \
-    X(MINUS, ) \
-    X(FORWARDSLASH, ) \
-    X(BACKSLASH, ) \
-    X(BACKTICK, ) \
-    X(LBRACKET, ) \
-    X(RBRACKET, ) \
-    X(APOSTROPHE, )
-
 typedef enum {
-#define X(key, value) GFX_KEY_##key value,
-    GFX_KEY_XLIST
-#undef X
+    GFX_KEY_NONE = 0,
+    GFX_KEY_BACKSPACE,
+    GFX_KEY_TAB,
+    GFX_KEY_ENTER,
+    GFX_KEY_CAPSLOCK,
+    GFX_KEY_ESCAPE,
+    GFX_KEY_SPACE,
+    GFX_KEY_PAGEUP,
+    GFX_KEY_PAGEDOWN,
+    GFX_KEY_END,
+    GFX_KEY_HOME,
+    GFX_KEY_LEFT,
+    GFX_KEY_UP,
+    GFX_KEY_RIGHT,
+    GFX_KEY_DOWN,
+    GFX_KEY_INSERT,
+    GFX_KEY_DELETE,
+    GFX_KEY_NUMPAD_0,
+    GFX_KEY_NUMPAD_1,
+    GFX_KEY_NUMPAD_2,
+    GFX_KEY_NUMPAD_3,
+    GFX_KEY_NUMPAD_4,
+    GFX_KEY_NUMPAD_5,
+    GFX_KEY_NUMPAD_6,
+    GFX_KEY_NUMPAD_7,
+    GFX_KEY_NUMPAD_8,
+    GFX_KEY_NUMPAD_9,
+    GFX_KEY_NUMPAD_MULTIPLY,
+    GFX_KEY_NUMPAD_ADD,
+    GFX_KEY_NUMPAD_SUBTRACT,
+    GFX_KEY_NUMPAD_DECIMAL,
+    GFX_KEY_NUMPAD_DIVIDE,
+    GFX_KEY_NUMPAD_ENTER,
+    GFX_KEY_F1,
+    GFX_KEY_F2,
+    GFX_KEY_F3,
+    GFX_KEY_F4,
+    GFX_KEY_F5,
+    GFX_KEY_F6,
+    GFX_KEY_F7,
+    GFX_KEY_F8,
+    GFX_KEY_F9,
+    GFX_KEY_F10,
+    GFX_KEY_F11,
+    GFX_KEY_F12,
+    GFX_KEY_NUM_LOCK,
+    GFX_KEY_SCROLL_LOCK,
+    GFX_KEY_LSHIFT,
+    GFX_KEY_0,
+    GFX_KEY_1,
+    GFX_KEY_2,
+    GFX_KEY_3,
+    GFX_KEY_4,
+    GFX_KEY_5,
+    GFX_KEY_6,
+    GFX_KEY_7,
+    GFX_KEY_8,
+    GFX_KEY_9,
+    GFX_KEY_RSHIFT,
+    GFX_KEY_LCONTROL,
+    GFX_KEY_RCONTROL,
+    GFX_KEY_LALT,
+    GFX_KEY_RALT,
+    GFX_KEY_SEMICOLON,
+    GFX_KEY_EQUAL,
+    GFX_KEY_A,
+    GFX_KEY_B,
+    GFX_KEY_C,
+    GFX_KEY_D,
+    GFX_KEY_E,
+    GFX_KEY_F,
+    GFX_KEY_G,
+    GFX_KEY_H,
+    GFX_KEY_I,
+    GFX_KEY_J,
+    GFX_KEY_K,
+    GFX_KEY_L,
+    GFX_KEY_M,
+    GFX_KEY_N,
+    GFX_KEY_O,
+    GFX_KEY_P,
+    GFX_KEY_Q,
+    GFX_KEY_R,
+    GFX_KEY_S,
+    GFX_KEY_T,
+    GFX_KEY_U,
+    GFX_KEY_V,
+    GFX_KEY_W,
+    GFX_KEY_X,
+    GFX_KEY_Y,
+    GFX_KEY_Z,
+    GFX_KEY_COMMA,
+    GFX_KEY_PERIOD,
+    GFX_KEY_MINUS,
+    GFX_KEY_FORWARDSLASH,
+    GFX_KEY_BACKSLASH,
+    GFX_KEY_BACKTICK,
+    GFX_KEY_LBRACKET,
+    GFX_KEY_RBRACKET,
+    GFX_KEY_APOSTROPHE,
 
     GFX_KEY_COUNT
 } gfx_key;
@@ -152,8 +147,8 @@ void gfx_win_clear(gfx_window* win);
 
 void gfx_win_swap_buffers(gfx_window* win);
 
-#define GFX_IS_MOUSE_DOWN(win, mb) ( win->mouse_buttons[mb])
-#define GFX_IS_MOUSE_UP(win, mb)   (!win->mouse_buttons[mb])
+#define GFX_IS_MOUSE_DOWN(win, mb) (win->mouse_buttons[mb])
+#define GFX_IS_MOUSE_UP(win, mb) (!win->mouse_buttons[mb])
 #define GFX_IS_MOUSE_JUST_DOWN(win, mb) (win->mouse_buttons[mb] && !win->prev_mouse_buttons[mb])
 #define GFX_IS_MOUSE_JUST_UP(win, mb) (!win->mouse_buttons[mb] && win->prev_mouse_buttons[mb])
 

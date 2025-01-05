@@ -2,10 +2,10 @@
 
 #ifdef PLATFORM_LINUX
 
+#include "platform/platform.h"
 #include "gfx/gfx.h"
 #include "opengl_defs.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include <X11/Xlib.h>
@@ -31,8 +31,6 @@ typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLX
 
 static gfx_key x11_translate_key(XKeyEvent* e);
 
-// TODO: Make a better error system
-
 gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     gfx_window* win = ARENA_PUSH(arena, gfx_window);
 
@@ -45,7 +43,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 
     win->backend->display = XOpenDisplay(NULL);
     if (win->backend->display == NULL) {
-        fprintf(stderr, "Failed to open X11 display\n");
+        plat_fatal_error("Failed to open X11 display");
         return NULL;
     }
 
@@ -55,7 +53,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     glXQueryVersion(win->backend->display, &major_version, &minor_version);
     if (major_version <= 0 || minor_version <= 1) {
         XCloseDisplay(win->backend->display);
-        fprintf(stderr, "Invalid GLX version\n");
+        plat_fatal_error("Invalid GLX version");
         return NULL;
     }
 
@@ -78,7 +76,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     GLXFBConfig* fbc = glXChooseFBConfig(win->backend->display, win->backend->screen, fbc_attribs, &fb_count);
     if (fbc == NULL) {
         XCloseDisplay(win->backend->display);
-        fprintf(stderr, "Failed to retrieve framebuffer\n");
+        plat_fatal_error("Failed to retrieve framebuffer");
         return NULL;
     }
 
@@ -114,7 +112,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     XVisualInfo* visual = glXGetVisualFromFBConfig(win->backend->display, win->backend->fb_config);
     if (visual == NULL) {
         XCloseDisplay(win->backend->display);
-        fprintf(stderr, "Cannot create visual window\n");
+        plat_fatal_error("Cannot create visual window");
         
         return NULL;
     }
@@ -146,7 +144,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     glXCreateContextAttribsARBProc glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
 
     if (!glXCreateContextAttribsARB) {
-        fprintf(stderr, "glXCreateContextAttribsARB() not found\n");
+        plat_fatal_error("glXCreateContextAttribsARB() not found");
     }
 
     static int context_attribs[] = {
@@ -175,6 +173,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 
     return win;
 }
+
 void gfx_win_destroy(gfx_window* win) {
     glXMakeCurrent(win->backend->display, None, NULL);
     glXDestroyContext(win->backend->display, win->backend->gl_context);
@@ -183,9 +182,14 @@ void gfx_win_destroy(gfx_window* win) {
     XCloseDisplay(win->backend->display);
 }
 
+b32 gfx_win_make_current(gfx_window* win) {
+    return glXMakeCurrent(win->backend->display, win->backend->window, win->backend->gl_context);
+}
+
 void gfx_win_process_events(gfx_window* win) {
-    memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_NUM_MOUSE_BUTTONS);
-    memcpy(win->prev_keys, win->keys, GFX_NUM_KEYS);
+    memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
+    memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
+
     win->mouse_scroll = 0;
     
     while (XPending(win->backend->display)) {
@@ -234,14 +238,18 @@ void gfx_win_process_events(gfx_window* win) {
     }
 }
 
-void gfx_win_make_current(gfx_window* win) {
-    glXMakeCurrent(win->backend->display, win->backend->window, win->backend->gl_context);
+void gfx_win_clear_color(gfx_window* win, vec4f col) {
+    UNUSED(win);
+
+    glClearColor(col.x, col.y, col.z, col.w);
 }
+
 void gfx_win_clear(gfx_window* win) {
     UNUSED(win);
     
     glClear(GL_COLOR_BUFFER_BIT);
 }
+
 void gfx_win_swap_buffers(gfx_window* win) {
     glXSwapBuffers(win->backend->display, win->backend->window);
 }
