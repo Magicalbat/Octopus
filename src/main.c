@@ -7,6 +7,8 @@
 #include "gfx/gfx.h"
 #include "gfx/opengl/opengl_defs.h"
 
+#include "truetype/truetype.h"
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -19,7 +21,16 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
+    string8 font_file = plat_file_read(perm_arena, STR8_LIT("res/Hack.ttf"));
+    tt_font_info font = { 0 };
+
+    b32 ret = tt_init_font(font_file, &font);
+
+    if (!ret) {
+        printf("Failed to load font file\n");
+    }
+
+    /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 
     gfx_win_make_current(win);
 
@@ -32,7 +43,7 @@ int main(int argc, char** argv) {
         gfx_win_swap_buffers(win);
     }
 
-    gfx_win_destroy(win);
+    gfx_win_destroy(win);*/
 
     arena_destroy(perm_arena);
 
