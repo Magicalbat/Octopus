@@ -47,6 +47,7 @@ static_assert(sizeof(f64) == 8, "Size of double must be 8");
 #define GiB(n) ((u64)(n) << 30)
 
 #define ALIGN_UP_POW2(n, p) (((u64)(n) + ((u64)(p) - 1)) & (~((u64)(p) - 1)))
+#define ALIGN_DOWN_POW2(n, p) (((u64)(n)) & (~((u64)(p) - 1)))
 
 #define UNUSED(x) (void)(x)
 

@@ -9,8 +9,6 @@ typedef struct {
 } tt_table_info;
 
 typedef struct {
-    string8 file;
-
     u16 num_glyphs;
     // Max of single and composite glyphs
     u16 max_glyph_points;
@@ -22,7 +20,8 @@ typedef struct {
         tt_table_info hmtx;
     } tables;
 
-    u64 cmap_offset;
+    // Offset from start of file, not from start of cmap table
+    u64 cmap_subtable_offset;
 
     u16 loca_format;
 } tt_font_info;

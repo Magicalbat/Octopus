@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    string8 font_file = plat_file_read(perm_arena, STR8_LIT("res/Hack.ttf"));
+    string8 font_file = plat_file_read(perm_arena, STR8_LIT("res/Envy Code R.ttf"));
     tt_font_info font = { 0 };
 
     b32 ret = tt_init_font(font_file, &font);
@@ -29,6 +29,25 @@ int main(int argc, char** argv) {
     if (!ret) {
         printf("Failed to load font file\n");
     }
+
+    printf(
+        "num_glyphs: %u\n"
+        "max_glyph_points: %u\n\n"
+        "loca: { %u %u }\n"
+        "glyf: { %u %u }\n"
+        "hhea: { %u %u }\n"
+        "hmtx: { %u %u }\n\n"
+        "cmap_subtable_offset: %llu\n"
+        "loca_format: %u\n",
+        font.num_glyphs,
+        font.max_glyph_points,
+        font.tables.loca.offset, font.tables.loca.length,
+        font.tables.glyf.offset, font.tables.glyf.length,
+        font.tables.hhea.offset, font.tables.hhea.length,
+        font.tables.hmtx.offset, font.tables.hmtx.length,
+        font.cmap_subtable_offset,
+        font.loca_format
+    );
 
     /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));
 

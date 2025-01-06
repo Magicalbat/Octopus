@@ -26,21 +26,114 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
         return false;
     }
 
+    // Just defaults; should be overwritten by the maxp values
+    font_info->num_glyphs = 0xffff;
+    font_info->max_glyph_points = 0xffff;
+
+    tt_table_info maxp = _tt_get_and_validate_table(file, "maxp");
+    if (maxp.offset != 0) {
+        u32 version = READ_BE32(file.str + maxp.offset);
+
+        if (version == 0x00005000) {
+            font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
+        } else if (version == 0x00010000) {
+            font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
+
+            u16 max_points = READ_BE16(file.str + maxp.offset + 6);
+            u16 max_composite_points = READ_BE16(file.str + maxp.offset + 10);
+
+            font_info->max_glyph_points = MAX(max_points, max_composite_points);
+        }
+    }
+
     font_info->tables.loca = _tt_get_and_validate_table(file, "loca");
     font_info->tables.glyf = _tt_get_and_validate_table(file, "glyf");
     font_info->tables.hhea = _tt_get_and_validate_table(file, "hhea");
     font_info->tables.hmtx = _tt_get_and_validate_table(file, "hmtx");
 
-    if ((
-        font_info->tables.loca.offset * 
-        font_info->tables.glyf.offset * 
-        font_info->tables.hhea.offset * 
-        font_info->tables.hmtx.offset 
-    ) == 0) {
-        // One of the tables was not found
+    if (
+        font_info->tables.loca.offset == 0 ||
+        font_info->tables.glyf.offset == 0 ||
+        font_info->tables.hhea.offset == 0 ||
+        font_info->tables.hmtx.offset == 0
+    ) {
         return false;
     }
-    
+
+    tt_table_info cmap = _tt_get_and_validate_table(file, "cmap");
+    if (cmap.offset == 0) {
+        return false;
+    }
+
+    // Getting correct cmap subtable
+    {
+        if (cmap.length < 4) {
+            return false;
+        }
+
+        u32 num_tables = READ_BE16(file.str + cmap.offset + 2);
+        
+        // 4 bytes for header, 8 bytes per encoding record
+        if (cmap.length < 4 + 8 * num_tables) {
+            return false;
+        }
+
+        font_info->cmap_subtable_offset = 0;
+
+        for (u32 i = 0; i < num_tables; i++) {
+            // 4 bytes for header, 8 bytes per encoding record
+            u64 offset = cmap.offset + 4 + 8 * i;
+
+            u16 platform_id = READ_BE16(file.str + offset);
+            u16 encoding_id = READ_BE16(file.str + offset + 2);
+
+            if (platform_id == 0 && (encoding_id == 3 || encoding_id == 4)) {
+                // I am only supporting Unicode cmaps
+                u32 subtable_offset = READ_BE32(file.str + offset + 4);
+
+                if (subtable_offset < cmap.length) {
+                    font_info->cmap_subtable_offset = (u64)cmap.offset + subtable_offset;
+                    break;
+                }
+            }
+        }
+
+        if (font_info->cmap_subtable_offset == 0) {
+            return false;
+        }
+    }
+
+    tt_table_info head = _tt_get_and_validate_table(file, "head");
+    if (head.offset == 0 || head.length != 54) {
+        return false;
+    }
+
+    font_info->loca_format = READ_BE16(file.str + head.offset + 50);
+
+    // Verifying that all loca offsets are within the glyf table
+    {
+        tt_table_info loca = font_info->tables.loca;
+        tt_table_info glyf = font_info->tables.glyf;
+
+        if (font_info->loca_format == 0) {
+            for (u32 i = 0; i < loca.length; i += 2) {
+                u32 offset = READ_BE16(file.str + loca.offset + i) * 2;
+
+                if (offset > glyf.length) {
+                    return false;
+                }
+            }
+        } else {
+            for (u32 i = 0; i < loca.length; i += 4) {
+                u32 offset = READ_BE32(file.str + loca.offset + i);
+
+                if (offset > glyf.length) {
+                    return false;
+                }
+            }
+        }
+    }
+
     return true;
 }
 
@@ -48,18 +141,12 @@ u32 _tt_checksum(u8* data, u64 length) {
     u32 sum = 0;
 
     u64 i = 0;
-    for (; i < length; i += 4) {
+    for (; i < ALIGN_DOWN_POW2(length, 4); i += 4) {
         sum += READ_BE32(data + i);
     }
 
-    if (i != length) {
-        // Length is not divisible by 4
-        // Have to go back and get the leftover bytes
-        i -= 3;
-
-        for (u32 shift = 24; i < length; i++, shift -= 8) {
-            sum += data[i] << shift;
-        }
+    for (u32 shift = 24; i < length; i++, shift -= 8) {
+        sum += data[i] << shift;
     }
 
     return sum;
