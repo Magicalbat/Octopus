@@ -22,8 +22,11 @@ typedef struct {
 
     // Offset from start of file, not from start of cmap table
     u64 cmap_subtable_offset;
+    // 4 or 12
+    u16 cmap_format;
 
     u16 loca_format;
+    u32 max_glyph_index;
 } tt_font_info;
 
 b32 tt_init_font(string8 file, tt_font_info* font_info);

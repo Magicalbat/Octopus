@@ -10,9 +10,6 @@
 #include "truetype/truetype.h"
 
 int main(int argc, char** argv) {
-    UNUSED(argc);
-    UNUSED(argv);
-
     plat_init();
 
     u64 seeds[2] = { 0 };
@@ -21,7 +18,8 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264));
 
-    string8 font_file = plat_file_read(perm_arena, STR8_LIT("res/Envy Code R.ttf"));
+    char* font_path = argc > 1 ? argv[1] : "res/Hack.ttf";
+    string8 font_file = plat_file_read(perm_arena, str8_from_cstr((u8*)font_path));
     tt_font_info font = { 0 };
 
     b32 ret = tt_init_font(font_file, &font);
@@ -38,7 +36,9 @@ int main(int argc, char** argv) {
         "hhea: { %u %u }\n"
         "hmtx: { %u %u }\n\n"
         "cmap_subtable_offset: %llu\n"
-        "loca_format: %u\n",
+        "cmap_format: %u\n\n"
+        "loca_format: %u\n"
+        "max_glyph_index: %u\n",
         font.num_glyphs,
         font.max_glyph_points,
         font.tables.loca.offset, font.tables.loca.length,
@@ -46,7 +46,9 @@ int main(int argc, char** argv) {
         font.tables.hhea.offset, font.tables.hhea.length,
         font.tables.hmtx.offset, font.tables.hmtx.length,
         font.cmap_subtable_offset,
-        font.loca_format
+        font.cmap_format,
+        font.loca_format,
+        font.max_glyph_index
     );
 
     /*gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Test Window"));

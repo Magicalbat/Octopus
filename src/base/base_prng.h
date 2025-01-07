@@ -1,6 +1,9 @@
 #ifndef BASE_PRNG_H
 #define BASE_PRNG_H
 
+// Permuted congruential generator
+// Based on https://www.pcg-random.org
+
 #include "base_defs.h"
 
 typedef struct {

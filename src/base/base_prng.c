@@ -1,5 +1,8 @@
 #include "base_prng.h"
 
+// Permuted congruential generator
+// Based on https://www.pcg-random.org
+
 #include <math.h>
 
 static THREAD_LOCAL prng s_rng = { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL };

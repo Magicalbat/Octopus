@@ -1,7 +1,8 @@
 #include "truetype_parse.h"
 
-// TODO: remove
+// TODO: remove stdio
 #include <stdio.h>
+#include <string.h>
 
 #define READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
 #define READ_BE32(mem) ((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
@@ -12,6 +13,12 @@ u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
 
 b32 tt_init_font(string8 file, tt_font_info* font_info) {
+    if (font_info == NULL) {
+        return false;
+    }
+
+    memset(font_info, 0, sizeof(tt_font_info));
+
     if (file.size < 12) {
         return false;
     }
@@ -65,7 +72,7 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
         return false;
     }
 
-    // Getting correct cmap subtable
+    // Getting and validating correct cmap subtable
     {
         if (cmap.length < 4) {
             return false;
@@ -78,8 +85,8 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
             return false;
         }
 
-        font_info->cmap_subtable_offset = 0;
-
+        u32 subtable_offset = 0;
+        i32 prev_encoding_id = -1;
         for (u32 i = 0; i < num_tables; i++) {
             // 4 bytes for header, 8 bytes per encoding record
             u64 offset = cmap.offset + 4 + 8 * i;
@@ -87,19 +94,50 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
             u16 platform_id = READ_BE16(file.str + offset);
             u16 encoding_id = READ_BE16(file.str + offset + 2);
 
+            // TODO: Add support for other platforms?
             if (platform_id == 0 && (encoding_id == 3 || encoding_id == 4)) {
-                // I am only supporting Unicode cmaps
-                u32 subtable_offset = READ_BE32(file.str + offset + 4);
+
+                // Prefer encoding id of 4 because it supports more codepoints
+                if (prev_encoding_id == 4 && encoding_id == 3) {
+                    continue;
+                }
+
+                prev_encoding_id = encoding_id;
+
+                subtable_offset = READ_BE32(file.str + offset + 4);
 
                 if (subtable_offset < cmap.length) {
                     font_info->cmap_subtable_offset = (u64)cmap.offset + subtable_offset;
-                    break;
                 }
             }
         }
 
         if (font_info->cmap_subtable_offset == 0) {
             return false;
+        }
+
+        // Verifying the length of the subtable
+        {
+            // Format 4 and Format 12 are both at least 16 bytes long
+            if (subtable_offset + 16 > cmap.length) {
+                return false;
+            }
+
+            u32 format = READ_BE16(file.str + font_info->cmap_subtable_offset);
+            u32 subtable_length = 0;
+            if (format == 4) {
+                subtable_length = READ_BE16(file.str + font_info->cmap_subtable_offset + 2);
+            } else if (format == 12) {
+                subtable_length = READ_BE32(file.str + font_info->cmap_subtable_offset + 4);
+            } else {
+                return false;
+            }
+
+            if (subtable_offset + subtable_length > cmap.length) {
+                return false;
+            }
+
+            font_info->cmap_format = format;
         }
     }
 
@@ -109,6 +147,9 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
     }
 
     font_info->loca_format = READ_BE16(file.str + head.offset + 50);
+    if (font_info->loca_format != 0 && font_info->loca_format != 1) {
+        return false;
+    }
 
     // Verifying that all loca offsets are within the glyf table
     {
@@ -133,6 +174,8 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
             }
         }
     }
+
+    font_info->max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2);
 
     return true;
 }
