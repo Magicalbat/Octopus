@@ -18,7 +18,11 @@ static u64 round_up_pow2(u64 n) {
     return n;
 }
 
-mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size) {
+mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size, b32 chained) {
+    if (desired_reserve_size < MiB(1)) {
+        desired_reserve_size += sizeof(mem_arena);
+    }
+
     u32 page_size = plat_mem_page_size();
     u64 block_size = round_up_pow2(ALIGN_UP_POW2(desired_block_size, page_size));
     u64 reserve_size = round_up_pow2(desired_reserve_size);
@@ -39,6 +43,7 @@ mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size) {
     out->block_size = block_size;
     out->pos = sizeof(mem_arena);
     out->commit_size = base_commit;
+    out->chained = chained;
 
     return out;
 }
@@ -73,10 +78,14 @@ void* arena_push_no_zero(mem_arena* arena, u64 size) {
 
     // Need a new arena?
     if (new_pos > current->reserve_size) {
+        if (!arena->chained) {
+            goto fail;
+        }
+
         mem_arena* new_arena = arena_create(
             // Make sure there is enough space in this arena
             ALIGN_UP_POW2(size + sizeof(mem_arena), current->reserve_size),
-            current->block_size
+            current->block_size, true
         );
 
         if (new_arena == NULL) {
@@ -179,7 +188,7 @@ mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts) {
     }
 
     if (scratch_pool[scratch_index] == NULL) {
-        scratch_pool[scratch_index] = arena_create(ARENA_SCRATCH_RESERVE_SIZE, ARENA_SCRATCH_COMMIT_SIZE);
+        scratch_pool[scratch_index] = arena_create(ARENA_SCRATCH_RESERVE_SIZE, ARENA_SCRATCH_COMMIT_SIZE, true);
     }
 
     return arena_temp_begin(scratch_pool[scratch_index]);

@@ -25,6 +25,8 @@ typedef struct mem_arena {
     u64 base_pos;
     u64 pos;
     u64 commit_size;
+
+    b32 chained;
 } mem_arena;
 
 typedef struct {
@@ -32,7 +34,7 @@ typedef struct {
     u64 pos;
 } mem_arena_temp;
 
-mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size);
+mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size, b32 chained);
 void arena_destroy(mem_arena* arena);
 u64 arena_get_pos(mem_arena* arena);
 void* arena_push_no_zero(mem_arena* arena, u64 size);
