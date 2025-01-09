@@ -29,7 +29,7 @@ typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLX
 #   include "opengl_funcs_xlist.h"
 #undef X
 
-static gfx_key x11_translate_key(XKeyEvent* e);
+static gfx_key _x11_translate_key(XKeyEvent* e);
 
 gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     gfx_window* win = ARENA_PUSH(arena, gfx_window);
@@ -43,7 +43,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 
     win->backend->display = XOpenDisplay(NULL);
     if (win->backend->display == NULL) {
-        plat_fatal_error("Failed to open X11 display");
+        error_emit("Failed to open X11 display");
         return NULL;
     }
 
@@ -53,7 +53,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     glXQueryVersion(win->backend->display, &major_version, &minor_version);
     if (major_version <= 0 || minor_version <= 1) {
         XCloseDisplay(win->backend->display);
-        plat_fatal_error("Invalid GLX version");
+        error_emit("Invalid GLX version");
         return NULL;
     }
 
@@ -76,7 +76,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     GLXFBConfig* fbc = glXChooseFBConfig(win->backend->display, win->backend->screen, fbc_attribs, &fb_count);
     if (fbc == NULL) {
         XCloseDisplay(win->backend->display);
-        plat_fatal_error("Failed to retrieve framebuffer");
+        error_emit("Failed to retrieve framebuffer");
         return NULL;
     }
 
@@ -112,7 +112,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     XVisualInfo* visual = glXGetVisualFromFBConfig(win->backend->display, win->backend->fb_config);
     if (visual == NULL) {
         XCloseDisplay(win->backend->display);
-        plat_fatal_error("Cannot create visual window");
+        error_emit("Cannot create visual window");
         
         return NULL;
     }
@@ -144,7 +144,8 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     glXCreateContextAttribsARBProc glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
 
     if (!glXCreateContextAttribsARB) {
-        plat_fatal_error("glXCreateContextAttribsARB() not found");
+        error_emit("glXCreateContextAttribsARB() not found");
+        return NULL;
     }
 
     static int context_attribs[] = {
@@ -175,6 +176,10 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 }
 
 void gfx_win_destroy(gfx_window* win) {
+    if (win == NULL) {
+        return;
+    }
+
     glXMakeCurrent(win->backend->display, None, NULL);
     glXDestroyContext(win->backend->display, win->backend->gl_context);
 
@@ -183,10 +188,18 @@ void gfx_win_destroy(gfx_window* win) {
 }
 
 b32 gfx_win_make_current(gfx_window* win) {
+    if (win == NULL) {
+        return false;
+    }
+
     return glXMakeCurrent(win->backend->display, win->backend->window, win->backend->gl_context);
 }
 
 void gfx_win_process_events(gfx_window* win) {
+    if (win == NULL) {
+        return;
+    }
+
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
     memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
 
@@ -222,11 +235,11 @@ void gfx_win_process_events(gfx_window* win) {
                 win->mouse_pos.y = (f32)e.xmotion.y;
             } break;
             case KeyPress: {
-                gfx_key keydown = x11_translate_key(&e.xkey);
+                gfx_key keydown = _x11_translate_key(&e.xkey);
                 win->keys[keydown] = true;
             } break;
             case KeyRelease: {
-                gfx_key keyup = x11_translate_key(&e.xkey);
+                gfx_key keyup = _x11_translate_key(&e.xkey);
                 win->keys[keyup] = false;
             } break;
             case ClientMessage: {
@@ -239,24 +252,33 @@ void gfx_win_process_events(gfx_window* win) {
 }
 
 void gfx_win_clear_color(gfx_window* win, vec4f col) {
-    UNUSED(win);
+    if (win == NULL) {
+        return;
+    }
 
     glClearColor(col.x, col.y, col.z, col.w);
 }
 
 void gfx_win_clear(gfx_window* win) {
-    UNUSED(win);
+    if (win == NULL) {
+        return;
+    }
+
     
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void gfx_win_swap_buffers(gfx_window* win) {
+    if (win == NULL) {
+        return;
+    }
+
     glXSwapBuffers(win->backend->display, win->backend->window);
 }
 
 // Adapted from sokol_app.h
 // https://github.com/floooh/sokol/blob/master/sokol_app.h#L10175 
-static gfx_key x11_translate_key(XKeyEvent* e) {
+static gfx_key _x11_translate_key(XKeyEvent* e) {
     KeySym keysym = XLookupKeysym(e, 0);
 
     switch (keysym) {

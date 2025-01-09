@@ -23,6 +23,7 @@ void plat_fatal_error(const char* msg) {
 u64 plat_time_usec(void) {
     struct timespec ts = { 0 };
     if (-1 == clock_gettime(CLOCK_MONOTONIC, &ts)) {
+        error_emit("Failed to get time");
         return 0;
     }
 
@@ -40,6 +41,7 @@ u64 plat_file_size(string8 file_name) {
     arena_scratch_release(scratch);
 
     if (ret == -1) {
+        error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return 0;
     }
 
@@ -57,6 +59,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     arena_scratch_release(scratch);
 
     if (fd == -1) {
+        error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return (string8){ 0 };
     }
 
@@ -64,10 +67,12 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
     struct stat file_stats = { 0 };
     if (fstat(fd, &file_stats) == -1) {
+        error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         goto end;
     }
 
     if (!S_ISREG(file_stats.st_mode)) {
+        error_emitf("Incorrect mode for reading of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         goto end;
     }
 
@@ -82,6 +87,8 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
         i64 bytes_read = read(fd, out.str + str_pos, out.size - str_pos);
 
         if (bytes_read == -1) {
+            error_emitf("Failed to read from file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+
             arena_temp_end(maybe_temp);
             out = (string8){ 0 };
             goto end;
@@ -109,6 +116,7 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     }
 
     if (fd == -1) {
+        error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return false;
     }
 
@@ -124,6 +132,7 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
             i64 written = write(fd, full_file.str + total_written, full_file.size - total_written);
 
             if (written == -1) {
+                error_emitf("Failed to write to file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
                 out = false;
                 break;
             }
@@ -146,6 +155,10 @@ b32 plat_file_delete(string8 file_name) {
     i32 ret = remove((char*)name_cstr);
 
     arena_scratch_release(scratch);
+
+    if (ret == -1) {
+        error_emitf("Failed to delete file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+    }
 
     return ret == 0;
 }

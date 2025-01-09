@@ -7,7 +7,7 @@
 
 #define ERROR_MAX_ERRORS 256
 #define ERROR_MAX_MSG_LEN 1024
-#define ERROR_CONCAT_CHAR ';'
+#define ERROR_CONCAT_CHAR '\n'
 
 typedef enum {
     ERROR_OUTPUT_FIRST,

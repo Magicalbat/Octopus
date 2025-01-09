@@ -49,7 +49,7 @@ u64 plat_file_size(string8 file_name) {
     arena_scratch_release(scratch);
 
     if (ret == false) {
-        error_emit("Failed to get file attributes");
+        error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return 0;
     }
 

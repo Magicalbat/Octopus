@@ -13,7 +13,10 @@ u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
 
 b32 tt_init_font(string8 file, tt_font_info* font_info) {
-    if (font_info == NULL) {
+    // A file of zero size should not emit an error
+    // because it probably means the file loaded incorrectly
+    // which would have already made an error
+    if (font_info == NULL || file.size == 0) {
         return false;
     }
 
