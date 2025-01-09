@@ -270,6 +270,27 @@ u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoin
             return (u16)((u16)codepoint + id_delta);
         }
     } else if (font_info->cmap_format == 12) {
+        u32 num_groups = READ_BE32(subtable + 12);
+        i64 group = -1;
+
+        for (u32 i = 0; i < num_groups; i++) {
+            u32 start_code = READ_BE32(subtable + 16 + i * 12);
+            u32 end_code = READ_BE32(subtable + 16 + i * 12 + 4);
+
+            if (codepoint >= start_code && codepoint <= end_code) {
+                group = i;
+                break;
+            }
+        }
+
+        if (group == -1) {
+            return 0;
+        }
+
+        u32 start_code = READ_BE32(subtable + 16 + group * 12);
+        u32 start_glyph_id = READ_BE32(subtable + 16 + group * 12 + 8);
+
+        return (codepoint - start_code) + start_glyph_id;
     }
 
     return 0;

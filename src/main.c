@@ -26,7 +26,6 @@ int main(int argc, char** argv) {
 
     tt_init_font(font_file, &font);
 
-    printf("%u\n", tt_get_glyph_index(font_file, &font, 'A'));
     for (u32 c = 'A'; c <= 'Z'; c++) {
         printf("%c: %u\n", c, tt_get_glyph_index(font_file, &font, c));
     }
@@ -37,7 +36,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    /*printf(
+    printf(
         "num_glyphs: %u\n"
         "max_glyph_points: %u\n\n"
         "loca: { %u %u }\n"
@@ -58,7 +57,7 @@ int main(int argc, char** argv) {
         font.cmap_format,
         font.loca_format,
         font.max_glyph_index
-    );*/
+    );
 
     arena_destroy(perm_arena);
 
