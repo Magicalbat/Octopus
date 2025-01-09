@@ -10,6 +10,8 @@
 #include "truetype/truetype.h"
 
 int main(int argc, char** argv) {
+    error_frame_begin();
+
     plat_init();
 
     u64 seeds[2] = { 0 };
@@ -22,13 +24,15 @@ int main(int argc, char** argv) {
     string8 font_file = plat_file_read(perm_arena, str8_from_cstr((u8*)font_path));
     tt_font_info font = { 0 };
 
-    b32 ret = tt_init_font(font_file, &font);
+    tt_init_font(font_file, &font);
 
-    if (!ret) {
-        printf("Failed to load font file\n");
+    string8 err_str = error_frame_end(perm_arena, ERROR_OUTPUT_CONCAT);
+    if (err_str.size) {
+        printf("\x1b[31mError(s): %.*s\x1b[0m\n", (int)err_str.size, err_str.str);
+        return 1;
     }
 
-    /*printf(
+    printf(
         "num_glyphs: %u\n"
         "max_glyph_points: %u\n\n"
         "loca: { %u %u }\n"
@@ -49,7 +53,7 @@ int main(int argc, char** argv) {
         font.cmap_format,
         font.loca_format,
         font.max_glyph_index
-    );*/
+    );
 
     arena_destroy(perm_arena);
 

@@ -88,6 +88,9 @@ string8 error_frame_end(mem_arena* arena, error_output_type output_type) {
 
         _context.cur_stack_pos = last_error.stack_pos;
         _context.cur_arena_pos = last_error.arena_pos;
+    } else {
+        _context.cur_stack_pos = 0;
+        _context.cur_arena_pos = 0;
     }
 
     return out;

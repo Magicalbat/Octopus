@@ -132,6 +132,10 @@ string8 str8_createf(mem_arena* arena, const char* fmt, ...) {
 }
 
 void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
+    if (list == NULL) {
+        return;
+    }
+
     if (list->last == NULL || list->last->size == STR8_LIST_BUCKET_SIZE) {
         // Need to create a new bucket
         string8_bucket* bucket = ARENA_PUSH(arena, string8_bucket);
