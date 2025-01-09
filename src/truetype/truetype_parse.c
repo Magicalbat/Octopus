@@ -12,31 +12,35 @@
 u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
 
-b32 tt_init_font(string8 file, tt_font_info* font_info) {
-    // A file of zero size should not emit an error
-    // because it probably means the file loaded incorrectly
-    // which would have already made an error
-    if (font_info == NULL || file.size == 0) {
-        return false;
+void tt_init_font(string8 file, tt_font_info* font_info) {
+    if (font_info == NULL) {
+        return;
     }
 
     memset(font_info, 0, sizeof(tt_font_info));
 
+    // A file of zero size should not emit an error
+    // because it probably means the file loaded incorrectly
+    // which would have already made an error
+    if (file.size == 0) {
+        return;
+    }
+
     if (file.size < 12) {
         error_emit("Invalid truetype file");
-        return false;
+        return;
     }
 
     if (READ_BE32(file.str) != 0x00010000 && READ_BE32(file.str) != TAG_TO_U32("true")) {
         error_emit("Unsupported truetype format or invalid truetype file");
-        return false;
+        return;
     }
 
     // Because of the checksumAdjust in the head table,
     // the checksum of the file must be the number below
     if (_tt_checksum(file.str, file.size) != 0xB1B0AFBA) {
         error_emit("Invalid truetype file");
-        return false;
+        return;
     }
 
     // Just defaults; should be overwritten by the maxp values
@@ -71,20 +75,20 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
         font_info->tables.hmtx.offset == 0
     ) {
         error_emit("Failed to load loca, glyf, hhea, or hmtx font tables");
-        return false;
+        return;
     }
 
     tt_table_info cmap = _tt_get_and_validate_table(file, "cmap");
     if (cmap.offset == 0) {
         error_emit("Failed to load cmap font table");
-        return false;
+        return;
     }
 
     // Getting and validating correct cmap subtable
     {
         if (cmap.length < 4) {
             error_emit("Invalid cmap font table");
-            return false;
+            return;
         }
 
         u32 num_tables = READ_BE16(file.str + cmap.offset + 2);
@@ -92,7 +96,7 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
         // 4 bytes for header, 8 bytes per encoding record
         if (cmap.length < 4 + 8 * num_tables) {
             error_emit("Invalid cmap font table");
-            return false;
+            return;
         }
 
         u32 subtable_offset = 0;
@@ -124,7 +128,7 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
 
         if (font_info->cmap_subtable_offset == 0) {
             error_emit("Unable to find supported cmap font subtable");
-            return false;
+            return;
         }
 
         // Verifying the length of the subtable
@@ -132,23 +136,37 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
             // Format 4 and Format 12 are both at least 16 bytes long
             if (subtable_offset + 16 > cmap.length) {
                 error_emit("Invalid cmap font subtable");
-                return false;
+                return;
             }
 
             u32 format = READ_BE16(file.str + font_info->cmap_subtable_offset);
             u32 subtable_length = 0;
             if (format == 4) {
                 subtable_length = READ_BE16(file.str + font_info->cmap_subtable_offset + 2);
+
+                u32 seg_count = READ_BE16(file.str + font_info->cmap_subtable_offset + 6) / 2;
+
+                if (subtable_length < 16 + 2 * seg_count * 4) {
+                    error_emit("Invalid format 4 cmap font subtable");
+                    return;
+                }
             } else if (format == 12) {
                 subtable_length = READ_BE32(file.str + font_info->cmap_subtable_offset + 4);
+
+                u32 num_groups = READ_BE32(file.str + font_info->cmap_subtable_offset + 12);
+
+                if (subtable_length != 16 + num_groups * 12) {
+                    error_emit("Invalid format 12 cmap font subtable");
+                    return;
+                }
             } else {
-                error_emit("Invalid cmap font subtable");
-                return false;
+                error_emit("Unsupported cmap font subtable");
+                return;
             }
 
             if (subtable_offset + subtable_length > cmap.length) {
                 error_emit("Invalid cmap font subtable");
-                return false;
+                return;
             }
 
             font_info->cmap_format = format;
@@ -158,13 +176,13 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
     tt_table_info head = _tt_get_and_validate_table(file, "head");
     if (head.offset == 0 || head.length != 54) {
         error_emit("Failed to load head font table");
-        return false;
+        return;
     }
 
     font_info->loca_format = READ_BE16(file.str + head.offset + 50);
     if (font_info->loca_format != 0 && font_info->loca_format != 1) {
         error_emit("Invalid loca format in font");
-        return false;
+        return;
     }
 
     // Verifying that all loca offsets are within the glyf table
@@ -178,7 +196,7 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
 
                 if (offset > glyf.length) {
                     error_emit("Invalid loca font table");
-                    return false;
+                    return;
                 }
             }
         } else {
@@ -187,7 +205,7 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
 
                 if (offset > glyf.length) {
                     error_emit("Invalid loca font table");
-                    return false;
+                    return;
                 }
             }
         }
@@ -195,7 +213,66 @@ b32 tt_init_font(string8 file, tt_font_info* font_info) {
 
     font_info->max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2);
 
-    return true;
+    font_info->initialized = true;
+}
+
+u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoint) {
+    if (!font_info->initialized) {
+        return 0;
+    }
+
+    u8* subtable = file.str + font_info->cmap_subtable_offset;
+
+    if (font_info->cmap_format == 4) {
+        if (codepoint > 0xffff) {
+            return 0;
+        }
+
+        u32 length = READ_BE16(subtable + 2);
+        u16 seg_count = READ_BE16(subtable + 6) / 2;
+        u32 glyph_id_array_length = length - (16 + seg_count * 8);
+        u16 end_code = 0;
+        u16 segment = 0;
+
+        for (; segment < seg_count; segment++) {
+            end_code = READ_BE16(subtable + 14 + segment * 2);
+
+            if (end_code >= codepoint) {
+                break;
+            }
+        }
+
+        u16 start_code = READ_BE16(subtable + 16 + seg_count * 2 + segment * 2);
+
+        if (start_code > codepoint) {
+            return 0;
+        }
+
+        i16 id_delta = READ_BE16(subtable + 16 + seg_count * 4 + segment * 2);
+        u16 id_range_offset = READ_BE16(subtable + 16 + seg_count * 6 + segment * 2);
+
+        if (id_range_offset != 0) {
+            u32 glyph_id_array_index = id_range_offset / 2 + (segment - seg_count) +
+                (codepoint - start_code);
+
+            if (glyph_id_array_index >= glyph_id_array_length) {
+                return 0;
+            }
+
+            u16 glyph_id = READ_BE16(subtable + 16 + seg_count * 8 + glyph_id_array_index * 2);
+
+            if (glyph_id == 0) {
+                return 0;
+            }
+
+            return (u16)(glyph_id + id_delta);
+        } else {
+            return (u16)((u16)codepoint + id_delta);
+        }
+    } else if (font_info->cmap_format == 12) {
+    }
+
+    return 0;
 }
 
 u32 _tt_checksum(u8* data, u64 length) {

@@ -9,6 +9,8 @@ typedef struct {
 } tt_table_info;
 
 typedef struct {
+    b32 initialized;
+
     u16 num_glyphs;
     // Max of single and composite glyphs
     u16 max_glyph_points;
@@ -29,7 +31,8 @@ typedef struct {
     u32 max_glyph_index;
 } tt_font_info;
 
-b32 tt_init_font(string8 file, tt_font_info* font_info);
+void tt_init_font(string8 file, tt_font_info* font_info);
+u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoint);
 
 #endif // TRUETYPE_PARSE_H
 
