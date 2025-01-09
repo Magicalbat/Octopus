@@ -11,6 +11,8 @@ typedef struct {
 typedef struct {
     b32 initialized;
 
+    string8 file;
+
     u16 num_glyphs;
     // Max of single and composite glyphs
     u16 max_glyph_points;
@@ -28,11 +30,28 @@ typedef struct {
     u16 cmap_format;
 
     u16 loca_format;
-    u32 max_glyph_index;
 } tt_font_info;
 
+typedef enum {
+    TT_SEGMENT_LINE,
+    TT_SEGMENT_QBEZIER
+} tt_segment_type;
+
+typedef struct {
+    tt_segment_type type;
+
+    union {
+        line2f line;
+        qbezier2f qbez;
+    };
+} tt_segment;
+
 void tt_init_font(string8 file, tt_font_info* font_info);
-u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoint);
+u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);
+f32 tt_get_scale(const tt_font_info* font_info, f32 height);
+// segments should be pre-allocated with size font_info.max_glyph_points * sizeof(tt_segment)
+// Returns the number of segments written
+u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments, f32 scale);
 
 #endif // TRUETYPE_PARSE_H
 

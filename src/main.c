@@ -26,9 +26,10 @@ int main(int argc, char** argv) {
 
     tt_init_font(font_file, &font);
 
-    for (u32 c = 'A'; c <= 'Z'; c++) {
-        printf("%c: %u\n", c, tt_get_glyph_index(font_file, &font, c));
-    }
+    f32 scale = tt_get_scale(&font, 24.0f);
+    tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
+    u32 glyph_index = tt_get_glyph_index(&font, 'A');
+    u32 num_segments = tt_get_glyph_outline(&font, glyph_index, segments, scale);
 
     string8 err_str = error_frame_end(perm_arena, ERROR_OUTPUT_CONCAT);
     if (err_str.size) {
@@ -36,7 +37,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    printf(
+    /*printf(
         "num_glyphs: %u\n"
         "max_glyph_points: %u\n\n"
         "loca: { %u %u }\n"
@@ -45,8 +46,7 @@ int main(int argc, char** argv) {
         "hmtx: { %u %u }\n\n"
         "cmap_subtable_offset: %u\n"
         "cmap_format: %u\n\n"
-        "loca_format: %u\n"
-        "max_glyph_index: %u\n",
+        "loca_format: %u\n",
         font.num_glyphs,
         font.max_glyph_points,
         font.tables.loca.offset, font.tables.loca.length,
@@ -55,9 +55,8 @@ int main(int argc, char** argv) {
         font.tables.hmtx.offset, font.tables.hmtx.length,
         (u32)font.cmap_subtable_offset,
         font.cmap_format,
-        font.loca_format,
-        font.max_glyph_index
-    );
+        font.loca_format
+    );*/
 
     arena_destroy(perm_arena);
 

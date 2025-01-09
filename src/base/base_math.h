@@ -7,6 +7,17 @@ typedef struct { f32 x, y;       } vec2f;
 typedef struct { f32 x, y, z;    } vec3f;
 typedef struct { f32 x, y, z, w; } vec4f;
 
+typedef struct {
+    vec2f p0;
+    vec2f p1;
+} line2f;
+
+typedef struct {
+    vec2f p0;
+    vec2f p1;
+    vec2f p2;
+} qbezier2f;
+
 vec2f vec2f_add(vec2f a, vec2f b);
 vec2f vec2f_sub(vec2f a, vec2f b);
 vec2f vec2f_comp_mul(vec2f a, vec2f b);

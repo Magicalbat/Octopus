@@ -11,6 +11,9 @@
 
 u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
+// font_info should be initialized before calling
+// -1 is returned if the glyph index has no glyph
+void _tt_get_glyph_offset(const tt_font_info* font_info, u32 glyph_index, u32* glyph_offset, u32* glyph_length);
 
 void tt_init_font(string8 file, tt_font_info* font_info) {
     if (font_info == NULL) {
@@ -42,6 +45,8 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         error_emit("Invalid truetype file");
         return;
     }
+
+    font_info->file = file;
 
     // Just defaults; should be overwritten by the maxp values
     font_info->num_glyphs = 0xffff;
@@ -211,16 +216,20 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         }
     }
 
-    font_info->max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2);
+    u32 max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2) - 1;
+    if (max_glyph_index < font_info->num_glyphs) {
+        font_info->num_glyphs = max_glyph_index;
+    }
 
     font_info->initialized = true;
 }
 
-u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoint) {
-    if (!font_info->initialized) {
+u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
+    if (font_info == NULL || !font_info->initialized) {
         return 0;
     }
 
+    string8 file = font_info->file;
     u8* subtable = file.str + font_info->cmap_subtable_offset;
 
     if (font_info->cmap_format == 4) {
@@ -296,6 +305,148 @@ u32 tt_get_glyph_index(string8 file, const tt_font_info* font_info, u32 codepoin
     return 0;
 }
 
+f32 tt_get_scale(const tt_font_info* font_info, f32 height) {
+    if (font_info == NULL || !font_info->initialized) {
+        return 0;
+    }
+
+    string8 file = font_info->file;
+    tt_table_info hhea = font_info->tables.hhea;
+
+    i16 ascent = READ_BE16(file.str + hhea.offset + 4);
+    i16 descent = READ_BE16(file.str + hhea.offset + 6);
+    i16 font_height = ascent - descent;
+
+    return height / (f32)font_height;
+}
+
+typedef union {
+    struct {
+        u8 on_curve: 1;
+        u8 x_short: 1;
+        u8 y_short: 1;
+        u8 repeat: 1;
+        u8 x_same_or_positive: 1;
+        u8 y_same_or_positive: 1;
+        u8 reserved: 2;
+    };
+    u8 bits;
+} _tt_glyph_flag;
+
+u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments, f32 scale) {
+    if (font_info == NULL || !font_info->initialized) {
+        return 0;
+    }
+
+    tt_table_info glyf_table = font_info->tables.glyf;
+
+    u32 glyph_offset = 0;
+    u32 glyph_length = 0;
+    _tt_get_glyph_offset(font_info, glyph_index, &glyph_offset, &glyph_length);
+    if (glyph_length == 0 || glyph_offset + glyph_length > glyf_table.length) {
+        return 0;
+    }
+
+    u8* glyph_data = font_info->file.str + glyf_table.offset + glyph_offset;
+
+    u32 num_segments = 0;
+
+    i16 num_contours = READ_BE16(glyph_data);
+    u32 num_points = (u32)READ_BE16(glyph_data + 10 + 2 * (num_contours - 1)) + 1;
+    u16 instructions_length = READ_BE16(glyph_data + 10 + num_contours * 2);
+
+    if (num_points == 0) {
+        return 0;
+    }
+
+    if (num_contours == -1) {
+        // TODO: support compound glyphs
+        return 0;
+    } else {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+        _tt_glyph_flag* flags = ARENA_PUSH_ARRAY(scratch.arena, _tt_glyph_flag, num_points);
+        i16* x_coords = ARENA_PUSH_ARRAY(scratch.arena, i16, num_points);
+        i16* y_coords = ARENA_PUSH_ARRAY(scratch.arena, i16, num_points);
+
+        u32 cur_offset = 12 + 2 * num_contours + instructions_length;
+
+        // Parsing flags
+        for (u32 i = 0; i < num_points; i++) {
+            flags[i].bits = *(glyph_data + cur_offset++);
+
+            if (flags[i].repeat) {
+                u8 to_repeat = *(glyph_data + cur_offset++);
+
+                while (to_repeat--) {
+                    i++;
+                    flags[i].bits = flags[i-1].bits;
+                }
+            }
+        }
+
+        // Parsing x-coords
+        i16 prev_coord = 0;
+        i16 cur_coord_diff = 0;
+        for (u32 i = 0; i < num_points; i++) {
+            u32 flag_combined = (flags[i].x_short << 1) | flags[i].x_same_or_positive;
+
+            switch (flag_combined) {
+                case 0b00: {
+                    cur_coord_diff = READ_BE16(glyph_data + cur_offset);
+                    cur_offset += 2;
+                } break;
+                case 0b01: {
+                    cur_coord_diff = 0;
+                } break;
+                case 0b10: {
+                    cur_coord_diff = -(*(glyph_data + cur_offset++));
+                } break;
+                case 0b11: {
+                    cur_coord_diff = *(glyph_data + cur_offset++);
+                } break;
+            }
+
+            x_coords[i] = prev_coord + cur_coord_diff;
+            prev_coord = x_coords[i];
+        }
+
+        // Parsing y-coords
+        prev_coord = 0;
+        cur_coord_diff = 0;
+        for (u32 i = 0; i < num_points; i++) {
+           u32 flag_combined = (flags[i].y_short << 1) | flags[i].y_same_or_positive;
+
+            switch (flag_combined) {
+                case 0b00: {
+                    cur_coord_diff = READ_BE16(glyph_data + cur_offset);
+                    cur_offset += 2;
+                } break;
+                case 0b01: {
+                    cur_coord_diff = 0;
+                } break;
+                case 0b10: {
+                    cur_coord_diff = -(*(glyph_data + cur_offset++));
+                } break;
+                case 0b11: {
+                    cur_coord_diff = *(glyph_data + cur_offset++);
+                } break;
+            }
+
+            y_coords[i] = prev_coord + cur_coord_diff;
+            prev_coord = y_coords[i];
+        }
+
+        for (u32 i = 0; i < num_points; i++) {
+            printf("%d, %d\n", x_coords[i], y_coords[i]);
+        }
+
+        arena_scratch_release(scratch);
+    }
+
+    return num_segments;
+}
+
 u32 _tt_checksum(u8* data, u64 length) {
     u32 sum = 0;
 
@@ -369,5 +520,29 @@ tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
 
 invalid:
     return (tt_table_info){ 0 };
+}
+
+void _tt_get_glyph_offset(const tt_font_info* font_info, u32 glyph_index, u32* glyph_offset, u32* glyph_length) {
+    if (glyph_index >= font_info->num_glyphs) {
+        return;
+    }
+
+    string8 file = font_info->file;
+
+    tt_table_info loca = font_info->tables.loca;
+
+    u32 offset1 = 0;
+    u32 offset2 = 0;
+
+    if (font_info->loca_format == 0) {
+        offset1 = READ_BE16(file.str + loca.offset + glyph_index * 2) * 2;
+        offset2 = READ_BE16(file.str + loca.offset + glyph_index * 2 + 2) * 2;
+    } else { // loca_format == 1
+        offset1 = READ_BE32(file.str + loca.offset + glyph_index * 4);
+        offset2 = READ_BE32(file.str + loca.offset + glyph_index * 4 + 4);
+    }
+
+    *glyph_offset = offset1;
+    *glyph_length = offset2 - offset1;
 }
 
