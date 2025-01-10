@@ -17,6 +17,7 @@ X(void, glCompressedTexImage3D, (GLenum target, GLint level, GLenum internalform
 X(void, glCompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void *data))
 #endif
 
+X(void, glDebugMessageCallback, (GLDEBUGPROC callback, const void *userParam))
 X(void, glAttachShader, (GLuint program, GLuint shader))
 X(void, glBindAttribLocation, (GLuint program, GLuint index, const GLchar *name))
 X(void, glBindBuffer, (GLenum target, GLuint buffer))

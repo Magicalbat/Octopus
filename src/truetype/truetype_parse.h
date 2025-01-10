@@ -51,7 +51,7 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);
 f32 tt_get_scale(const tt_font_info* font_info, f32 height);
 // segments should be pre-allocated with size font_info.max_glyph_points * sizeof(tt_segment)
 // Returns the number of segments written
-u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments, f32 scale);
+u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments);
 
 #endif // TRUETYPE_PARSE_H
 

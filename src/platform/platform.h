@@ -11,6 +11,7 @@ string8 plat_get_name(void);
 void plat_fatal_error(const char* msg);
 
 u64 plat_time_usec(void);
+void plat_sleep_ms(u32 ms);
 
 u64 plat_file_size(string8 file_name);
 string8 plat_file_read(mem_arena* arena, string8 file_name);

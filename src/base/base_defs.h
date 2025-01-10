@@ -42,6 +42,9 @@ typedef double f64;
 static_assert(sizeof(f32) == 4, "Size of float must be 4");
 static_assert(sizeof(f64) == 8, "Size of double must be 8");
 
+#define STRINGIFY_NX(s) #s
+#define STRINGIFY(s) STRINGIFY_NX(s)
+
 #define KiB(n) ((u64)(n) << 10)
 #define MiB(n) ((u64)(n) << 20)
 #define GiB(n) ((u64)(n) << 30)

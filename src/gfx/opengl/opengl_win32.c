@@ -132,8 +132,9 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 #define WGL_CONTEXT_MAJOR_VERSION_ARB             0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB             0x2092
 #define WGL_CONTEXT_PROFILE_MASK_ARB              0x9126
-#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB          0x00000001
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB          0x0001
 #define WGL_CONTEXT_FLAGS_ARB                     0x2094
+#define WGL_CONTEXT_DEBUG_BIT_ARB                 0x0001
 #define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB    0x0002
 
     {
@@ -142,7 +143,10 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
             WGL_CONTEXT_MINOR_VERSION_ARB, 5,
             WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
             WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-            // Debug flag?
+
+#ifndef NDEBUG
+            WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
+#endif
             0,
         };
 

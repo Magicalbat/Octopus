@@ -39,6 +39,10 @@ u64 plat_time_usec(void) {
     return (u64)ticks.QuadPart * 1000000 / ticks_per_sec;
 }
 
+void plat_sleep_ms(u32 ms) {
+    Sleep(ms);
+}
+
 u64 plat_file_size(string8 file_name) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
