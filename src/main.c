@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 
     //f32 scale = tt_get_scale(&font, 24.0f);
     tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
-    u32 glyph_index = tt_get_glyph_index(&font, 'A');
+    u32 glyph_index = tt_get_glyph_index(&font, 0x211d);
     u32 num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
             verts[num_verts++] = segments[i].line.p1;
         }
 
-        vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vec2f) * num_segments * 2, verts, GL_STATIC_DRAW);
+        vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vec2f) * num_segments * 2, verts, GL_DYNAMIC_DRAW);
 
         arena_scratch_release(scratch);
     }
@@ -103,12 +103,37 @@ int main(int argc, char** argv) {
 
         gfx_win_process_events(win);
 
+        for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {
+            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
+                glyph_index = tt_get_glyph_index(&font, key);
+                num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
+
+                mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+                vec2f* verts = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_segments * 2);
+                u32 num_verts = 0;
+                
+                for (u32 i = 0; i < num_segments; i++) {
+                    verts[num_verts++] = segments[i].line.p0;
+                    verts[num_verts++] = segments[i].line.p1;
+                }
+
+                glBindVertexArray(vertex_array);
+                glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(vec2f) * num_segments * 2, verts, GL_DYNAMIC_DRAW);
+
+                arena_scratch_release(scratch);
+
+
+                break;
+            }
+        }
+
         scale *= 1.0f + (10.0f * win->mouse_scroll * delta);
-        printf("%3.3f\r", scale);
 
         f32 view_mat[] = {
             scale, 0.0f, 0.0f,
-            0.0f, scale * ((f32)win->height / win->width), 0.0f,
+            0.0f, scale * ((f32)win->width / win->height), 0.0f,
             0.0f, 0.0f, 0.0f
         };
 

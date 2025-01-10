@@ -352,6 +352,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
     u32 num_segments = 0;
 
     i16 num_contours = READ_BE16(glyph_data);
+    // Last end_point_of_contour + 1
     u32 num_points = (u32)READ_BE16(glyph_data + 10 + 2 * (num_contours - 1)) + 1;
     u16 instructions_length = READ_BE16(glyph_data + 10 + num_contours * 2);
 
@@ -372,7 +373,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         u32 cur_offset = 12 + 2 * num_contours + instructions_length;
 
         // Parsing flags
-        for (u32 i = 0; i < num_points && cur_offset < glyph_length; i++) {
+        for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
             flags[i].bits = *(glyph_data + cur_offset++);
 
             if (flags[i].repeat) {
@@ -388,8 +389,12 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         // Parsing x-coords
         i16 prev_coord = 0;
         i16 cur_coord_diff = 0;
-        for (u32 i = 0; i < num_points && cur_offset < glyph_length; i++) {
+        for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
             u32 flag_combined = (flags[i].x_short << 1) | flags[i].x_same_or_positive;
+
+            if (cur_offset == glyph_length && flag_combined != 0b01) {
+                return 0;
+            }
 
             switch (flag_combined) {
                 case 0b00: {
@@ -414,8 +419,12 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         // Parsing y-coords
         prev_coord = 0;
         cur_coord_diff = 0;
-        for (u32 i = 0; i < num_points && cur_offset < glyph_length; i++) {
+        for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
            u32 flag_combined = (flags[i].y_short << 1) | flags[i].y_same_or_positive;
+
+            if (cur_offset == glyph_length && flag_combined != 0b01) {
+                return 0;
+            }
 
             switch (flag_combined) {
                 case 0b00: {
@@ -444,11 +453,9 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         for (u32 contour = 0; contour < (u32)num_contours && cur_offset < glyph_length; contour++) {
             u32 end_point_of_contour = READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
-
-            printf("%u\n", end_point_of_contour);
         
             for (u32 point = prev_end_point_of_contour + 1; point <= end_point_of_contour; point++) {
-                u32 next_point = point == end_point_of_contour ? prev_end_point_of_contour + 1 : point + 1;
+                u32 next_point = point >= end_point_of_contour ? prev_end_point_of_contour + 1 : point + 1;
 
                 segments[num_segments++] = (tt_segment){
                     .type = TT_SEGMENT_LINE,
