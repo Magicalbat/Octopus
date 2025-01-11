@@ -43,8 +43,8 @@ int main(int argc, char** argv) {
 
     //f32 scale = tt_get_scale(&font, 24.0f);
     tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
-    u32 glyph_index = tt_get_glyph_index(&font, 0x211d);
-    u32 num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
+    u32 prev_codepoint = 0;
+    u32 codepoint = 0x211d;
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -65,22 +65,9 @@ int main(int argc, char** argv) {
     glGenVertexArrays(1, &vertex_array);
     glBindVertexArray(vertex_array);
 
-    u32 vertex_buffer = 0;
-    {
-        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-        vec2f* verts = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_segments * 2);
-        u32 num_verts = 0;
-        
-        for (u32 i = 0; i < num_segments; i++) {
-            verts[num_verts++] = segments[i].line.p0;
-            verts[num_verts++] = segments[i].line.p1;
-        }
-
-        vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vec2f) * num_segments * 2, verts, GL_DYNAMIC_DRAW);
-
-        arena_scratch_release(scratch);
-    }
+    u32 max_verts = 0xffff;
+    u32 num_verts = 0;
+    u32 vertex_buffer = vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, max_verts, NULL, GL_DYNAMIC_DRAW);
 
     // End of setup error frame
     {
@@ -105,29 +92,82 @@ int main(int argc, char** argv) {
 
         for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {
             if (GFX_IS_KEY_JUST_DOWN(win, key)) {
-                glyph_index = tt_get_glyph_index(&font, key);
-                num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
-
-                mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-                vec2f* verts = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_segments * 2);
-                u32 num_verts = 0;
+                codepoint = key;
                 
-                for (u32 i = 0; i < num_segments; i++) {
-                    verts[num_verts++] = segments[i].line.p0;
-                    verts[num_verts++] = segments[i].line.p1;
-                }
-
-                glBindVertexArray(vertex_array);
-                glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-                glBufferData(GL_ARRAY_BUFFER, sizeof(vec2f) * num_segments * 2, verts, GL_DYNAMIC_DRAW);
-
-                arena_scratch_release(scratch);
-
-
                 break;
             }
         }
+
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_UP)) {
+            codepoint++;
+        }
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_DOWN)) {
+            codepoint--;
+        }
+
+        if (prev_codepoint != codepoint) {
+            u32 glyph_index = tt_get_glyph_index(&font, codepoint);
+            u32 num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
+
+            mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+            #define BEZ_SUBDIVISIONS 10
+
+            num_verts = 0;
+            for (u32 i = 0; i < num_segments; i++) {
+                switch (segments[i].type) {
+                    case TT_SEGMENT_LINE: {
+                        num_verts += 2;
+                    } break;
+                    case TT_SEGMENT_QBEZIER: {
+                        num_verts += BEZ_SUBDIVISIONS * 2;
+                    } break;
+                }
+            }
+
+            vec2f* verts = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_verts);
+            u32 cur_vert = 0;
+            
+            for (u32 i = 0; i < num_segments; i++) {
+                switch (segments[i].type) {
+                    case TT_SEGMENT_LINE: {
+                        verts[cur_vert++] = segments[i].line.p0;
+                        verts[cur_vert++] = segments[i].line.p1;
+                    } break;
+                    case TT_SEGMENT_QBEZIER: {
+                        qbezier2f* qbez = &segments[i].qbez;
+
+                        vec2f c0 = vec2f_add(vec2f_sub(qbez->p2, vec2f_scale(qbez->p1, 2.0f)), qbez->p0);
+                        vec2f c1 = vec2f_sub(qbez->p1, qbez->p0);
+                        vec2f c2 = qbez->p0;
+
+                        vec2f prev_point = c2;
+                        for (u32 j = 1; j <= BEZ_SUBDIVISIONS; j++) {
+                            f32 t = (f32)j / BEZ_SUBDIVISIONS;
+                            vec2f point = vec2f_add(
+                                vec2f_add(
+                                    vec2f_scale(c0, t * t),
+                                    vec2f_scale(c1, 2.0f * t)
+                                ), c2
+                            );
+
+                            verts[cur_vert++] = prev_point;
+                            verts[cur_vert++] = point;
+
+                            prev_point = point;
+                        }
+                    } break;
+                }
+            }
+
+            glBindVertexArray(vertex_array);
+            glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * num_verts, verts);
+
+            arena_scratch_release(scratch);
+        }
+
+        prev_codepoint = codepoint;
 
         scale *= 1.0f + (10.0f * win->mouse_scroll * delta);
 
@@ -149,7 +189,7 @@ int main(int argc, char** argv) {
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), NULL);
 
-        glDrawArrays(GL_LINES, 0, num_segments * 2);
+        glDrawArrays(GL_LINES, 0, num_verts);
 
         glDisableVertexAttribArray(0);
 

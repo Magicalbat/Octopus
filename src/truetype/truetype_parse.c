@@ -393,7 +393,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             u32 flag_combined = (flags[i].x_short << 1) | flags[i].x_same_or_positive;
 
             if (cur_offset == glyph_length && flag_combined != 0b01) {
-                return 0;
+                break;
             }
 
             switch (flag_combined) {
@@ -423,7 +423,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
            u32 flag_combined = (flags[i].y_short << 1) | flags[i].y_same_or_positive;
 
             if (cur_offset == glyph_length && flag_combined != 0b01) {
-                return 0;
+                break;
             }
 
             switch (flag_combined) {
@@ -448,25 +448,71 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
         // Converting data to tt_segments
         cur_offset = 10;
-        i32 prev_end_point_of_contour = -1;
+
+        u32 start_index = 0;
+        u32 end_index = 0;
+        u32 point_offset = 0;
+        u32 contour_length = 0;
 
         for (u32 contour = 0; contour < (u32)num_contours && cur_offset < glyph_length; contour++) {
-            u32 end_point_of_contour = READ_BE16(glyph_data + cur_offset);
+            end_index = READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
-        
-            for (u32 point = prev_end_point_of_contour + 1; point <= end_point_of_contour; point++) {
-                u32 next_point = point >= end_point_of_contour ? prev_end_point_of_contour + 1 : point + 1;
+            contour_length = end_index + 1 - start_index;
 
-                segments[num_segments++] = (tt_segment){
-                    .type = TT_SEGMENT_LINE,
-                    .line = (line2f){
-                        (vec2f){ x_coords[point], y_coords[point] },
-                        (vec2f){ x_coords[next_point], y_coords[next_point] }
-                    }
-                };
+            // Ensure the first point is on the curve
+            point_offset = 0;
+            while (!flags[start_index + point_offset % contour_length].on_curve) {
+                printf("asdlfkjasdf\n");
+                point_offset++;
             }
 
-            prev_end_point_of_contour = end_point_of_contour;
+            u32 prev_point_index = start_index + point_offset % contour_length;
+            vec2f prev_point = { x_coords[prev_point_index], y_coords[prev_point_index] };
+            // The +1 is to add the segment that closes the contour
+            for (u32 i = 0; i < contour_length + 1; i++) {
+                u32 point_index = start_index + (i + point_offset) % contour_length;
+                vec2f point = { x_coords[point_index], y_coords[point_index] };
+
+                if (flags[point_index].on_curve) {
+                    segments[num_segments++] = (tt_segment){
+                        .type = TT_SEGMENT_LINE,
+                        .line = (line2f){ prev_point, point }
+                    };
+
+                    prev_point = point;
+                } else {
+                    // Bezier
+                    u32 next_point_index = start_index + (i + 1 + point_offset) % contour_length;
+                    vec2f next_point = { x_coords[next_point_index], y_coords[next_point_index] };
+
+                    if (flags[next_point_index].on_curve) {
+                        i++;
+
+                        segments[num_segments++] = (tt_segment){
+                            .type = TT_SEGMENT_QBEZIER,
+                            .qbez = (qbezier2f){
+                                prev_point, point, next_point
+                            }
+                        };
+
+                        prev_point = next_point;
+                    } else { // Next point off curve
+                        // Get midpoint between the two off-curve points
+                        vec2f p2 = vec2f_scale(vec2f_add(point, next_point), 0.5f);
+
+                        segments[num_segments++] = (tt_segment){
+                            .type = TT_SEGMENT_QBEZIER,
+                            .qbez = (qbezier2f){
+                                prev_point, point, p2
+                            }
+                        };
+
+                        prev_point = p2;
+                    }
+                }
+            }
+
+            start_index = end_index + 1;
         }
 
         arena_scratch_release(scratch);
