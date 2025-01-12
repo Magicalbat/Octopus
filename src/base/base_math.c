@@ -139,6 +139,25 @@ vec4f vec4f_norm(vec4f v) {
     return (vec4f){ v.x * r, v.y * r, v.z * r, v.w * r };
 }
 
+mat2f mat2f_mul_mat2f(mat2f a, mat2f b) {
+    mat2f out = { .m = {
+        a.m[0] * b.m[0] + a.m[2] * b.m[1], 
+        a.m[1] * b.m[0] + a.m[3] * b.m[1],
+        a.m[0] * b.m[2] + a.m[2] * b.m[3],
+        a.m[1] * b.m[2] + a.m[3] * b.m[3],
+    }};
+
+    return out;
+}
+vec2f mat2f_mul_vec2f(const mat2f* mat, vec2f v) {
+    const f32* m = mat->m;
+
+    return (vec2f){
+        v.x * m[0] + v.y * m[1],
+        v.x * m[2] + v.y * m[3]
+    };
+}
+
 void mat3f_transform(mat3f* mat, vec2f scale, vec2f offset, f32 rotation) {
     f32 r_sin = sinf(rotation);
     f32 r_cos = cosf(rotation);

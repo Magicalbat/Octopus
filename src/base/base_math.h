@@ -8,6 +8,7 @@ typedef struct { f32 x, y, z;    } vec3f;
 typedef struct { f32 x, y, z, w; } vec4f;
 
 // Row major
+typedef struct { f32 m[4]; } mat2f;
 typedef struct { f32 m[9]; } mat3f;
 
 typedef struct {
@@ -68,6 +69,9 @@ b32 vec4f_eq(vec4f a, vec4f b);
 f32 vec4f_sqr_len(vec4f v);
 f32 vec4f_len(vec4f v);
 vec4f vec4f_norm(vec4f v);
+
+mat2f mat2f_mul_mat2f(mat2f a, mat2f b);
+vec2f mat2f_mul_vec2f(const mat2f* mat, vec2f v);
 
 void mat3f_transform(mat3f* mat, vec2f scale, vec2f offset, f32 rotation);
 void mat3f_from_view(mat3f* mat, viewf v);

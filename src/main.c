@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     //f32 scale = tt_get_scale(&font, 24.0f);
     tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
     u32 prev_codepoint = 0;
-    u32 codepoint = 'A';
+    u32 codepoint = L'Ñ';
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
 
     viewf view = {
         .aspect_ratio = (f32)win->width / win->height,
-        .width = win->width
+        .width = win->width * 2
     };
     mat3f view_mat = { 0 };
     mat3f inv_view_mat = { 0 };
@@ -140,8 +140,14 @@ int main(int argc, char** argv) {
         }
 
         if (prev_codepoint != codepoint) {
+            printf("%u\n", codepoint);
+
             u32 glyph_index = tt_get_glyph_index(&font, codepoint);
-            u32 num_segments = tt_get_glyph_outline(&font, glyph_index, segments);
+            u32 num_segments = tt_get_glyph_outline(
+                &font, glyph_index, segments, 0,
+                (mat2f){ .m = { 1, 0, 0, 1 } },
+                (vec2f){ 0, 0 }
+            );
 
             mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
@@ -167,8 +173,8 @@ int main(int argc, char** argv) {
 
                 switch (segments[i].type) {
                     case TT_SEGMENT_LINE: {
-                        verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(segments[i].line.p0, scale));
-                        verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(segments[i].line.p1, scale));
+                        verts[cur_vert++] = vec2f_comp_mul(segments[i].line.p0, scale);
+                        verts[cur_vert++] = vec2f_comp_mul(segments[i].line.p1, scale);
                     } break;
                     case TT_SEGMENT_QBEZIER: {
                         qbezier2f* qbez = &segments[i].qbez;
@@ -187,8 +193,8 @@ int main(int argc, char** argv) {
                                 ), c2
                             );
 
-                            verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(prev_point, scale));
-                            verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(point, scale));
+                            verts[cur_vert++] = vec2f_comp_mul(prev_point, scale);
+                            verts[cur_vert++] = vec2f_comp_mul(point, scale);
 
                             prev_point = point;
                         }

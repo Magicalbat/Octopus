@@ -51,20 +51,23 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
     // Just defaults; should be overwritten by the maxp values
     font_info->num_glyphs = 0xffff;
     font_info->max_glyph_points = 0xffff;
+    font_info->max_component_elements = 0xffff;
 
     tt_table_info maxp = _tt_get_and_validate_table(file, "maxp");
-    if (maxp.offset != 0) {
+    if (maxp.offset != 0 && maxp.length > 4) {
         u32 version = READ_BE32(file.str + maxp.offset);
 
-        if (version == 0x00005000) {
+        if (version == 0x00005000 && maxp.length == 6) {
             font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
-        } else if (version == 0x00010000) {
+        } else if (version == 0x00010000 && maxp.length == 32) {
             font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
 
             u16 max_points = READ_BE16(file.str + maxp.offset + 6);
             u16 max_composite_points = READ_BE16(file.str + maxp.offset + 10);
 
             font_info->max_glyph_points = MAX(max_points, max_composite_points);
+
+            font_info->max_component_elements = READ_BE16(file.str + maxp.offset + 28);
         }
     }
 
@@ -328,12 +331,31 @@ typedef union {
         u8 repeat: 1;
         u8 x_same_or_positive: 1;
         u8 y_same_or_positive: 1;
-        u8 reserved: 2;
+        u8 overlap_simple: 1;
+        u8 _reserved: 1;
     };
     u8 bits;
-} _tt_glyph_flag;
+} _tt_glyph_flags;
 
-u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments) {
+typedef union {
+    struct {
+        u8 args_are_16bit: 1;
+        u8 args_are_xy: 1;
+        u8 round_xy_to_grid: 1;
+        u8 have_scale: 1;
+        u8 _reserved0: 1;
+        u8 more_components: 1;
+        u8 have_xy_scale: 1;
+        u8 have_matrix: 1;
+        u8 have_instructions: 1;
+        u8 my_metric: 1;
+        u8 overlap_compound: 1;
+        u8 _reserved1: 5;
+    };
+    u16 bits;
+} _tt_comp_flags;
+
+u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments, u32 segments_offset, mat2f transform, vec2f offset) {
     if (font_info == NULL || !font_info->initialized) {
         return 0;
     }
@@ -361,15 +383,102 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
     }
 
     if (num_contours == -1) {
-        // TODO: support compound glyphs
+        u32 cur_offset = 10;
 
-        return 0;
+        for (u16 i = 0; i < font_info->max_component_elements; i++) {
+            if (cur_offset + 4 > glyph_length) {
+                break;
+            }
+
+            _tt_comp_flags flags = { .bits = READ_BE16(glyph_data + cur_offset) };
+            cur_offset += 2;
+            u16 glyph_index = READ_BE16(glyph_data + cur_offset);
+            cur_offset += 2;
+
+            if (!flags.args_are_xy) {
+                // TODO: support match point compound glyphs
+                return 0;
+            }
+
+            vec2f local_offset = { 0 };
+            mat2f local_mat = { .m = {
+                1, 0,
+                0, 1
+            } };
+
+            if (flags.args_are_16bit) {
+                if (cur_offset + 4 > glyph_length) {
+                    break;
+                }
+
+                local_offset.x = READ_BE16(glyph_data + cur_offset);
+                local_offset.y = READ_BE16(glyph_data + cur_offset + 2);
+
+                cur_offset += 4;
+            } else {
+                if (cur_offset + 2 > glyph_length) {
+                    break;
+                }
+
+                local_offset.x = (i8)(*(glyph_data + cur_offset++));
+                local_offset.y = (i8)(*(glyph_data + cur_offset++));
+            }
+
+            if (flags.have_scale) {
+                if (cur_offset + 2 > glyph_length) {
+                    break;
+                }
+
+                i16 scale_2_14 = READ_BE16(glyph_data + cur_offset);
+                cur_offset += 2;
+
+                f32 scale = (f32)scale_2_14 / 16384.0f;
+
+                local_mat.m[0] = scale;
+                local_mat.m[3] = scale;
+            } else if (flags.have_xy_scale) {
+                if (cur_offset + 4 > glyph_length) {
+                    break;
+                }
+
+                i16 x_scale_2_14 = READ_BE16(glyph_data + cur_offset);
+                i16 y_scale_2_14 = READ_BE16(glyph_data + cur_offset + 2);
+                cur_offset += 4;
+
+                local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
+                local_mat.m[3] = (f32)y_scale_2_14 / 16384.0f;
+
+            } else if (flags.have_matrix) {
+                if (cur_offset + 8 > glyph_length) {
+                    break;
+                }
+
+                i16 x_scale_2_14 = READ_BE16(glyph_data + cur_offset);
+                i16 scale01_2_14 = READ_BE16(glyph_data + cur_offset + 2);
+                i16 scale10_2_14 = READ_BE16(glyph_data + cur_offset + 4);
+                i16 y_scale_2_14 = READ_BE16(glyph_data + cur_offset + 6);
+                cur_offset += 8;
+
+                local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
+                local_mat.m[1] = (f32)scale01_2_14 / 16384.0f;
+                local_mat.m[2] = (f32)scale10_2_14 / 16384.0f;
+                local_mat.m[3] = (f32)y_scale_2_14 / 16384.0f;
+            }
+
+            vec2f child_offset = mat2f_mul_vec2f(&transform, local_offset);
+            mat2f child_mat = mat2f_mul_mat2f(local_mat, transform);
+
+            num_segments += tt_get_glyph_outline(font_info, glyph_index, segments, segments_offset + num_segments, child_mat, child_offset);
+
+            if (!flags.more_components) {
+                break;
+            }
+        }
     } else {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-        _tt_glyph_flag* flags = ARENA_PUSH_ARRAY(scratch.arena, _tt_glyph_flag, num_points);
-        i16* x_coords = ARENA_PUSH_ARRAY(scratch.arena, i16, num_points);
-        i16* y_coords = ARENA_PUSH_ARRAY(scratch.arena, i16, num_points);
+        _tt_glyph_flags* flags = ARENA_PUSH_ARRAY(scratch.arena, _tt_glyph_flags, num_points);
+        vec2f* points = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_points);
 
         u32 cur_offset = 12 + 2 * num_contours + instructions_length;
 
@@ -413,8 +522,8 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                 } break;
             }
 
-            x_coords[i] = prev_coord + cur_coord_diff;
-            prev_coord = x_coords[i];
+            points[i].x = prev_coord + cur_coord_diff;
+            prev_coord = points[i].x;
         }
 
         // Parsing y-coords
@@ -443,8 +552,14 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                 } break;
             }
 
-            y_coords[i] = prev_coord + cur_coord_diff;
-            prev_coord = y_coords[i];
+            points[i].y = prev_coord + cur_coord_diff;
+            prev_coord = points[i].y;
+        }
+
+        // Transforming points
+        for (u32 i = 0; i < num_points; i++) {
+            points[i] = mat2f_mul_vec2f(&transform, points[i]);
+            points[i] = vec2f_add(points[i], offset);
         }
 
         // Converting data to tt_segments
@@ -467,14 +582,14 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             }
 
             u32 prev_point_index = start_index + point_offset % contour_length;
-            vec2f prev_point = { x_coords[prev_point_index], y_coords[prev_point_index] };
+            vec2f prev_point = points[prev_point_index];
             // The +1 is to add the segment that closes the contour
             for (u32 i = 0; i < contour_length + 1; i++) {
                 u32 point_index = start_index + (i + point_offset) % contour_length;
-                vec2f point = { x_coords[point_index], y_coords[point_index] };
+                vec2f point = points[point_index];
 
                 if (flags[point_index].on_curve) {
-                    segments[num_segments++] = (tt_segment){
+                    segments[segments_offset + num_segments++] = (tt_segment){
                         .type = TT_SEGMENT_LINE,
                         .line = (line2f){ prev_point, point }
                     };
@@ -483,12 +598,12 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                 } else {
                     // Bezier
                     u32 next_point_index = start_index + (i + 1 + point_offset) % contour_length;
-                    vec2f next_point = { x_coords[next_point_index], y_coords[next_point_index] };
+                    vec2f next_point = points[next_point_index];
 
                     if (flags[next_point_index].on_curve) {
                         i++;
 
-                        segments[num_segments++] = (tt_segment){
+                        segments[segments_offset + num_segments++] = (tt_segment){
                             .type = TT_SEGMENT_QBEZIER,
                             .qbez = (qbezier2f){
                                 prev_point, point, next_point
@@ -500,7 +615,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                         // Get midpoint between the two off-curve points
                         vec2f p2 = vec2f_scale(vec2f_add(point, next_point), 0.5f);
 
-                        segments[num_segments++] = (tt_segment){
+                        segments[segments_offset + num_segments++] = (tt_segment){
                             .type = TT_SEGMENT_QBEZIER,
                             .qbez = (qbezier2f){
                                 prev_point, point, p2
