@@ -362,6 +362,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
     if (num_contours == -1) {
         // TODO: support compound glyphs
+
         return 0;
     } else {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -462,7 +463,6 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             // Ensure the first point is on the curve
             point_offset = 0;
             while (!flags[start_index + point_offset % contour_length].on_curve) {
-                printf("asdlfkjasdf\n");
                 point_offset++;
             }
 

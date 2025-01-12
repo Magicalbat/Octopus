@@ -1,4 +1,6 @@
 #include "base_math.h"
+#include "base_error.h"
+
 #include <math.h>
 
 vec2f vec2f_add(vec2f a, vec2f b) {
@@ -137,5 +139,61 @@ vec4f vec4f_norm(vec4f v) {
     return (vec4f){ v.x * r, v.y * r, v.z * r, v.w * r };
 }
 
+void mat3f_transform(mat3f* mat, vec2f scale, vec2f offset, f32 rotation) {
+    f32 r_sin = sinf(rotation);
+    f32 r_cos = cosf(rotation);
 
+    *mat = (mat3f){ .m = {
+         r_cos * scale.x, r_sin * scale.x, offset.x,
+        -r_sin * scale.y, r_cos * scale.y, offset.y,
+         0.0f, 0.0f, 1.0f
+    } };
+}
+
+void mat3f_from_view(mat3f* mat, viewf v) {
+    vec2f size = vec2f_scale((vec2f){ 1.0f, 1.0f / v.aspect_ratio }, v.width);
+
+    vec2f scale = {
+         2.0f / size.x,
+        -2.0f / size.y,
+    };
+
+    f32 r_sin = sinf(v.rotation);
+    f32 r_cos = cosf(v.rotation);
+
+    vec2f offset = {
+        -(v.center.x * (r_cos * scale.x) + v.center.y * (r_sin * scale.x)),
+        -(v.center.x * (-r_sin * scale.y) + v.center.y * (r_cos * scale.y))
+    };
+
+    mat3f_transform(mat, scale, offset, v.rotation);
+}
+
+void mat3f_from_inv_view(mat3f* mat, viewf v) {
+    vec2f size = vec2f_scale((vec2f){ 1.0f, 1.0f / v.aspect_ratio }, v.width);
+
+    vec2f scale = {
+         size.x / 2.0f,
+        -size.y / 2.0f,
+    };
+
+    mat3f_transform(mat, scale, v.center, v.rotation);
+}
+
+vec3f mat3f_mul_vec3f(const mat3f* mat, vec3f v) {
+    const f32* m = mat->m;
+
+    vec3f out = {
+        v.x * m[0] + v.y * m[1] + v.z * m[2],
+        v.x * m[3] + v.y * m[4] + v.z * m[5],
+        v.x * m[6] + v.y * m[7] + v.z * m[8]
+    };
+
+    return out;
+}
+vec2f mat3f_mul_vec2f(const mat3f* mat, vec2f v) {
+    vec3f v3 = { v.x, v.y, 1 };
+    v3 = mat3f_mul_vec3f(mat, v3);
+    return (vec2f){ v3.x, v3.y };
+}
 

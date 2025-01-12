@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     //f32 scale = tt_get_scale(&font, 24.0f);
     tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
     u32 prev_codepoint = 0;
-    u32 codepoint = 0x211d;
+    u32 codepoint = 'A';
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -78,7 +78,16 @@ int main(int argc, char** argv) {
         }
     }
 
-    f32 scale = 1e-3f;
+    viewf view = {
+        .aspect_ratio = (f32)win->width / win->height,
+        .width = win->width
+    };
+    mat3f view_mat = { 0 };
+    mat3f inv_view_mat = { 0 };
+    mat3f_from_view(&view_mat, view);
+    mat3f_from_inv_view(&inv_view_mat, view);
+
+    vec2f drag_init_mouse_pos = { 0 };
 
     u64 prev_frame = plat_time_usec();
     while (!win->should_close) {
@@ -90,6 +99,25 @@ int main(int argc, char** argv) {
 
         gfx_win_process_events(win);
 
+        view.width *= 1.0f + (-10.0f * win->mouse_scroll * delta);
+        view.aspect_ratio = (f32)win->width / win->height;
+
+        mat3f_from_view(&view_mat, view);
+        mat3f_from_inv_view(&inv_view_mat, view);
+
+        vec2f mouse_pos = {
+            2.0f * win->mouse_pos.x / win->width - 1.0f,
+            -(2.0f * win->mouse_pos.y / win->height - 1.0f)
+        };
+        mouse_pos = mat3f_mul_vec2f(&inv_view_mat, mouse_pos);
+
+        if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
+            drag_init_mouse_pos = mouse_pos;
+        }
+        if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
+            view.center = vec2f_add(view.center, vec2f_sub(drag_init_mouse_pos, mouse_pos));
+        }
+
         for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {
             if (GFX_IS_KEY_JUST_DOWN(win, key)) {
                 codepoint = key;
@@ -98,10 +126,16 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_UP)) {
+        if (GFX_IS_KEY_DOWN(win, GFX_KEY_UP)) {
             codepoint++;
         }
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_DOWN)) {
+        if (GFX_IS_KEY_DOWN(win, GFX_KEY_DOWN)) {
+            codepoint--;
+        }
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_RIGHT)) {
+            codepoint++;
+        }
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_LEFT)) {
             codepoint--;
         }
 
@@ -129,10 +163,12 @@ int main(int argc, char** argv) {
             u32 cur_vert = 0;
             
             for (u32 i = 0; i < num_segments; i++) {
+                vec2f scale = { 1, -1 };
+
                 switch (segments[i].type) {
                     case TT_SEGMENT_LINE: {
-                        verts[cur_vert++] = segments[i].line.p0;
-                        verts[cur_vert++] = segments[i].line.p1;
+                        verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(segments[i].line.p0, scale));
+                        verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(segments[i].line.p1, scale));
                     } break;
                     case TT_SEGMENT_QBEZIER: {
                         qbezier2f* qbez = &segments[i].qbez;
@@ -151,8 +187,8 @@ int main(int argc, char** argv) {
                                 ), c2
                             );
 
-                            verts[cur_vert++] = prev_point;
-                            verts[cur_vert++] = point;
+                            verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(prev_point, scale));
+                            verts[cur_vert++] = vec2f_add(mouse_pos, vec2f_comp_mul(point, scale));
 
                             prev_point = point;
                         }
@@ -169,18 +205,10 @@ int main(int argc, char** argv) {
 
         prev_codepoint = codepoint;
 
-        scale *= 1.0f + (10.0f * win->mouse_scroll * delta);
-
-        f32 view_mat[] = {
-            scale, 0.0f, 0.0f,
-            0.0f, scale * ((f32)win->width / win->height), 0.0f,
-            0.0f, 0.0f, 0.0f
-        };
-
         gfx_win_clear(win);
 
         glUseProgram(shader_program);
-        glUniformMatrix3fv(shader_mat_loc, 1, GL_FALSE, view_mat);
+        glUniformMatrix3fv(shader_mat_loc, 1, GL_TRUE, view_mat.m);
         glUniform4f(shader_col_loc, 1.0f, 1.0f, 1.0f, 1.0f);
 
         glBindVertexArray(vertex_array);

@@ -7,6 +7,9 @@ typedef struct { f32 x, y;       } vec2f;
 typedef struct { f32 x, y, z;    } vec3f;
 typedef struct { f32 x, y, z, w; } vec4f;
 
+// Row major
+typedef struct { f32 m[9]; } mat3f;
+
 typedef struct {
     vec2f p0;
     vec2f p1;
@@ -17,6 +20,13 @@ typedef struct {
     vec2f p1;
     vec2f p2;
 } qbezier2f;
+
+typedef struct {
+    vec2f center;
+    f32 aspect_ratio;
+    f32 width;
+    f32 rotation;
+} viewf;
 
 vec2f vec2f_add(vec2f a, vec2f b);
 vec2f vec2f_sub(vec2f a, vec2f b);
@@ -58,6 +68,13 @@ b32 vec4f_eq(vec4f a, vec4f b);
 f32 vec4f_sqr_len(vec4f v);
 f32 vec4f_len(vec4f v);
 vec4f vec4f_norm(vec4f v);
+
+void mat3f_transform(mat3f* mat, vec2f scale, vec2f offset, f32 rotation);
+void mat3f_from_view(mat3f* mat, viewf v);
+void mat3f_from_inv_view(mat3f* mat, viewf v);
+vec3f mat3f_mul_vec3f(const mat3f* mat, vec3f v);
+// Equivalent to mat3f_mul_vec3f(mat, { v.x, v.y, 1 }).xy;
+vec2f mat3f_mul_vec2f(const mat3f* mat, vec2f v);
 
 #endif // BASE_MATH_H
 
