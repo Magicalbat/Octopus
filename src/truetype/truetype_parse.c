@@ -360,10 +360,10 @@ tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index)
 
     tt_bounding_box box = { 0 };
 
-    box.x_min = READ_BE16(glyph_data + 2);
-    box.y_min = READ_BE16(glyph_data + 4);
-    box.x_max = READ_BE16(glyph_data + 6);
-    box.y_max = READ_BE16(glyph_data + 8);
+    box.x_min = (i16)READ_BE16(glyph_data + 2);
+    box.y_min = (i16)READ_BE16(glyph_data + 4);
+    box.x_max = (i16)READ_BE16(glyph_data + 6);
+    box.y_max = (i16)READ_BE16(glyph_data + 8);
 
     return box;
 }
@@ -629,7 +629,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             u32 prev_point_index = start_index + point_offset % contour_length;
             vec2f prev_point = points[prev_point_index];
             // The +1 is to add the segment that closes the contour
-            for (u32 i = 0; i < contour_length + 1; i++) {
+            for (u32 i = 1; i < contour_length + 1; i++) {
                 u32 point_index = start_index + (i + point_offset) % contour_length;
                 vec2f point = points[point_index];
 

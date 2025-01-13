@@ -106,6 +106,12 @@ vec3f mat3f_mul_vec3f(const mat3f* mat, vec3f v);
 // Equivalent to mat3f_mul_vec3f(mat, { v.x, v.y, 1 }).xy;
 vec2f mat3f_mul_vec2f(const mat3f* mat, vec2f v);
 
+// Positions the rects into a rectangle of width max_width and variable height.
+// The x and y's of the rects are ignored by the function and overwritten.
+// The total height of the packed rects is returned
+// The borders are not padded
+f32 rectf_pack(rectf* rects, u32 num_rects, f32 max_width, f32 padding);
+
 vec2f line2f_point(const line2f* line, f32 t);
 vec2f line2f_deriv(const line2f* line);
 curve_dist_info line2f_dist(const line2f* line, vec2f target);

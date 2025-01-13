@@ -63,32 +63,15 @@ int main(int argc, char** argv) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     f32 font_size = 64;
-    u32 falloff = 5;
+    u32 falloff = 3;
+    f32 scale = tt_get_scale_for_height(&font, font_size);
 
-    u32 glyph_index = tt_get_glyph_index(&font, codepoint);
-    f32 scale = tt_get_scale(&font, font_size);
-
-    tt_bounding_box box = tt_get_glyph_box(&font, glyph_index);
-    u32 width = (box.x_max - box.x_min) * scale + falloff * 2;
-    u32 height = (box.y_max - box.y_min) * scale + falloff * 2;
-
-    {
-        f32 font_height = 1.0f / tt_get_scale(&font, 1);
-
-        printf("%f %f\n", box.y_max - box.y_min, font_height);
+    u32 codepoints[127-32] = { 0 };
+    for (u32 i = 33; i <= 127; i++) {
+        codepoints[i-33] = i;
     }
 
-    u8* bitmap = ARENA_PUSH_ARRAY(perm_arena, u8, width * height);
-
-    tt_bitmap_view bitmap_view = {
-        .data = bitmap,
-        .total_width = width,
-        .total_height = height,
-        .local_width = width,
-        .local_height = height,
-    };
-
-    tt_render_glyph_sdf(&font, glyph_index, scale, falloff, &bitmap_view);
+    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, 127-32, TT_RENDER_SDF, scale, falloff, 512);
 
     u32 texture = 0;
     glGenTextures(1, &texture);
@@ -100,7 +83,7 @@ int main(int argc, char** argv) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, bitmap.width, bitmap.height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     u32 line_shader = glh_create_shader(line_vert_source, line_frag_source);
@@ -120,7 +103,7 @@ int main(int argc, char** argv) {
     glGenVertexArrays(1, &sdf_vertex_array);
     glBindVertexArray(sdf_vertex_array);
 
-    rectf sdf_rect = { -1000, -500, width * 10, height * 10 };
+    rectf sdf_rect = { -(f32)bitmap.width * 7, -(f32)bitmap.height * 5, bitmap.width * 5, bitmap.height * 5 };
     f32 sdf_verts[] = {
         sdf_rect.x, sdf_rect.y,   0.0f, 0.0f,
         sdf_rect.x + sdf_rect.w, sdf_rect.y,   1.0f, 0.0f,
@@ -205,6 +188,19 @@ int main(int argc, char** argv) {
         if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_TAB)) {
             sdf_mode += 1;
             sdf_mode %= 2;
+        }
+
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_1)) {
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        }
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_2)) {
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         }
 
         for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {

@@ -1,6 +1,7 @@
 #include "base_math.h"
 #include "base_error.h"
 
+#include <stdlib.h>
 #include <math.h>
 
 u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
@@ -249,6 +250,7 @@ mat2f mat2f_mul_mat2f(mat2f a, mat2f b) {
 
     return out;
 }
+
 vec2f mat2f_mul_vec2f(const mat2f* mat, vec2f v) {
     const f32* m = mat->m;
 
@@ -310,11 +312,77 @@ vec3f mat3f_mul_vec3f(const mat3f* mat, vec3f v) {
 
     return out;
 }
+
 vec2f mat3f_mul_vec2f(const mat3f* mat, vec2f v) {
     vec3f v3 = { v.x, v.y, 1 };
     v3 = mat3f_mul_vec3f(mat, v3);
     return (vec2f){ v3.x, v3.y };
 }
+
+typedef struct {
+    f32 height;
+    u32 orig_index;
+} _indexed_rect_height;
+
+// Sorts it heighest to smallest
+i32 _indexed_rect_height_compare(const void* a_ptr, const void* b_ptr) {
+    f32 a_height = ((_indexed_rect_height*)a_ptr)->height;
+    f32 b_height = ((_indexed_rect_height*)b_ptr)->height;
+
+    if (a_height > b_height) return -1;
+    if (a_height < b_height) return  1;
+
+    return 0;
+}
+
+f32 rectf_pack(rectf* rects, u32 num_rects, f32 max_width, f32 padding) {
+    if (rects == NULL) {
+        return 0.0f;
+    }
+
+    for (u32 i = 0; i < num_rects; i++) {
+        if (rects[i].w >= max_width) {
+            error_emit("Cannot pack rects: rectangle is too wide");
+            return 0.0f;
+        }
+    }
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    _indexed_rect_height* indexed_heights = ARENA_PUSH_ARRAY_NZ(scratch.arena, _indexed_rect_height, num_rects);
+    for (u32 i = 0; i < num_rects; i++) {
+        indexed_heights[i].height = rects[i].h;
+        indexed_heights[i].orig_index = i;
+    }
+
+    qsort(indexed_heights, num_rects, sizeof(_indexed_rect_height), _indexed_rect_height_compare);
+
+    f32 row_height = 0.0f;
+    vec2f pos = { 0 };
+
+    for (u32 i = 0; i < num_rects; i++) {
+        rectf* r = &rects[indexed_heights[i].orig_index];
+
+        if (pos.x + r->w > max_width) {
+            pos.y += row_height + padding;
+            pos.x = 0.0f;
+        }
+
+        if (pos.x == 0) {
+            row_height = r->h;
+        }
+
+        r->x = pos.x;
+        r->y = pos.y;
+
+        pos.x += r->w + padding;
+    }
+
+    arena_scratch_release(scratch);
+
+    return pos.y + row_height;
+}
+
 vec2f line2f_point(const line2f* line, f32 t) {
     vec2f out = { 0 };
 
@@ -323,9 +391,11 @@ vec2f line2f_point(const line2f* line, f32 t) {
 
     return out;
 }
+
 vec2f line2f_deriv(const line2f* line) {
     return vec2f_sub(line->p1, line->p0);
 }
+
 curve_dist_info line2f_dist(const line2f* line, vec2f target) {
     vec2f line_vec = vec2f_sub(line->p1, line->p0);
     vec2f point_vec = vec2f_sub(target, line->p0);
@@ -349,7 +419,7 @@ curve_dist_info line2f_dist(const line2f* line, vec2f target) {
         return out;
     }
 
-    vec2f line_to_point = t < 0.5f ? vec2f_sub(line->p0, target) : vec2f_sub(line->p1, target);
+    vec2f line_to_point = vec2f_sub(t < 0.5 ? line->p0 : line->p1, target);
     f32 dist = vec2f_len(line_to_point);
     f32 point_line_cross = vec2f_cross(line_vec, point_vec);
     f32 alignment_dot = vec2f_dot(vec2f_norm(line_vec), vec2f_norm(line_to_point));
@@ -371,6 +441,7 @@ vec2f qbezier2f_point(const qbezier2f* qbez, f32 t) {
 
     return out;
 }
+
 vec2f qbezier2f_deriv(const qbezier2f* qbez, f32 t) {
     vec2f out = { 0 };
 
@@ -381,6 +452,7 @@ vec2f qbezier2f_deriv(const qbezier2f* qbez, f32 t) {
     return out;
 
 }
+
 vec2f qbezier2f_second_deriv(const qbezier2f* qbez) {
     vec2f out = vec2f_scale(
         vec2f_add(qbez->p0, vec2f_sub(
@@ -390,6 +462,7 @@ vec2f qbezier2f_second_deriv(const qbezier2f* qbez) {
 
     return out;
 }
+
 curve_dist_info qbezier2f_dist(const qbezier2f* qbez, vec2f target) {
     vec2f p = vec2f_sub(target, qbez->p0);
     vec2f p1 = vec2f_sub(qbez->p1, qbez->p0);
