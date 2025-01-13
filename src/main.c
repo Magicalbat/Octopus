@@ -140,8 +140,6 @@ int main(int argc, char** argv) {
         }
 
         if (prev_codepoint != codepoint) {
-            printf("%u\n", codepoint);
-
             u32 glyph_index = tt_get_glyph_index(&font, codepoint);
             u32 num_segments = tt_get_glyph_outline(
                 &font, glyph_index, segments, 0,
