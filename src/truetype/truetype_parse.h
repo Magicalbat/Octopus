@@ -1,7 +1,10 @@
 #ifndef TRUETYPE_PARSE_H
 #define TRUETYPE_PARSE_H
 
-#include "base/base.h"
+#include "base/base_defs.h"
+#include "base/base_str.h"
+
+#include "truetype_segment.h"
 
 typedef struct {
     u32 offset;
@@ -33,20 +36,6 @@ typedef struct {
 
     u16 loca_format;
 } tt_font_info;
-
-typedef enum {
-    TT_SEGMENT_LINE,
-    TT_SEGMENT_QBEZIER
-} tt_segment_type;
-
-typedef struct {
-    tt_segment_type type;
-
-    union {
-        line2f line;
-        qbezier2f qbez;
-    };
-} tt_segment;
 
 void tt_init_font(string8 file, tt_font_info* font_info);
 u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);

@@ -1,7 +1,5 @@
 #include "truetype_parse.h"
 
-// TODO: remove stdio
-#include <stdio.h>
 #include <string.h>
 
 #define READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
