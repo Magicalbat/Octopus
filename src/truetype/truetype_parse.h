@@ -24,9 +24,10 @@ typedef struct {
     u16 max_component_elements;
 
     struct {
+        tt_table_info head;
+        tt_table_info hhea;
         tt_table_info loca;
         tt_table_info glyf;
-        tt_table_info hhea;
         tt_table_info hmtx;
     } tables;
 
@@ -49,7 +50,10 @@ typedef struct {
 } tt_bounding_box;
 
 void tt_init_font(string8 file, tt_font_info* font_info);
-f32 tt_get_scale(const tt_font_info* font_info, f32 height);
+// Returns pixels / (ascent - descent)
+f32 tt_get_scale_for_height(const tt_font_info* font_info, f32 pixels);
+// Returns pixels / units_per_em
+f32 tt_get_scale_for_em(const tt_font_info* font_info, f32 pixels);
 u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);
 tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index);
 // segments should be pre-allocated with font_info.max_glyph_points segments

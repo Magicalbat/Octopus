@@ -72,6 +72,12 @@ int main(int argc, char** argv) {
     u32 width = (box.x_max - box.x_min) * scale + falloff * 2;
     u32 height = (box.y_max - box.y_min) * scale + falloff * 2;
 
+    {
+        f32 font_height = 1.0f / tt_get_scale(&font, 1);
+
+        printf("%f %f\n", box.y_max - box.y_min, font_height);
+    }
+
     u8* bitmap = ARENA_PUSH_ARRAY(perm_arena, u8, width * height);
 
     tt_bitmap_view bitmap_view = {
@@ -165,23 +171,35 @@ int main(int argc, char** argv) {
 
         gfx_win_process_events(win);
 
-        view.width *= 1.0f + (-10.0f * win->mouse_scroll * delta);
-        view.aspect_ratio = (f32)win->width / win->height;
+        vec2f mouse_pos = { 0 };
+        // Updating view and getting world mouse pos
+        {
+            view.aspect_ratio = (f32)win->width / win->height;
 
-        mat3f_from_view(&view_mat, view);
-        mat3f_from_inv_view(&inv_view_mat, view);
+            vec2f normalized_mouse_pos = (vec2f){
+                2.0f * win->mouse_pos.x / win->width - 1.0f,
+                -(2.0f * win->mouse_pos.y / win->height - 1.0f)
+            };
+            mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
 
-        vec2f mouse_pos = {
-            2.0f * win->mouse_pos.x / win->width - 1.0f,
-            -(2.0f * win->mouse_pos.y / win->height - 1.0f)
-        };
-        mouse_pos = mat3f_mul_vec2f(&inv_view_mat, mouse_pos);
+            if (win->mouse_scroll != 0) {
+                view.width *= 1.0f + (-10.0f * win->mouse_scroll * delta);
 
-        if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
-            drag_init_mouse_pos = mouse_pos;
-        }
-        if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
-            view.center = vec2f_add(view.center, vec2f_sub(drag_init_mouse_pos, mouse_pos));
+                // This makes the view zoom toward the mouse
+                mat3f_from_inv_view(&inv_view_mat, view);
+                vec2f new_mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
+                view.center = vec2f_add(view.center, vec2f_sub(mouse_pos, new_mouse_pos));
+            }
+
+            if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
+                drag_init_mouse_pos = mouse_pos;
+            }
+            if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
+                view.center = vec2f_add(view.center, vec2f_sub(drag_init_mouse_pos, mouse_pos));
+            }
+
+            mat3f_from_view(&view_mat, view);
+            mat3f_from_inv_view(&inv_view_mat, view);
         }
 
         if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_TAB)) {

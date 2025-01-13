@@ -71,18 +71,30 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         }
     }
 
+    font_info->tables.head = _tt_get_and_validate_table(file, "head");
+    font_info->tables.hhea = _tt_get_and_validate_table(file, "hhea");
     font_info->tables.loca = _tt_get_and_validate_table(file, "loca");
     font_info->tables.glyf = _tt_get_and_validate_table(file, "glyf");
-    font_info->tables.hhea = _tt_get_and_validate_table(file, "hhea");
     font_info->tables.hmtx = _tt_get_and_validate_table(file, "hmtx");
 
     if (
+        font_info->tables.head.offset == 0 ||
+        font_info->tables.hhea.offset == 0 ||
         font_info->tables.loca.offset == 0 ||
         font_info->tables.glyf.offset == 0 ||
-        font_info->tables.hhea.offset == 0 ||
         font_info->tables.hmtx.offset == 0
     ) {
-        error_emit("Failed to load loca, glyf, hhea, or hmtx font tables");
+        error_emit("Failed to load head, hhea, loca, glyf, or hmtx font tables");
+        return;
+    }
+
+    if (font_info->tables.head.length != 54) {
+        error_emit("Invalid head font table");
+        return;
+    }
+
+    if (font_info->tables.hhea.length != 36) {
+        error_emit("Invalid hhea font table");
         return;
     }
 
@@ -181,13 +193,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         }
     }
 
-    tt_table_info head = _tt_get_and_validate_table(file, "head");
-    if (head.offset == 0 || head.length != 54) {
-        error_emit("Failed to load head font table");
-        return;
-    }
-
-    font_info->loca_format = READ_BE16(file.str + head.offset + 50);
+    font_info->loca_format = READ_BE16(file.str + font_info->tables.head.offset + 50);
     if (font_info->loca_format != 0 && font_info->loca_format != 1) {
         error_emit("Invalid loca format in font");
         return;
@@ -227,7 +233,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
     font_info->initialized = true;
 }
 
-f32 tt_get_scale(const tt_font_info* font_info, f32 height) {
+f32 tt_get_scale_for_height(const tt_font_info* font_info, f32 pixels) {
     if (font_info == NULL || !font_info->initialized) {
         return 0;
     }
@@ -237,9 +243,22 @@ f32 tt_get_scale(const tt_font_info* font_info, f32 height) {
 
     i16 ascent = READ_BE16(file.str + hhea.offset + 4);
     i16 descent = READ_BE16(file.str + hhea.offset + 6);
-    i16 font_height = ascent - descent;
+    f32 font_height = (f32)ascent - descent;
 
-    return height / (f32)font_height;
+    return pixels / font_height;
+}
+
+f32 tt_get_scale_for_em(const tt_font_info* font_info, f32 pixels) {
+    if (font_info == NULL || !font_info->initialized) {
+        return 0;
+    }
+
+    string8 file = font_info->file;
+    tt_table_info head = font_info->tables.head;
+
+    u16 units_per_em = READ_BE16(file.str + head.offset + 18);
+
+    return pixels / (f32)units_per_em;
 }
 
 u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
