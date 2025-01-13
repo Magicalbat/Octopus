@@ -14,6 +14,10 @@ typedef struct { f32 m[4]; } mat2f;
 typedef struct { f32 m[9]; } mat3f;
 
 typedef struct {
+    f32 x, y, w, h;
+} rectf;
+
+typedef struct {
     vec2f p0;
     vec2f p1;
 } line2f;

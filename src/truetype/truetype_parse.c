@@ -1,5 +1,7 @@
 #include "truetype_parse.h"
 
+#include "base/base.h"
+
 #include <string.h>
 
 #define READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
@@ -225,6 +227,21 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
     font_info->initialized = true;
 }
 
+f32 tt_get_scale(const tt_font_info* font_info, f32 height) {
+    if (font_info == NULL || !font_info->initialized) {
+        return 0;
+    }
+
+    string8 file = font_info->file;
+    tt_table_info hhea = font_info->tables.hhea;
+
+    i16 ascent = READ_BE16(file.str + hhea.offset + 4);
+    i16 descent = READ_BE16(file.str + hhea.offset + 6);
+    i16 font_height = ascent - descent;
+
+    return height / (f32)font_height;
+}
+
 u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
     if (font_info == NULL || !font_info->initialized) {
         return 0;
@@ -306,19 +323,30 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
     return 0;
 }
 
-f32 tt_get_scale(const tt_font_info* font_info, f32 height) {
+tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index) {
     if (font_info == NULL || !font_info->initialized) {
-        return 0;
+        return (tt_bounding_box){ 0 };
     }
 
-    string8 file = font_info->file;
-    tt_table_info hhea = font_info->tables.hhea;
+    tt_table_info glyf_table = font_info->tables.glyf;
 
-    i16 ascent = READ_BE16(file.str + hhea.offset + 4);
-    i16 descent = READ_BE16(file.str + hhea.offset + 6);
-    i16 font_height = ascent - descent;
+    u32 glyph_offset = 0;
+    u32 glyph_length = 0;
+    _tt_get_glyph_offset(font_info, glyph_index, &glyph_offset, &glyph_length);
+    if (glyph_length < 10 || glyph_offset + glyph_length > glyf_table.length) {
+        return (tt_bounding_box){ 0 };
+    }
 
-    return height / (f32)font_height;
+    u8* glyph_data = font_info->file.str + glyf_table.offset + glyph_offset;
+
+    tt_bounding_box box = { 0 };
+
+    box.x_min = READ_BE16(glyph_data + 2);
+    box.y_min = READ_BE16(glyph_data + 4);
+    box.x_max = READ_BE16(glyph_data + 6);
+    box.y_max = READ_BE16(glyph_data + 8);
+
+    return box;
 }
 
 typedef union {

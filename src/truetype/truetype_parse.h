@@ -3,6 +3,7 @@
 
 #include "base/base_defs.h"
 #include "base/base_str.h"
+#include "base/base_math.h"
 
 #include "truetype_segment.h"
 
@@ -37,10 +38,21 @@ typedef struct {
     u16 loca_format;
 } tt_font_info;
 
+// Font bounding box
+// (x_min, y_min) is the lower left corner
+// (x_max, y_max) is the upper right corner
+typedef struct {
+    f32 x_min;
+    f32 y_min;
+    f32 x_max;
+    f32 y_max;
+} tt_bounding_box;
+
 void tt_init_font(string8 file, tt_font_info* font_info);
-u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);
 f32 tt_get_scale(const tt_font_info* font_info, f32 height);
-// segments should be pre-allocated with size font_info.max_glyph_points * sizeof(tt_segment)
+u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint);
+tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index);
+// segments should be pre-allocated with font_info.max_glyph_points segments
 // offset is applied after transform
 // Returns the number of segments written
 u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segment* segments, u32 segments_offset, mat2f transform, vec2f offset);

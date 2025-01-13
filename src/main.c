@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     //f32 scale = tt_get_scale(&font, 24.0f);
     tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
     u32 prev_codepoint = 0;
-    u32 codepoint = L'Ñ';
+    u32 codepoint = 'A';
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -54,6 +54,41 @@ int main(int argc, char** argv) {
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(gl_on_error, NULL);
 #endif
+
+    f32 font_size = 64;
+    u32 falloff = 5;
+
+    u32 glyph_index = tt_get_glyph_index(&font, codepoint);
+    f32 scale = tt_get_scale(&font, font_size);
+
+    tt_bounding_box box = tt_get_glyph_box(&font, glyph_index);
+    u32 width = (box.x_max - box.x_min) * scale + falloff * 2;
+    u32 height = (box.y_max - box.y_min) * scale + falloff * 2;
+
+    u8* bitmap = ARENA_PUSH_ARRAY(perm_arena, u8, width * height);
+
+    tt_bitmap_view bitmap_view = {
+        .data = bitmap,
+        .total_width = width,
+        .total_height = height,
+        .local_width = width,
+        .local_height = height,
+    };
+
+    tt_render_glyph_sdf(&font, glyph_index, scale, falloff, &bitmap_view);
+
+    u32 texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap);
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     u32 shader_program = glh_create_shader(vert_source, frag_source);
 

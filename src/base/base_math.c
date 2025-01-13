@@ -40,7 +40,7 @@ u32 solve_cubic_normed(f32 solutions[3], f32 a2, f32 a1, f32 a0) {
     f32 a2_2 = a2 * a2;
 
     f32 Q = (1.0f/9.0f) * (3.0f * a1 - a2_2);
-    f32 R = (1.0f/54.0f) * (9.0f * a2 * a2 - 27 * a0 - 2 * a2_2 * a2);
+    f32 R = (1.0f/54.0f) * (9.0f * a2 * a1 - 27 * a0 - 2 * a2_2 * a2);
 
     f32 R2 = R * R;
     f32 Q3 = Q * Q * Q;
@@ -427,7 +427,7 @@ curve_dist_info qbezier2f_dist(const qbezier2f* qbez, vec2f target) {
         }
     }
 
-    f32 sign_cross = vec2f_cross(qbezier2f_deriv(qbez, min_dist_t), vec2f_sub(nearest_point, target));
+    f32 sign_cross = vec2f_cross(vec2f_sub(nearest_point, target), qbezier2f_deriv(qbez, min_dist_t));
 
     curve_dist_info out = {
         .dist = min_dist,
