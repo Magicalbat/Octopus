@@ -115,13 +115,11 @@ f32 rectf_pack(rectf* rects, u32 num_rects, f32 max_width, f32 padding);
 vec2f line2f_point(const line2f* line, f32 t);
 vec2f line2f_deriv(const line2f* line);
 curve_dist_info line2f_dist(const line2f* line, vec2f target);
-f32 line2f_pseudo_sdist(const line2f* line, vec2f target);
 
 vec2f qbezier2f_point(const qbezier2f* qbez, f32 t);
 vec2f qbezier2f_deriv(const qbezier2f* qbez, f32 t);
 vec2f qbezier2f_second_deriv(const qbezier2f* qbez);
 curve_dist_info qbezier2f_dist(const qbezier2f* qbez, vec2f target);
-f32 qbezier2f_pseudo_sdist(const qbezier2f* qbez, vec2f target);
 
 b32 curve_dist_less(curve_dist_info a, curve_dist_info b);
 

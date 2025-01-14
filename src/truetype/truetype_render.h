@@ -6,6 +6,8 @@
 
 #include "truetype_parse.h"
 
+#define TT_CORNER_DOT_THRESHOLD 0.95f
+
 typedef enum {
     // Assumes a single channel 8-bit texture
     TT_RENDER_SDF,

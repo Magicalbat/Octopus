@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    f32 font_size = 64;
+    f32 font_size = 48;
     u32 falloff = 3;
     f32 scale = tt_get_scale_for_height(&font, font_size);
 
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     }
 
     u64 start_time = plat_time_usec();
-    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, 127-32, TT_RENDER_MSDF, scale, falloff, 512);
+    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, sizeof(codepoints) / sizeof(u32), TT_RENDER_MSDF, scale, falloff, 256);
     u64 end_time = plat_time_usec();
     printf("Font took %fms to render\n", (f32)(end_time - start_time) * 1e-3f);
 

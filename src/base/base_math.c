@@ -432,16 +432,6 @@ curve_dist_info line2f_dist(const line2f* line, vec2f target) {
     return out;
 }
 
-f32 line2f_pseudo_sdist(const line2f* line, vec2f target) {
-    vec2f line_vec = vec2f_sub(line->p1, line->p0);
-    vec2f point_vec = vec2f_sub(target, line->p0);
-
-    vec2f line_normal = vec2f_norm(vec2f_perp(line_vec));
-    f32 sdist = vec2f_dot(point_vec, line_normal);
-
-    return sdist;
-}
-
 vec2f qbezier2f_point(const qbezier2f* qbez, f32 t) {
     vec2f out = { 0 };
 
@@ -530,45 +520,6 @@ curve_dist_info qbezier2f_dist(const qbezier2f* qbez, vec2f target) {
     out.alignment = ABS(alignment_dot);
 
     return out;
-}
-
-f32 qbezier2f_pseudo_sdist(const qbezier2f* qbez, vec2f target) {
-    vec2f p = vec2f_sub(target, qbez->p0);
-    vec2f p1 = vec2f_sub(qbez->p1, qbez->p0);
-    vec2f p2 = vec2f_add(vec2f_sub(qbez->p2, vec2f_scale(qbez->p1, 2.0f)), qbez->p0);
-
-    f32 a = vec2f_dot(p2, p2);
-    f32 b = 3.0f * vec2f_dot(p1, p2);
-    f32 c = 2.0f * vec2f_dot(p1, p1) - vec2f_dot(p2, p);
-    f32 d = -vec2f_dot(p1, p);
-
-    f32 ts[3] = { 0 };
-    u32 num_solutions = solve_cubic(ts, a, b, c, d);
-
-    if (num_solutions == 0) {
-        ts[0] = 0.0f;
-        ts[1] = 1.0f;
-        num_solutions = 2;
-    }
-
-    f32 min_dist = INFINITY;
-    f32 min_dist_t = 0.0f;
-    vec2f nearest_point = { 0 };
-
-    for (u32 i = 0; i < num_solutions; i++) {
-        vec2f point = qbezier2f_point(qbez, ts[i]);
-        f32 dist = vec2f_dist(point, target);
-
-        if (dist < min_dist) {
-            min_dist = dist;
-            min_dist_t = ts[i];
-            nearest_point = point;
-        }
-    }
-
-    f32 sign_cross = vec2f_cross(vec2f_sub(nearest_point, target), qbezier2f_deriv(qbez, min_dist_t));
-
-    return min_dist * SIGN(sign_cross);
 }
 
 b32 curve_dist_less(curve_dist_info a, curve_dist_info b) {

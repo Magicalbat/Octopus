@@ -1,5 +1,7 @@
 #include "truetype_segment.h"
 
+#include <math.h>
+
 vec2f tt_segment_point(const tt_segment* seg, f32 t) {
     switch (seg->type) {
         case TT_SEGMENT_LINE: {
@@ -27,17 +29,6 @@ curve_dist_info tt_segment_dist(const tt_segment* seg, vec2f target) {
         } break;
         case TT_SEGMENT_QBEZIER: {
             return qbezier2f_dist(&seg->qbez, target);
-        } break;
-    }
-}
-
-f32 tt_segment_pseudo_sdist(const tt_segment* seg, vec2f target) {
-    switch (seg->type) {
-        case TT_SEGMENT_LINE: {
-            return line2f_pseudo_sdist(&seg->line, target);
-        } break;
-        case TT_SEGMENT_QBEZIER: {
-            return qbezier2f_pseudo_sdist(&seg->qbez, target);
         } break;
     }
 }
