@@ -615,10 +615,14 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         u32 point_offset = 0;
         u32 contour_length = 0;
 
+        u32 seg_flags = TT_SEGMENT_FLAG_CONTOUR_START;
+
         for (u32 contour = 0; contour < (u32)num_contours && cur_offset < glyph_length; contour++) {
             end_index = READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
             contour_length = end_index + 1 - start_index;
+
+            seg_flags = TT_SEGMENT_FLAG_CONTOUR_START;
 
             // Ensure the first point is on the curve
             point_offset = 0;
@@ -636,7 +640,8 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                 if (flags[point_index].on_curve) {
                     segments[segments_offset + num_segments++] = (tt_segment){
                         .type = TT_SEGMENT_LINE,
-                        .line = (line2f){ prev_point, point }
+                        .line = (line2f){ prev_point, point },
+                        .flags = seg_flags
                     };
 
                     prev_point = point;
@@ -664,12 +669,15 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                             .type = TT_SEGMENT_QBEZIER,
                             .qbez = (qbezier2f){
                                 prev_point, point, p2
-                            }
+                            },
+                            .flags = seg_flags,
                         };
 
                         prev_point = p2;
                     }
                 }
+
+                seg_flags = 0;
             }
 
             start_index = end_index + 1;

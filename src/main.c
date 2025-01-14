@@ -71,7 +71,10 @@ int main(int argc, char** argv) {
         codepoints[i-33] = i;
     }
 
-    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, 127-32, TT_RENDER_SDF, scale, falloff, 512);
+    u64 start_time = plat_time_usec();
+    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, 127-32, TT_RENDER_MSDF, scale, falloff, 512);
+    u64 end_time = plat_time_usec();
+    printf("Font took %fms to render\n", (f32)(end_time - start_time) * 1e-3f);
 
     u32 texture = 0;
     glGenTextures(1, &texture);
@@ -83,7 +86,7 @@ int main(int argc, char** argv) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, bitmap.width, bitmap.height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, bitmap.width, bitmap.height, 0, GL_RGB, GL_UNSIGNED_BYTE, bitmap.data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     u32 line_shader = glh_create_shader(line_vert_source, line_frag_source);
@@ -122,7 +125,7 @@ int main(int argc, char** argv) {
 
     u32 max_verts = 0xffff;
     u32 num_verts = 0;
-    u32 line_vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, max_verts, NULL, GL_DYNAMIC_DRAW);
+    u32 line_vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, max_verts, NULL, GL_STREAM_DRAW);
 
     // End of setup error frame
     {
@@ -407,12 +410,18 @@ static const char* sdf_frag_source = GLSL_SOURCE(
 
     in vec2 uv;
 
+    float median(float r, float g, float b) {
+        return max(min(r, g), min(max(r, g), b));
+    }
+
     void main() {
         if (u_mode == 0) {
-            float dist = texture(u_texture, uv).r;
-            out_col = vec4(dist, dist, dist, 1);
+            out_col = vec4(texture(u_texture, uv).rgb, 1.);
+            //float dist = texture(u_texture, uv).r;
+            //out_col = vec4(dist, dist, dist, 1);
         } else {
-            float dist = texture(u_texture, uv).r;
+            vec3 msd = texture(u_texture, uv).rgb;
+            float dist = median(msd.r, msd.g, msd.b);
             float blending = fwidth(dist);
             float alpha = smoothstep(0.5 - blending, 0.5 + blending, dist);
             out_col = vec4(vec3(1.), alpha);

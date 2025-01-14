@@ -54,5 +54,13 @@ void tt_render_glyph_sdf(
     tt_bitmap_view* bitmap_view
 );
 
+void tt_render_glyph_msdf(
+    const tt_font_info* font_info,
+    u32 glyph_index,
+    f32 glyph_scale,
+    u32 pixel_dist_falloff,
+    tt_bitmap_view* bitmap_view
+);
+
 #endif // TRUETYPE_RENDER_H
 

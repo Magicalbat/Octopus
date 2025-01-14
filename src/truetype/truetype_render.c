@@ -7,10 +7,12 @@
 typedef void (_tt_render_func)(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
 
 void _tt_render_glyph_sdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
+void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
 
 static _tt_render_func* _render_funcs[TT_RENDER_COUNT] = {
     [TT_RENDER_SDF] = _tt_render_glyph_sdf_impl,
-    // TODO: make msdf and tmsdf functions
+    [TT_RENDER_MSDF] = _tt_render_glyph_msdf_impl,
+    // TODO: TMSDF
 };
 
 static u8 _pixel_sizes[TT_RENDER_COUNT] = {
@@ -114,12 +116,8 @@ void _tt_render_glyph_sdf_impl(const tt_font_info* font_info, u32 glyph_index, f
             for (u32 i = 0; i < num_segments; i++) {
                 curve_dist_info cur_dist = tt_segment_dist(&segments[i], glyph_space_pos);
 
-                if (cur_dist.dist < min_dist.dist) {
+                if (curve_dist_less(cur_dist, min_dist)) {
                     min_dist = cur_dist;
-                } else if (ABS(cur_dist.dist - min_dist.dist) < 1e-6f) {
-                    if (cur_dist.alignment < min_dist.alignment) {
-                        min_dist = cur_dist;
-                    }
                 }
             }
 
@@ -135,6 +133,130 @@ void _tt_render_glyph_sdf_impl(const tt_font_info* font_info, u32 glyph_index, f
     }
 }
 
+void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments)  {
+    if (bitmap_view->offset_x >= bitmap_view->total_width || bitmap_view->offset_y >= bitmap_view->total_height) {
+        return;
+    }
+
+    // Flip y to make +y down (for bitmap)
+    mat2f transform = { .m = {
+        glyph_scale, 0.0f,
+        0.0f, -glyph_scale
+    }};
+
+    tt_bounding_box box = tt_get_glyph_box(font_info, glyph_index);
+
+    vec2f offset = {
+        -box.x_min * glyph_scale + pixel_dist_falloff, box.y_max * glyph_scale + pixel_dist_falloff
+    };
+
+    u32 num_segments = tt_get_glyph_outline(
+        font_info, glyph_index, segments, 0, transform, offset
+    );
+
+    if (num_segments == 0) {
+        return;
+    }
+
+    u32 edge_color = 0;
+    u32 contour_start = 0;
+    for (u32 i = 0; i < num_segments; i++) {
+        if (segments[i].flags & TT_SEGMENT_FLAG_CONTOUR_START) {
+            edge_color = TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_BLUE;
+
+            contour_start = i;
+        }
+
+        segments[i].flags |= edge_color;
+
+        u32 next_i = i + 1;
+        if (next_i >= num_segments || segments[next_i].flags & TT_SEGMENT_FLAG_CONTOUR_START) {
+            next_i = contour_start;
+        }
+
+        vec2f cur_dir = vec2f_norm(tt_segment_deriv(&segments[i], 1.0f));
+        vec2f next_dir = vec2f_norm(tt_segment_deriv(&segments[next_i], 0.0f));
+        f32 dir_dot = vec2f_dot(cur_dir, next_dir);
+
+        if (dir_dot < 0.9f) {
+            // New edge
+            if (edge_color == (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN)) {
+                edge_color = TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE;
+            } else {
+                edge_color = TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN;
+            }
+        }
+    }
+    
+    f32 dist_scale = 127.5f / (f32)pixel_dist_falloff;
+
+    u32 clamped_width = MIN(bitmap_view->local_width, bitmap_view->total_width - bitmap_view->offset_x);
+    u32 clamped_height = MIN(bitmap_view->local_height, bitmap_view->total_height - bitmap_view->offset_y);
+
+    for (u32 local_y = 0; local_y < clamped_height; local_y++) {
+        for (u32 local_x = 0; local_x < clamped_width; local_x++) {
+            vec2f glyph_space_pos = {
+                (f32)local_x + 0.5f,
+                (f32)local_y + 0.5f
+            };
+
+            curve_dist_info min_dists[3] = {};
+            min_dists[0].dist = INFINITY;
+            min_dists[1].dist = INFINITY;
+            min_dists[2].dist = INFINITY;
+
+            // TODO: keep track of edge instead of segment?
+            tt_segment* min_dist_segs[3] = { 
+                &segments[0],
+                &segments[0],
+                &segments[0],
+            };
+
+            for (u32 i = 0; i < num_segments; i++) {
+                curve_dist_info cur_dist = tt_segment_dist(&segments[i], glyph_space_pos);
+
+                if (segments[i].flags & TT_SEGMENT_FLAG_RED && curve_dist_less(cur_dist, min_dists[0])) {
+                    min_dists[0] = cur_dist;
+                    min_dist_segs[0] = &segments[i];
+                }
+                if (segments[i].flags & TT_SEGMENT_FLAG_GREEN && curve_dist_less(cur_dist, min_dists[1])) {
+                    min_dists[1] = cur_dist;
+                    min_dist_segs[1] = &segments[i];
+                }
+                if (segments[i].flags & TT_SEGMENT_FLAG_BLUE && curve_dist_less(cur_dist, min_dists[2])) {
+                    min_dists[2] = cur_dist;
+                    min_dist_segs[2] = &segments[i];
+                }
+            }
+
+            f32 final_dists[3] = {
+                tt_segment_pseudo_sdist(min_dist_segs[0], glyph_space_pos),
+                tt_segment_pseudo_sdist(min_dist_segs[1], glyph_space_pos),
+                tt_segment_pseudo_sdist(min_dist_segs[2], glyph_space_pos)
+            };
+
+            u32 img_x = local_x + bitmap_view->offset_x;
+            u32 img_y = local_y + bitmap_view->offset_y;
+
+            for (u32 i = 0; i < 3; i++) {
+                f32 val = final_dists[i] * dist_scale;
+                val += 127.5f;
+                val = CLAMP(val, 0, 255);
+
+                bitmap_view->data[(img_x + img_y * bitmap_view->total_width) * 3 + i] = (u8)val;
+            }
+
+            // Edge coloring view, for debugging
+            /*for (u32 i = 0; i < 3; i++) {
+                f32 val = min_dists[i].dist * (f32)min_dists[i].dist_sign * dist_scale;
+                val = (ABS(val) < 32) * 255;
+                bitmap_view->data[(img_x + img_y * bitmap_view->total_width) * 3 + i] = val;
+            }*/
+
+        }
+    }
+}
+
 void tt_render_glyph_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view) {
     if (font_info == NULL || !font_info->initialized || bitmap_view == NULL) {
         return;
@@ -146,5 +268,19 @@ void tt_render_glyph_sdf(const tt_font_info* font_info, u32 glyph_index, f32 gly
     _tt_render_glyph_sdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments);
 
     arena_scratch_release(scratch);
+}
+
+void tt_render_glyph_msdf(const tt_font_info* font_info,u32 glyph_index,f32 glyph_scale,u32 pixel_dist_falloff,tt_bitmap_view* bitmap_view) {
+    if (font_info == NULL || !font_info->initialized || bitmap_view == NULL) {
+        return;
+    }
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
+    _tt_render_glyph_msdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments);
+
+    arena_scratch_release(scratch);
+
 }
 
