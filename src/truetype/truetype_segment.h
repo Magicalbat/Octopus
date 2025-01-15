@@ -8,6 +8,14 @@ typedef enum {
     TT_SEGMENT_QBEZIER
 } tt_segment_type;
 
+typedef enum {
+    TT_SEGMENT_FLAG_CONTOUR_START = (1 << 0),
+
+    TT_SEGMENT_FLAG_RED = (1 << 1),
+    TT_SEGMENT_FLAG_GREEN = (1 << 2),
+    TT_SEGMENT_FLAG_BLUE = (1 << 3),
+} tt_segment_flag;
+
 typedef struct {
     tt_segment_type type;
 
@@ -16,7 +24,7 @@ typedef struct {
         qbezier2f qbez;
     };
 
-    b8 contour_start;
+    u32 flags;
 } tt_segment;
 
 vec2f tt_segment_point(const tt_segment* seg, f32 t);

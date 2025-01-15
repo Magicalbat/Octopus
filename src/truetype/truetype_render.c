@@ -141,79 +141,28 @@ b32 _tt_is_corner(const tt_segment* a, const tt_segment* b) {
     return dot < TT_CORNER_DOT_THRESHOLD;
 }
 
-// 1 bit for each color
-typedef enum {
-    _TT_EDGE_FLAG_CONTOUR_START = (1 << 0),
-
-    _TT_EDGE_FLAG_RED = (1 << 1),
-    _TT_EDGE_FLAG_GREEN = (1 << 2),
-    _TT_EDGE_FLAG_BLUE = (1 << 3),
-} _tt_edge_col;
-
-typedef struct {
-    tt_segment* segments;
-    u32 num_segments;
-
-    u32 flags;
-} _tt_edge;
-
-curve_dist_info _tt_edge_dist(const _tt_edge* edge, vec2f target) {
-    curve_dist_info min_dist = { .dist=INFINITY };
-
-    for (u32 i = 0; i < edge->num_segments; i++) {
-        curve_dist_info dist = tt_segment_dist(&edge->segments[i], target);
-
-        if (curve_dist_less(dist, min_dist)) {
-            min_dist = dist;
-        }
+f32 _tt_calc_psuedo_dist(const tt_segment* segment, curve_dist_info dist, vec2f target) {
+    if (dist.t > 0.0f || dist.t < 1.0f) {
+        return dist.dist * dist.dist_sign;
     }
 
-    return min_dist;
-}
+    vec2f dir = vec2f_norm(tt_segment_deriv(segment, dist.t));
+    vec2f target_vec = vec2f_sub(target, tt_segment_point(segment, dist.t));
 
-f32 _tt_edge_psuedo_dist(const _tt_edge* edge, vec2f target) {
-    curve_dist_info min_dist = _tt_edge_dist(edge, target);
+    f32 pseudo_dist = vec2f_cross(target_vec, dir);
 
-    vec2f start_point = tt_segment_point(&edge->segments[0], 0.0f);
-    vec2f start_deriv = tt_segment_deriv(&edge->segments[0], 0.0f);
-    vec2f end_point = tt_segment_point(&edge->segments[edge->num_segments - 1], 1.0f);
-    vec2f end_deriv = tt_segment_deriv(&edge->segments[edge->num_segments - 1], 1.0f);
-
-    if (!vec2f_eq(start_point, end_point)) {
-        tt_segment end_segs[] = {
-            (tt_segment){
-                .type = TT_SEGMENT_LINE,
-                .line = (line2f) {
-                    vec2f_sub(start_point, vec2f_scale(start_deriv, 1e6f)),
-                    start_point
-                }
-            },
-            (tt_segment){
-                .type = TT_SEGMENT_LINE,
-                .line = (line2f) {
-                    end_point,
-                    vec2f_add(end_point, vec2f_scale(end_deriv, 1e6f))
-                }
-            },
-        };
-
-        _tt_edge end_edge = {
-            .segments = end_segs,
-            .num_segments = 2
-        };
-
-        curve_dist_info end_dist = _tt_edge_dist(&end_edge, target);
-        
-        if (curve_dist_less(end_dist, min_dist)) {
-            min_dist = end_dist;
-        }
+    if (ABS(pseudo_dist) < dist.dist) {
+        return pseudo_dist;
     }
 
-    return min_dist.dist * min_dist.dist_sign;
+    return dist.dist * dist.dist_sign;
 }
 
-// TODO: remove
-#include <stdio.h>
+#define _WHITE (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
+#define _MAGENTA (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_BLUE)
+#define _YELLOW (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN)
+#define _TEAL (TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
+
 void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments)  {
     if (bitmap_view->offset_x >= bitmap_view->total_width || bitmap_view->offset_y >= bitmap_view->total_height) {
         return;
@@ -238,76 +187,76 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
     if (num_segments == 0) {
         return;
     }
-
-    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-    _tt_edge* edges = ARENA_PUSH_ARRAY(scratch.arena, _tt_edge, num_segments);
-    u32 num_edges = 0;
-
-    u32 contour_len = num_segments-1;
+    
+    u32 contour_len = num_segments;
     for (u32 contour_start = 0; contour_start < num_segments; contour_start += contour_len) {
-        // Finding contour length
-        {
-            u32 j = 0;
-            for (j = contour_start + 1; j < num_segments; j++) {
-                if (segments[j].contour_start) {
+        u32 j = contour_start + 1;
+        while (j < num_segments && !(segments[j].flags & TT_SEGMENT_FLAG_CONTOUR_START)) {
+            j++;
+        }
+        contour_len = j - contour_start;
+
+        // The first segment might not be the start of its edge,
+        // but the segments before are at the end of the contour in memory.
+        // This finds out how many are in the same edge
+        u32 num_end_in_first_edge = 0;
+        if (!_tt_is_corner(&segments[contour_start + contour_len - 1], &segments[contour_start])) {
+            num_end_in_first_edge++;
+
+            for (u32 i = contour_start + contour_len - 1; i >= contour_start + 1; i--) {
+                if (_tt_is_corner(&segments[i-1], &segments[i])) {
                     break;
+                } else {
+                    num_end_in_first_edge++;
+                }
+            }
+        }
+
+        u32 color = 0;
+
+        // Teardrop case is handled later
+        if (num_end_in_first_edge == contour_len) {
+            color = _WHITE;
+
+            for (u32 i = 0; i < contour_len; i++) {
+                segments[i + contour_start].flags |= color;
+            }
+        } else { // Multiple edges 
+            color = _MAGENTA;
+
+            u32 num_magenta = num_end_in_first_edge;
+
+            for (u32 i = 0; i < num_end_in_first_edge; i++) {
+                segments[contour_start + contour_len - i - 1].flags |= color;
+            }
+
+            for (u32 i = 0; i < contour_len - num_end_in_first_edge; i++) {
+                segments[contour_start + i].flags |= color;
+
+                num_magenta += color == _MAGENTA;
+
+                u32 next_i = i + 1;
+                if (next_i >= contour_len) {
+                    next_i = 0;
+                }
+
+                if (_tt_is_corner(&segments[contour_start + i], &segments[contour_start + next_i])) {
+                    if (color == _YELLOW) {
+                        color = _TEAL;
+                    } else {
+                        color = _YELLOW;
+                    }
                 }
             }
 
-            contour_len = j - contour_start;
-        }
-
-        // Rotating until the first segment of the contour is the start of an edge
-        // There is a possibility that there are no corners on the contour, 
-        // so I am wrapping it in a for loop
-        for (u32 j = 0; j < contour_len; j++) {
-            if (_tt_is_corner(&segments[contour_start + contour_len - 1], &segments[contour_start])) {
-                break;
-            } else {
-                tt_segment last_seg = segments[contour_start + contour_len - 1];
-
-                for (i64 k = contour_len - 1; k >= 1; k--) {
-                    segments[contour_start + k] = segments[contour_start + k - 1];
+            // If the entire contour is magenta, then this is the teardrop case,
+            // Have to find the corner and fix the colors
+            if (num_magenta == contour_len) {
+                for (u32 i = 0; i < contour_len - num_end_in_first_edge; i++) {
+                    segments[contour_start + i].flags &= ~(_MAGENTA);
+                    segments[contour_start + i].flags |= _YELLOW;
                 }
-                segments[contour_start] = last_seg;
             }
-        }
-
-        edges[num_edges++] = (_tt_edge){
-            .segments = &segments[contour_start],
-            .num_segments = 1,
-            .flags = _TT_EDGE_FLAG_CONTOUR_START
-        };
-
-        for (u32 j = contour_start + 1; j < contour_start + contour_len; j++) {
-            if (_tt_is_corner(&segments[j-1], &segments[j])) {
-                edges[num_edges++] = (_tt_edge){
-                    .segments = &segments[j],
-                    .num_segments = 1,
-                };
-            } else {
-                edges[num_edges-1].num_segments++;
-            }
-        }
-    }
-
-    u32 cur_color = 0;
-    for (u32 i = 0; i < num_edges; i++) {
-        if (edges[i].flags & _TT_EDGE_FLAG_CONTOUR_START) {
-            if (i < num_edges-1 && (edges[i+1].flags & _TT_EDGE_FLAG_CONTOUR_START)) {
-                cur_color = _TT_EDGE_FLAG_RED | _TT_EDGE_FLAG_GREEN | _TT_EDGE_FLAG_BLUE;
-            } else {
-                cur_color = _TT_EDGE_FLAG_RED | _TT_EDGE_FLAG_BLUE;
-            }
-        }
-
-        edges[i].flags |= cur_color;
-
-        if (cur_color == (_TT_EDGE_FLAG_RED | _TT_EDGE_FLAG_GREEN)) {
-            cur_color = _TT_EDGE_FLAG_GREEN | _TT_EDGE_FLAG_BLUE;
-        } else {
-            cur_color = _TT_EDGE_FLAG_RED | _TT_EDGE_FLAG_GREEN;
         }
     }
 
@@ -328,32 +277,32 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
             min_dists[1].dist = INFINITY;
             min_dists[2].dist = INFINITY;
 
-            i64 min_dist_edges[3] = { -1, -1, -1 };
+            i64 min_dist_segments[3] = { -1, -1, -1 };
 
-            for (u32 i = 0; i < num_edges; i++) {
-                curve_dist_info cur_dist = _tt_edge_dist(&edges[i], glyph_space_pos);
+            for (u32 i = 0; i < num_segments; i++) {
+                curve_dist_info cur_dist = tt_segment_dist(&segments[i], glyph_space_pos);
 
-                if (edges[i].flags & _TT_EDGE_FLAG_RED && curve_dist_less(cur_dist, min_dists[0])) {
+                if (segments[i].flags & TT_SEGMENT_FLAG_RED && curve_dist_less(cur_dist, min_dists[0])) {
                     min_dists[0] = cur_dist;
-                    min_dist_edges[0] = i;
+                    min_dist_segments[0] = i;
                 }
-                if (edges[i].flags & _TT_EDGE_FLAG_GREEN && curve_dist_less(cur_dist, min_dists[1])) {
+                if (segments[i].flags & TT_SEGMENT_FLAG_GREEN && curve_dist_less(cur_dist, min_dists[1])) {
                     min_dists[1] = cur_dist;
-                    min_dist_edges[1] = i;
+                    min_dist_segments[1] = i;
                 }
-                if (edges[i].flags & _TT_EDGE_FLAG_BLUE && curve_dist_less(cur_dist, min_dists[2])) {
+                if (segments[i].flags & TT_SEGMENT_FLAG_BLUE && curve_dist_less(cur_dist, min_dists[2])) {
                     min_dists[2] = cur_dist;
-                    min_dist_edges[2] = i;
+                    min_dist_segments[2] = i;
                 }
             }
 
             f32 final_dists[3] = { INFINITY, INFINITY, INFINITY };
             for (u32 i = 0; i < 3; i++) {
-                if (min_dist_edges[i] == -1) {
+                if (min_dist_segments[i] == -1) {
                     continue;
                 }
 
-                final_dists[i] = _tt_edge_psuedo_dist(&edges[min_dist_edges[i]], glyph_space_pos);
+                final_dists[i] = _tt_calc_psuedo_dist(&segments[min_dist_segments[i]], min_dists[i], glyph_space_pos);
             }
 
             u32 img_x = local_x + bitmap_view->offset_x;
@@ -362,7 +311,7 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
             #if 1
 
             for (u32 i = 0; i < 3; i++) {
-                f32 val = final_dists[i] * dist_scale;
+                f32 val = min_dists[i].dist * min_dists[i].dist_sign * dist_scale;
                 val += 127.5f;
                 val = CLAMP(val, 0, 255);
 
@@ -382,8 +331,6 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
 
         }
     }
-
-    arena_scratch_release(scratch);
 }
 
 void tt_render_glyph_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view) {

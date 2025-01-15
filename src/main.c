@@ -70,6 +70,7 @@ int main(int argc, char** argv) {
     for (u32 i = 33; i <= 127; i++) {
         codepoints[i-33] = i;
     }
+    //u32 codepoints[] = { ',' };
 
     u64 start_time = plat_time_usec();
     tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, sizeof(codepoints) / sizeof(u32), TT_RENDER_MSDF, scale, falloff, 256);

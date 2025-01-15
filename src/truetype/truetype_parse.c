@@ -615,14 +615,12 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         u32 point_offset = 0;
         u32 contour_length = 0;
 
-        b32 contour_start = true;
-
         for (u32 contour = 0; contour < (u32)num_contours && cur_offset < glyph_length; contour++) {
             end_index = READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
             contour_length = end_index + 1 - start_index;
 
-            contour_start = true;
+            u32 seg_flags = TT_SEGMENT_FLAG_CONTOUR_START;
 
             // Ensure the first point is on the curve
             point_offset = 0;
@@ -641,7 +639,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     segments[segments_offset + num_segments++] = (tt_segment){
                         .type = TT_SEGMENT_LINE,
                         .line = (line2f){ prev_point, point },
-                        .contour_start = contour_start
+                        .flags = seg_flags
                     };
 
                     prev_point = point;
@@ -658,7 +656,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                             .qbez = (qbezier2f){
                                 prev_point, point, next_point
                             },
-                            .contour_start = contour_start
+                            .flags = seg_flags
                         };
 
                         prev_point = next_point;
@@ -671,14 +669,14 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                             .qbez = (qbezier2f){
                                 prev_point, point, p2
                             },
-                            .contour_start = contour_start
+                            .flags = seg_flags
                         };
 
                         prev_point = p2;
                     }
                 }
 
-                contour_start = false;
+                seg_flags = 0;
             }
 
             start_index = end_index + 1;
