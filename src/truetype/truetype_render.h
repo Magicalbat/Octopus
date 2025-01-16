@@ -41,6 +41,9 @@ tt_bitmap tt_render_font_atlas(
     mem_arena* arena,
     const tt_font_info* font_info,
     u32* codepoints,
+    // out_rects must be of size num_codepoints, 
+    // and will be set by the function
+    rectf* out_rects, 
     u32 num_codepoints,
     tt_render_mode render_mode,
     f32 glyph_scale,

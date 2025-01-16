@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 
 #include "base/base.h"
@@ -62,7 +63,7 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    f32 font_size = 48;
+    f32 font_size = 36;
     u32 falloff = 3;
     f32 scale = tt_get_scale_for_height(&font, font_size);
 
@@ -71,9 +72,12 @@ int main(int argc, char** argv) {
         codepoints[i-33] = i;
     }
     //u32 codepoints[] = { ',' };
+    u32 num_codepoints = sizeof(codepoints) / sizeof(u32);
+
+    rectf* glyph_rects = ARENA_PUSH_ARRAY(perm_arena, rectf, num_codepoints);
 
     u64 start_time = plat_time_usec();
-    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, sizeof(codepoints) / sizeof(u32), TT_RENDER_MSDF, scale, falloff, 256);
+    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, glyph_rects, num_codepoints, TT_RENDER_MSDF, scale, falloff, 256);
     u64 end_time = plat_time_usec();
     printf("Font took %fms to render\n", (f32)(end_time - start_time) * 1e-3f);
 
@@ -146,6 +150,8 @@ int main(int argc, char** argv) {
     mat3f_from_view(&view_mat, view);
     mat3f_from_inv_view(&inv_view_mat, view);
 
+    f32 target_width = view.width;
+
     vec2f drag_init_mouse_pos = { 0 };
 
     u64 prev_frame = plat_time_usec();
@@ -170,7 +176,12 @@ int main(int argc, char** argv) {
             mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
 
             if (win->mouse_scroll != 0) {
-                view.width *= 1.0f + (-10.0f * win->mouse_scroll * delta);
+                target_width = view.width * (1.0f + (-10.0f * win->mouse_scroll * delta));
+
+            }
+
+            if (ABS(view.width - target_width) > 1e-6f) {
+                view.width += (target_width - view.width) * (1.0f - expf(-20 * delta));
 
                 // This makes the view zoom toward the mouse
                 mat3f_from_inv_view(&inv_view_mat, view);
@@ -424,7 +435,7 @@ static const char* sdf_frag_source = GLSL_SOURCE(
             vec3 msd = texture(u_texture, uv).rgb;
             float dist = median(msd.r, msd.g, msd.b);
             float blending = fwidth(dist);
-            float alpha = smoothstep(0.5 - blending, 0.5 + blending, dist);
+            float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
             out_col = vec4(vec3(1.), alpha);
         }
     }

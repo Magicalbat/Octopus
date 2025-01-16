@@ -21,8 +21,12 @@ static u8 _pixel_sizes[TT_RENDER_COUNT] = {
     [TT_RENDER_TMSDF] = 4
 };
 
-tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, u32* codepoints, u32 num_codepoints, tt_render_mode render_mode, f32 glyph_scale, u32 pixel_dist_falloff, u32 bitmap_width) {
-    if (font_info == NULL || !font_info->initialized || codepoints == NULL || render_mode >= TT_RENDER_COUNT) {
+tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, u32* codepoints, rectf* out_rects, u32 num_codepoints, tt_render_mode render_mode, f32 glyph_scale, u32 pixel_dist_falloff, u32 bitmap_width) {
+    if (
+        font_info == NULL || !font_info->initialized ||
+        codepoints == NULL || out_rects == NULL ||
+        render_mode >= TT_RENDER_COUNT
+    ) {
         return (tt_bitmap){ 0 };
     }
 
@@ -35,15 +39,14 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
         glyph_indices[i] = tt_get_glyph_index(font_info, codepoints[i]);
     }
 
-    rectf* glyph_rects = ARENA_PUSH_ARRAY(scratch.arena, rectf, num_glyphs);
     for (u32 i = 0; i < num_glyphs; i++) {
         tt_bounding_box box = tt_get_glyph_box(font_info, glyph_indices[i]);
 
-        glyph_rects[i].w = ceilf((f32)(box.x_max - box.x_min) * glyph_scale + pixel_dist_falloff * 2);
-        glyph_rects[i].h = ceilf((f32)(box.y_max - box.y_min) * glyph_scale + pixel_dist_falloff * 2);
+        out_rects[i].w = ceilf((f32)(box.x_max - box.x_min) * glyph_scale + pixel_dist_falloff * 2);
+        out_rects[i].h = ceilf((f32)(box.y_max - box.y_min) * glyph_scale + pixel_dist_falloff * 2);
     }
 
-    u32 bitmap_height = ceilf(rectf_pack(glyph_rects, num_glyphs, bitmap_width, 1));
+    u32 bitmap_height = ceilf(rectf_pack(out_rects, num_glyphs, bitmap_width, 1));
 
     tt_bitmap bitmap = {
         .data = ARENA_PUSH_ARRAY(arena, u8, _pixel_sizes[render_mode] * bitmap_width * bitmap_height),
@@ -61,10 +64,10 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
     tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
 
     for (u32 i = 0; i < num_glyphs; i++) {
-        bitmap_view.offset_x = glyph_rects[i].x;
-        bitmap_view.offset_y = glyph_rects[i].y;
-        bitmap_view.local_width = glyph_rects[i].w;
-        bitmap_view.local_height = glyph_rects[i].h;
+        bitmap_view.offset_x = out_rects[i].x;
+        bitmap_view.offset_y = out_rects[i].y;
+        bitmap_view.local_width = out_rects[i].w;
+        bitmap_view.local_height = out_rects[i].h;
 
         render_func(font_info, glyph_indices[i], glyph_scale, pixel_dist_falloff, &bitmap_view, segments);
     }
@@ -161,7 +164,7 @@ f32 _tt_calc_psuedo_dist(const tt_segment* segment, curve_dist_info dist, vec2f 
 #define _WHITE (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
 #define _MAGENTA (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_BLUE)
 #define _YELLOW (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN)
-#define _TEAL (TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
+#define _CYAN (TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
 
 void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments)  {
     if (bitmap_view->offset_x >= bitmap_view->total_width || bitmap_view->offset_y >= bitmap_view->total_height) {
@@ -242,7 +245,7 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
 
                 if (_tt_is_corner(&segments[contour_start + i], &segments[contour_start + next_i])) {
                     if (color == _YELLOW) {
-                        color = _TEAL;
+                        color = _CYAN;
                     } else {
                         color = _YELLOW;
                     }
