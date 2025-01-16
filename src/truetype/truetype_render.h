@@ -51,17 +51,10 @@ tt_bitmap tt_render_font_atlas(
     u32 bitmap_width
 );
 
-void tt_render_glyph_sdf(
+void tt_render_glyph(
     const tt_font_info* font_info,
     u32 glyph_index,
-    f32 glyph_scale,
-    u32 pixel_dist_falloff,
-    tt_bitmap_view* bitmap_view
-);
-
-void tt_render_glyph_msdf(
-    const tt_font_info* font_info,
-    u32 glyph_index,
+    tt_render_mode render_mode, 
     f32 glyph_scale,
     u32 pixel_dist_falloff,
     tt_bitmap_view* bitmap_view

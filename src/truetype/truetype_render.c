@@ -6,13 +6,14 @@
 
 typedef void (_tt_render_func)(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
 
-void _tt_render_glyph_sdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
-void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
+void _tt_render_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
+void _tt_render_msdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
+void _tt_render_tmsdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments);
 
 static _tt_render_func* _render_funcs[TT_RENDER_COUNT] = {
-    [TT_RENDER_SDF] = _tt_render_glyph_sdf_impl,
-    [TT_RENDER_MSDF] = _tt_render_glyph_msdf_impl,
-    // TODO: TMSDF
+    [TT_RENDER_SDF] = _tt_render_sdf,
+    [TT_RENDER_MSDF] = _tt_render_msdf,
+    [TT_RENDER_TMSDF] = _tt_render_tmsdf,
 };
 
 static u8 _pixel_sizes[TT_RENDER_COUNT] = {
@@ -77,7 +78,21 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
     return bitmap;
 }
 
-void _tt_render_glyph_sdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments) {
+void tt_render_glyph(const tt_font_info* font_info, u32 glyph_index, tt_render_mode render_mode, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view) {
+    if (font_info == NULL || !font_info->initialized || bitmap_view == NULL || render_mode >= TT_RENDER_COUNT) {
+        return;
+    }
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
+    _render_funcs[render_mode](font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments);
+
+    arena_scratch_release(scratch);
+}
+
+
+void _tt_render_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments) {
     if (bitmap_view->offset_x >= bitmap_view->total_width || bitmap_view->offset_y >= bitmap_view->total_height) {
         return;
     }
@@ -166,7 +181,7 @@ f32 _tt_calc_psuedo_dist(const tt_segment* segment, curve_dist_info dist, vec2f 
 #define _YELLOW (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN)
 #define _CYAN (TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
 
-void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments)  {
+void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments, b32 alpha)  {
     if (bitmap_view->offset_x >= bitmap_view->total_width || bitmap_view->offset_y >= bitmap_view->total_height) {
         return;
     }
@@ -275,7 +290,7 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
                 (f32)local_y + 0.5f
             };
 
-            curve_dist_info min_dists[3] = {};
+            curve_dist_info min_dists[4] = {};
             min_dists[0].dist = INFINITY;
             min_dists[1].dist = INFINITY;
             min_dists[2].dist = INFINITY;
@@ -313,12 +328,25 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
 
             #if 1
 
-            for (u32 i = 0; i < 3; i++) {
+            u32 pixel_size = 3;
+
+            if (alpha) {
+                pixel_size = 4;
+
+                min_dists[3] = min_dists[0];
+                for (u32 i = 1; i < 3; i++) {
+                    if (curve_dist_less(min_dists[i], min_dists[3])) {
+                        min_dists[3] = min_dists[i];
+                    }
+                }
+            }
+
+            for (u32 i = 0; i < pixel_size; i++) {
                 f32 val = min_dists[i].dist * min_dists[i].dist_sign * dist_scale;
                 val += 127.5f;
                 val = CLAMP(val, 0, 255);
 
-                bitmap_view->data[(img_x + img_y * bitmap_view->total_width) * 3 + i] = (u8)val;
+                bitmap_view->data[(img_x + img_y * bitmap_view->total_width) * pixel_size + i] = (u8)val;
             }
 
             #else
@@ -336,30 +364,11 @@ void _tt_render_glyph_msdf_impl(const tt_font_info* font_info, u32 glyph_index, 
     }
 }
 
-void tt_render_glyph_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view) {
-    if (font_info == NULL || !font_info->initialized || bitmap_view == NULL) {
-        return;
-    }
-
-    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-    tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
-    _tt_render_glyph_sdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments);
-
-    arena_scratch_release(scratch);
+void _tt_render_msdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments) {
+    _tt_render_msdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments, false);
+}
+void _tt_render_tmsdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_scale, u32 pixel_dist_falloff, tt_bitmap_view* bitmap_view, tt_segment* segments) {
+    _tt_render_msdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments, true);
 }
 
-void tt_render_glyph_msdf(const tt_font_info* font_info,u32 glyph_index,f32 glyph_scale,u32 pixel_dist_falloff,tt_bitmap_view* bitmap_view) {
-    if (font_info == NULL || !font_info->initialized || bitmap_view == NULL) {
-        return;
-    }
-
-    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-    tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
-    _tt_render_glyph_msdf_impl(font_info, glyph_index, glyph_scale, pixel_dist_falloff, bitmap_view, segments);
-
-    arena_scratch_release(scratch);
-
-}
 

@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
 
-    char* font_path = argc > 1 ? argv[1] : "res/Envy Code R.ttf";
+    char* font_path = argc > 1 ? argv[1] : "res/Hack.ttf";
     string8 font_file = plat_file_read(perm_arena, str8_from_cstr((u8*)font_path));
     tt_font_info font = { 0 };
 
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     rectf* glyph_rects = ARENA_PUSH_ARRAY(perm_arena, rectf, num_codepoints);
 
     u64 start_time = plat_time_usec();
-    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, glyph_rects, num_codepoints, TT_RENDER_MSDF, scale, falloff, 256);
+    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, glyph_rects, num_codepoints, TT_RENDER_TMSDF, scale, falloff, 256);
     u64 end_time = plat_time_usec();
     printf("Font took %fms to render\n", (f32)(end_time - start_time) * 1e-3f);
 
@@ -91,8 +91,10 @@ int main(int argc, char** argv) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, bitmap.width, bitmap.height, 0, GL_RGB, GL_UNSIGNED_BYTE, bitmap.data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bitmap.width, bitmap.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap.data);
     glGenerateMipmap(GL_TEXTURE_2D);
+
+    b32 filter_texture = true;
 
     u32 line_shader = glh_create_shader(line_vert_source, line_frag_source);
     glUseProgram(line_shader);
@@ -176,7 +178,7 @@ int main(int argc, char** argv) {
             mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
 
             if (win->mouse_scroll != 0) {
-                target_width = view.width * (1.0f + (-10.0f * win->mouse_scroll * delta));
+                target_width = target_width * (1.0f + (-10.0f * win->mouse_scroll * delta));
 
             }
 
@@ -200,22 +202,24 @@ int main(int argc, char** argv) {
             mat3f_from_inv_view(&inv_view_mat, view);
         }
 
+        for (gfx_key key = GFX_KEY_1; key <= GFX_KEY_5; key++) {
+            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
+                sdf_mode = key - GFX_KEY_1;
+            }
+        }
+
         if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_TAB)) {
-            sdf_mode += 1;
-            sdf_mode %= 2;
-        }
-
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_1)) {
             glBindTexture(GL_TEXTURE_2D, texture);
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        }
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_2)) {
-            glBindTexture(GL_TEXTURE_2D, texture);
+            filter_texture = !filter_texture;
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            if (filter_texture) { 
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            } else {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            }
         }
 
         for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {
@@ -427,16 +431,29 @@ static const char* sdf_frag_source = GLSL_SOURCE(
     }
 
     void main() {
-        if (u_mode == 0) {
-            out_col = vec4(texture(u_texture, uv).rgb, 1.);
-            //float dist = texture(u_texture, uv).r;
-            //out_col = vec4(dist, dist, dist, 1);
-        } else {
-            vec3 msd = texture(u_texture, uv).rgb;
-            float dist = median(msd.r, msd.g, msd.b);
-            float blending = fwidth(dist);
-            float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
-            out_col = vec4(vec3(1.), alpha);
+        switch (u_mode) {
+            case 0: {
+                out_col = texture(u_texture, uv);
+            } break;
+            case 1: {
+                out_col = vec4(vec3(texture(u_texture, uv).a), 1);
+            } break;
+            case 2: {
+                out_col = vec4(texture(u_texture, uv).rgb, 1);
+            } break;
+            case 3: {
+                float dist = texture(u_texture, uv).a;
+                float blending = fwidth(dist);
+                float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
+                out_col = vec4(vec3(1.), alpha);
+            } break;
+            case 4: {
+                vec3 msd = texture(u_texture, uv).rgb;
+                float dist = median(msd.r, msd.g, msd.b);
+                float blending = fwidth(dist);
+                float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
+                out_col = vec4(vec3(1.), alpha);
+            } break;
         }
     }
 );
