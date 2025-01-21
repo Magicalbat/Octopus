@@ -284,7 +284,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
                 (f32)local_y + 0.5f
             };
 
-            curve_dist_info min_dists[4] = {};
+            curve_dist_info min_dists[3] = {};
             min_dists[0].dist = INFINITY;
             min_dists[1].dist = INFINITY;
             min_dists[2].dist = INFINITY;
@@ -308,7 +308,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
                 }
             }
 
-            f32 final_dists[3] = { INFINITY, INFINITY, INFINITY };
+            f32 final_dists[4] = { INFINITY, INFINITY, INFINITY, INFINITY };
             for (u32 i = 0; i < 3; i++) {
                 if (min_dist_segments[i] == -1) {
                     continue;
@@ -327,16 +327,18 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
             if (alpha) {
                 pixel_size = 4;
 
-                min_dists[3] = min_dists[0];
+                curve_dist_info min_dist = min_dists[0];
                 for (u32 i = 1; i < 3; i++) {
-                    if (curve_dist_less(min_dists[i], min_dists[3])) {
-                        min_dists[3] = min_dists[i];
+                    if (curve_dist_less(min_dists[i], min_dist)) {
+                        min_dist = min_dists[i];
                     }
                 }
+
+                final_dists[3] = min_dist.dist * min_dist.dist_sign;
             }
 
             for (u32 i = 0; i < pixel_size; i++) {
-                f32 val = min_dists[i].dist * min_dists[i].dist_sign * dist_scale;
+                f32 val = final_dists[i] * dist_scale;
                 val += 127.5f;
                 val = CLAMP(val, 0, 255);
 
