@@ -1,13 +1,4 @@
-#include "platform.h"
 #ifdef PLATFORM_LINUX
-
-#include <time.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 
 void plat_init(void) { }
 

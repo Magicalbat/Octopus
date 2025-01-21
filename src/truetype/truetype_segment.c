@@ -1,7 +1,3 @@
-#include "truetype_segment.h"
-
-#include <math.h>
-
 vec2f tt_segment_point(const tt_segment* seg, f32 t) {
     switch (seg->type) {
         case TT_SEGMENT_LINE: {

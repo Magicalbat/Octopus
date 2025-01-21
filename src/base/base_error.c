@@ -1,8 +1,3 @@
-#include "base_error.h"
-
-#include <stdio.h>
-#include <string.h>
-
 typedef struct {
     string8 msg;
     u32 stack_pos;

@@ -1,18 +1,4 @@
-#include "base/base_defs.h"
-
 #ifdef PLATFORM_LINUX
-
-#include "platform/platform.h"
-#include "gfx/gfx.h"
-#include "opengl_defs.h"
-
-#include <string.h>
-
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-
-#include <GL/glx.h>
-#include <GL/gl.h>
 
 typedef struct _gfx_win_backend {
     Display* display;
@@ -25,7 +11,7 @@ typedef struct _gfx_win_backend {
 
 typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
-#define X(ret, name, args) gl_##name##_func name = NULL;
+#define X(ret, name, args) static gl_##name##_func name = NULL;
 #   include "opengl_funcs_xlist.h"
 #undef X
 

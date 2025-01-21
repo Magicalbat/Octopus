@@ -1,9 +1,3 @@
-#include "base_math.h"
-#include "base_error.h"
-
-#include <stdlib.h>
-#include <math.h>
-
 u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
     if (solutions == NULL) {
         return 0;

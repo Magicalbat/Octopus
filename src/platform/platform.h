@@ -1,7 +1,18 @@
-#ifndef PLATFORM_H
-#define PLATFORM_H
+#if defined(PLATFORM_WIN32)
 
-#include "base/base.h"
+#define WIN32_MEAN_AND_LEAN
+#define UNICODE
+#include <Windows.h>
+
+#elif defined(PLATFORM_LINUX)
+
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+#endif
 
 void plat_init(void);
 
@@ -27,6 +38,4 @@ void plat_mem_decommit(void* mem, u64 size);
 void plat_mem_release(void* mem, u64 size);
 
 u32 plat_mem_page_size(void);
-
-#endif // PLATFORM_H
 

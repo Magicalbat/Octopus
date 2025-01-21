@@ -1,11 +1,3 @@
-#ifndef BASE_STR_H
-#define BASE_STR_H
-
-#include "base_defs.h"
-#include "base_arena.h"
-
-#include <stdarg.h>
-
 typedef struct {
     u8* str;
     u64 size;
@@ -98,6 +90,4 @@ string8 str8_from_str16(mem_arena* arena, string16 str, b32 null_terminate);
 // Converts a utf-8 string8 to a utf-16 string16
 // Null termination is not counted toward the size of the string
 string16 str16_from_str8(mem_arena* arena, string8 str, b32 null_terminate);
-
-#endif // BASE_STR_H
 

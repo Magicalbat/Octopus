@@ -1,0 +1,9 @@
+-m64
+-std=c17
+-Wall
+-Wextra
+-Isrc
+-include src/base/base.h
+-include src/platform/platform.h
+-include src/gfx/gfx.h
+-include src/truetype/truetype.h

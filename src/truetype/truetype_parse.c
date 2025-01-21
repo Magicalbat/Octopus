@@ -1,13 +1,7 @@
-#include "truetype_parse.h"
+#define _TT_READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
+#define _TT_READ_BE32(mem) ((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
 
-#include "base/base.h"
-
-#include <string.h>
-
-#define READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
-#define READ_BE32(mem) ((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
-
-#define TAG_TO_U32(tag) (((u32)((tag)[0]) << 24) | ((u32)((tag)[1]) << 16) | ((u32)((tag)[2]) << 8) | (u32)((tag)[3]))
+#define _TT_TAG_TO_U32(tag) (((u32)((tag)[0]) << 24) | ((u32)((tag)[1]) << 16) | ((u32)((tag)[2]) << 8) | (u32)((tag)[3]))
 
 u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
@@ -34,7 +28,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         return;
     }
 
-    if (READ_BE32(file.str) != 0x00010000 && READ_BE32(file.str) != TAG_TO_U32("true")) {
+    if (_TT_READ_BE32(file.str) != 0x00010000 && _TT_READ_BE32(file.str) != _TT_TAG_TO_U32("true")) {
         error_emit("Unsupported truetype format or invalid truetype file");
         return;
     }
@@ -55,19 +49,19 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
 
     tt_table_info maxp = _tt_get_and_validate_table(file, "maxp");
     if (maxp.offset != 0 && maxp.length > 4) {
-        u32 version = READ_BE32(file.str + maxp.offset);
+        u32 version = _TT_READ_BE32(file.str + maxp.offset);
 
         if (version == 0x00005000 && maxp.length == 6) {
-            font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
+            font_info->num_glyphs = _TT_READ_BE16(file.str + maxp.offset + 4);
         } else if (version == 0x00010000 && maxp.length == 32) {
-            font_info->num_glyphs = READ_BE16(file.str + maxp.offset + 4);
+            font_info->num_glyphs = _TT_READ_BE16(file.str + maxp.offset + 4);
 
-            u16 max_points = READ_BE16(file.str + maxp.offset + 6);
-            u16 max_composite_points = READ_BE16(file.str + maxp.offset + 10);
+            u16 max_points = _TT_READ_BE16(file.str + maxp.offset + 6);
+            u16 max_composite_points = _TT_READ_BE16(file.str + maxp.offset + 10);
 
             font_info->max_glyph_points = MAX(max_points, max_composite_points);
 
-            font_info->max_component_elements = READ_BE16(file.str + maxp.offset + 28);
+            font_info->max_component_elements = _TT_READ_BE16(file.str + maxp.offset + 28);
         }
     }
 
@@ -111,7 +105,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
             return;
         }
 
-        u32 num_tables = READ_BE16(file.str + cmap.offset + 2);
+        u32 num_tables = _TT_READ_BE16(file.str + cmap.offset + 2);
         
         // 4 bytes for header, 8 bytes per encoding record
         if (cmap.length < 4 + 8 * num_tables) {
@@ -125,8 +119,8 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
             // 4 bytes for header, 8 bytes per encoding record
             u64 offset = cmap.offset + 4 + 8 * i;
 
-            u16 platform_id = READ_BE16(file.str + offset);
-            u16 encoding_id = READ_BE16(file.str + offset + 2);
+            u16 platform_id = _TT_READ_BE16(file.str + offset);
+            u16 encoding_id = _TT_READ_BE16(file.str + offset + 2);
 
             // TODO: Add support for other platforms?
             if (platform_id == 0 && (encoding_id == 3 || encoding_id == 4)) {
@@ -138,7 +132,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
 
                 prev_encoding_id = encoding_id;
 
-                subtable_offset = READ_BE32(file.str + offset + 4);
+                subtable_offset = _TT_READ_BE32(file.str + offset + 4);
 
                 if (subtable_offset < cmap.length) {
                     font_info->cmap_subtable_offset = (u64)cmap.offset + subtable_offset;
@@ -159,21 +153,21 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
                 return;
             }
 
-            u32 format = READ_BE16(file.str + font_info->cmap_subtable_offset);
+            u32 format = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset);
             u32 subtable_length = 0;
             if (format == 4) {
-                subtable_length = READ_BE16(file.str + font_info->cmap_subtable_offset + 2);
+                subtable_length = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset + 2);
 
-                u32 seg_count = READ_BE16(file.str + font_info->cmap_subtable_offset + 6) / 2;
+                u32 seg_count = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset + 6) / 2;
 
                 if (subtable_length < 16 + 2 * seg_count * 4) {
                     error_emit("Invalid format 4 cmap font subtable");
                     return;
                 }
             } else if (format == 12) {
-                subtable_length = READ_BE32(file.str + font_info->cmap_subtable_offset + 4);
+                subtable_length = _TT_READ_BE32(file.str + font_info->cmap_subtable_offset + 4);
 
-                u32 num_groups = READ_BE32(file.str + font_info->cmap_subtable_offset + 12);
+                u32 num_groups = _TT_READ_BE32(file.str + font_info->cmap_subtable_offset + 12);
 
                 if (subtable_length != 16 + num_groups * 12) {
                     error_emit("Invalid format 12 cmap font subtable");
@@ -193,7 +187,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         }
     }
 
-    font_info->loca_format = READ_BE16(file.str + font_info->tables.head.offset + 50);
+    font_info->loca_format = _TT_READ_BE16(file.str + font_info->tables.head.offset + 50);
     if (font_info->loca_format != 0 && font_info->loca_format != 1) {
         error_emit("Invalid loca format in font");
         return;
@@ -206,7 +200,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
 
         if (font_info->loca_format == 0) {
             for (u32 i = 0; i < loca.length; i += 2) {
-                u32 offset = READ_BE16(file.str + loca.offset + i) * 2;
+                u32 offset = _TT_READ_BE16(file.str + loca.offset + i) * 2;
 
                 if (offset > glyf.length) {
                     error_emit("Invalid loca font table");
@@ -215,7 +209,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
             }
         } else {
             for (u32 i = 0; i < loca.length; i += 4) {
-                u32 offset = READ_BE32(file.str + loca.offset + i);
+                u32 offset = _TT_READ_BE32(file.str + loca.offset + i);
 
                 if (offset > glyf.length) {
                     error_emit("Invalid loca font table");
@@ -241,8 +235,8 @@ f32 tt_get_scale_for_height(const tt_font_info* font_info, f32 pixels) {
     string8 file = font_info->file;
     tt_table_info hhea = font_info->tables.hhea;
 
-    i16 ascent = READ_BE16(file.str + hhea.offset + 4);
-    i16 descent = READ_BE16(file.str + hhea.offset + 6);
+    i16 ascent = _TT_READ_BE16(file.str + hhea.offset + 4);
+    i16 descent = _TT_READ_BE16(file.str + hhea.offset + 6);
     f32 font_height = (f32)ascent - descent;
 
     return pixels / font_height;
@@ -256,7 +250,7 @@ f32 tt_get_scale_for_em(const tt_font_info* font_info, f32 pixels) {
     string8 file = font_info->file;
     tt_table_info head = font_info->tables.head;
 
-    u16 units_per_em = READ_BE16(file.str + head.offset + 18);
+    u16 units_per_em = _TT_READ_BE16(file.str + head.offset + 18);
 
     return pixels / (f32)units_per_em;
 }
@@ -274,28 +268,28 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
             return 0;
         }
 
-        u32 length = READ_BE16(subtable + 2);
-        u16 seg_count = READ_BE16(subtable + 6) / 2;
+        u32 length = _TT_READ_BE16(subtable + 2);
+        u16 seg_count = _TT_READ_BE16(subtable + 6) / 2;
         u32 glyph_id_array_length = length - (16 + seg_count * 8);
         u16 end_code = 0;
         u16 segment = 0;
 
         for (; segment < seg_count; segment++) {
-            end_code = READ_BE16(subtable + 14 + segment * 2);
+            end_code = _TT_READ_BE16(subtable + 14 + segment * 2);
 
             if (end_code >= codepoint) {
                 break;
             }
         }
 
-        u16 start_code = READ_BE16(subtable + 16 + seg_count * 2 + segment * 2);
+        u16 start_code = _TT_READ_BE16(subtable + 16 + seg_count * 2 + segment * 2);
 
         if (start_code > codepoint) {
             return 0;
         }
 
-        i16 id_delta = READ_BE16(subtable + 16 + seg_count * 4 + segment * 2);
-        u16 id_range_offset = READ_BE16(subtable + 16 + seg_count * 6 + segment * 2);
+        i16 id_delta = _TT_READ_BE16(subtable + 16 + seg_count * 4 + segment * 2);
+        u16 id_range_offset = _TT_READ_BE16(subtable + 16 + seg_count * 6 + segment * 2);
 
         if (id_range_offset != 0) {
             u32 glyph_id_array_index = id_range_offset / 2 + (segment - seg_count) +
@@ -305,7 +299,7 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
                 return 0;
             }
 
-            u16 glyph_id = READ_BE16(subtable + 16 + seg_count * 8 + glyph_id_array_index * 2);
+            u16 glyph_id = _TT_READ_BE16(subtable + 16 + seg_count * 8 + glyph_id_array_index * 2);
 
             if (glyph_id == 0) {
                 return 0;
@@ -316,12 +310,12 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
             return (u16)((u16)codepoint + id_delta);
         }
     } else if (font_info->cmap_format == 12) {
-        u32 num_groups = READ_BE32(subtable + 12);
+        u32 num_groups = _TT_READ_BE32(subtable + 12);
         i64 group = -1;
 
         for (u32 i = 0; i < num_groups; i++) {
-            u32 start_code = READ_BE32(subtable + 16 + i * 12);
-            u32 end_code = READ_BE32(subtable + 16 + i * 12 + 4);
+            u32 start_code = _TT_READ_BE32(subtable + 16 + i * 12);
+            u32 end_code = _TT_READ_BE32(subtable + 16 + i * 12 + 4);
 
             if (codepoint >= start_code && codepoint <= end_code) {
                 group = i;
@@ -333,8 +327,8 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
             return 0;
         }
 
-        u32 start_code = READ_BE32(subtable + 16 + group * 12);
-        u32 start_glyph_id = READ_BE32(subtable + 16 + group * 12 + 8);
+        u32 start_code = _TT_READ_BE32(subtable + 16 + group * 12);
+        u32 start_glyph_id = _TT_READ_BE32(subtable + 16 + group * 12 + 8);
 
         return (codepoint - start_code) + start_glyph_id;
     }
@@ -360,10 +354,10 @@ tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index)
 
     tt_bounding_box box = { 0 };
 
-    box.x_min = (i16)READ_BE16(glyph_data + 2);
-    box.y_min = (i16)READ_BE16(glyph_data + 4);
-    box.x_max = (i16)READ_BE16(glyph_data + 6);
-    box.y_max = (i16)READ_BE16(glyph_data + 8);
+    box.x_min = (i16)_TT_READ_BE16(glyph_data + 2);
+    box.y_min = (i16)_TT_READ_BE16(glyph_data + 4);
+    box.x_max = (i16)_TT_READ_BE16(glyph_data + 6);
+    box.y_max = (i16)_TT_READ_BE16(glyph_data + 8);
 
     return box;
 }
@@ -418,10 +412,10 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
     u32 num_segments = 0;
 
-    i16 num_contours = READ_BE16(glyph_data);
+    i16 num_contours = _TT_READ_BE16(glyph_data);
     // Last end_point_of_contour + 1
-    u32 num_points = (u32)READ_BE16(glyph_data + 10 + 2 * (num_contours - 1)) + 1;
-    u16 instructions_length = READ_BE16(glyph_data + 10 + num_contours * 2);
+    u32 num_points = (u32)_TT_READ_BE16(glyph_data + 10 + 2 * (num_contours - 1)) + 1;
+    u16 instructions_length = _TT_READ_BE16(glyph_data + 10 + num_contours * 2);
 
     if (num_points == 0) {
         return 0;
@@ -435,9 +429,9 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                 break;
             }
 
-            _tt_comp_flags flags = { .bits = READ_BE16(glyph_data + cur_offset) };
+            _tt_comp_flags flags = { .bits = _TT_READ_BE16(glyph_data + cur_offset) };
             cur_offset += 2;
-            u16 glyph_index = READ_BE16(glyph_data + cur_offset);
+            u16 glyph_index = _TT_READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
 
             if (!flags.args_are_xy) {
@@ -456,8 +450,8 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                local_offset.x = READ_BE16(glyph_data + cur_offset);
-                local_offset.y = READ_BE16(glyph_data + cur_offset + 2);
+                local_offset.x = _TT_READ_BE16(glyph_data + cur_offset);
+                local_offset.y = _TT_READ_BE16(glyph_data + cur_offset + 2);
 
                 cur_offset += 4;
             } else {
@@ -474,7 +468,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 scale_2_14 = READ_BE16(glyph_data + cur_offset);
+                i16 scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
                 cur_offset += 2;
 
                 f32 scale = (f32)scale_2_14 / 16384.0f;
@@ -486,8 +480,8 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 x_scale_2_14 = READ_BE16(glyph_data + cur_offset);
-                i16 y_scale_2_14 = READ_BE16(glyph_data + cur_offset + 2);
+                i16 x_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
+                i16 y_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 2);
                 cur_offset += 4;
 
                 local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
@@ -498,10 +492,10 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 x_scale_2_14 = READ_BE16(glyph_data + cur_offset);
-                i16 scale01_2_14 = READ_BE16(glyph_data + cur_offset + 2);
-                i16 scale10_2_14 = READ_BE16(glyph_data + cur_offset + 4);
-                i16 y_scale_2_14 = READ_BE16(glyph_data + cur_offset + 6);
+                i16 x_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
+                i16 scale01_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 2);
+                i16 scale10_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 4);
+                i16 y_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 6);
                 cur_offset += 8;
 
                 local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
@@ -553,7 +547,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
             switch (flag_combined) {
                 case 0b00: {
-                    cur_coord_diff = READ_BE16(glyph_data + cur_offset);
+                    cur_coord_diff = _TT_READ_BE16(glyph_data + cur_offset);
                     cur_offset += 2;
                 } break;
                 case 0b01: {
@@ -583,7 +577,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
             switch (flag_combined) {
                 case 0b00: {
-                    cur_coord_diff = READ_BE16(glyph_data + cur_offset);
+                    cur_coord_diff = _TT_READ_BE16(glyph_data + cur_offset);
                     cur_offset += 2;
                 } break;
                 case 0b01: {
@@ -616,7 +610,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         u32 contour_length = 0;
 
         for (u32 contour = 0; contour < (u32)num_contours && cur_offset < glyph_length; contour++) {
-            end_index = READ_BE16(glyph_data + cur_offset);
+            end_index = _TT_READ_BE16(glyph_data + cur_offset);
             cur_offset += 2;
             contour_length = end_index + 1 - start_index;
 
@@ -693,7 +687,7 @@ u32 _tt_checksum(u8* data, u64 length) {
 
     u64 i = 0;
     for (; i < ALIGN_DOWN_POW2(length, 4); i += 4) {
-        sum += READ_BE32(data + i);
+        sum += _TT_READ_BE32(data + i);
     }
 
     for (u32 shift = 24; i < length; i++, shift -= 8) {
@@ -704,7 +698,7 @@ u32 _tt_checksum(u8* data, u64 length) {
 }
 
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
-    u32 num_tables = READ_BE16(file.str + 4);
+    u32 num_tables = _TT_READ_BE16(file.str + 4);
 
     // Table directory is 12 bytes
     // Each table record is 16 bytes
@@ -712,7 +706,7 @@ tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
         goto invalid;
     }
 
-    u32 tag = TAG_TO_U32(tag_str);
+    u32 tag = _TT_TAG_TO_U32(tag_str);
     u32 table_record_offset = 0;
     i32 table_index = -1;
 
@@ -721,7 +715,7 @@ tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
         // Each table record is 16 bytes
         table_record_offset = 12 + 16 * i;
 
-        u32 cur_tag = READ_BE32(file.str + table_record_offset);
+        u32 cur_tag = _TT_READ_BE32(file.str + table_record_offset);
 
         if (cur_tag == tag) {
             table_index = i;
@@ -733,20 +727,20 @@ tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
         goto invalid;
     }
 
-    u32 offset = READ_BE32(file.str + table_record_offset + 8);
-    u32 length = READ_BE32(file.str + table_record_offset + 12);
+    u32 offset = _TT_READ_BE32(file.str + table_record_offset + 8);
+    u32 length = _TT_READ_BE32(file.str + table_record_offset + 12);
 
     if (offset + length > file.size) {
         goto invalid;
     }
 
-    u32 file_checksum = READ_BE32(file.str + table_record_offset + 4);
+    u32 file_checksum = _TT_READ_BE32(file.str + table_record_offset + 4);
     u32 calculated_checksum = _tt_checksum(file.str + offset, length);
 
-    if (tag == TAG_TO_U32("head")) {
+    if (tag == _TT_TAG_TO_U32("head")) {
         // When calculating the head checksum, you treat checksum_adjust as zero
         // Instead of modifying the file str, I am subtracting it here
-        u32 checksum_adjust = READ_BE32(file.str + offset + 8);
+        u32 checksum_adjust = _TT_READ_BE32(file.str + offset + 8);
         calculated_checksum -= checksum_adjust;
     }
 
@@ -776,11 +770,11 @@ void _tt_get_glyph_offset(const tt_font_info* font_info, u32 glyph_index, u32* g
     u32 offset2 = 0;
 
     if (font_info->loca_format == 0) {
-        offset1 = READ_BE16(file.str + loca.offset + glyph_index * 2) * 2;
-        offset2 = READ_BE16(file.str + loca.offset + glyph_index * 2 + 2) * 2;
+        offset1 = _TT_READ_BE16(file.str + loca.offset + glyph_index * 2) * 2;
+        offset2 = _TT_READ_BE16(file.str + loca.offset + glyph_index * 2 + 2) * 2;
     } else { // loca_format == 1
-        offset1 = READ_BE32(file.str + loca.offset + glyph_index * 4);
-        offset2 = READ_BE32(file.str + loca.offset + glyph_index * 4 + 4);
+        offset1 = _TT_READ_BE32(file.str + loca.offset + glyph_index * 4);
+        offset2 = _TT_READ_BE32(file.str + loca.offset + glyph_index * 4 + 4);
     }
 
     *glyph_offset = offset1;

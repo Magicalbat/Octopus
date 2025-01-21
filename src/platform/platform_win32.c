@@ -1,9 +1,4 @@
-#include "platform.h"
 #ifdef PLATFORM_WIN32
-
-#define WIN32_MEAN_AND_LEAN
-#define UNICODE
-#include <Windows.h>
 
 #define _DWORD_MAX (~(DWORD)0)
 

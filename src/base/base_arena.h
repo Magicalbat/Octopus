@@ -1,8 +1,3 @@
-#ifndef BASE_ARENA_H
-#define BASE_ARENA_H
-
-#include "base_defs.h"
-
 #define ARENA_NUM_SCRATCH 2
 #define ARENA_SCRATCH_RESERVE_SIZE MiB(64)
 #define ARENA_SCRATCH_COMMIT_SIZE KiB(256)
@@ -47,6 +42,3 @@ void arena_temp_end(mem_arena_temp temp_arena);
 
 mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts);
 void arena_scratch_release(mem_arena_temp scratch);
-
-#endif // BASE_ARENA_H
-

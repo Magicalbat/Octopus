@@ -1,8 +1,3 @@
-#include "base_arena.h"
-#include "platform/platform.h"
-
-#include <string.h>
-
 #define ARENA_ALIGN (sizeof(void*))
 
 static u64 round_up_pow2(u64 n) {

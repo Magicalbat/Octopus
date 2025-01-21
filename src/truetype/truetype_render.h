@@ -1,11 +1,3 @@
-#ifndef TRUETYPE_RENDER_H
-#define TRUETYPE_RENDER_H
-
-#include "base/base_defs.h"
-#include "base/base_arena.h"
-
-#include "truetype_parse.h"
-
 #define TT_CORNER_DOT_THRESHOLD 0.95f
 
 typedef enum {
@@ -59,6 +51,4 @@ void tt_render_glyph(
     u32 pixel_dist_falloff,
     tt_bitmap_view* bitmap_view
 );
-
-#endif // TRUETYPE_RENDER_H
 

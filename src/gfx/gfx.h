@@ -1,7 +1,11 @@
-#ifndef GFX_H
-#define GFX_H
+#define GFX_API_OPENGL
 
-#include "base/base.h"
+#if defined(GFX_API_OPENGL)
+
+#include "opengl/opengl_defs.h"
+#include "opengl/opengl_helpers.h"
+
+#endif
 
 typedef enum {
     GFX_MB_LEFT,
@@ -156,7 +160,4 @@ void gfx_win_swap_buffers(gfx_window* win);
 #define GFX_IS_KEY_UP(win, key) (!win->keys[key])
 #define GFX_IS_KEY_JUST_DOWN(win, key) (win->keys[key] && !win->prev_keys[key])
 #define GFX_IS_KEY_JUST_UP(win, key) (!win->keys[key] && win->prev_keys[key])
-
-
-#endif // GFX_H
 

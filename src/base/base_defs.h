@@ -1,11 +1,3 @@
-#ifndef BASE_DEFS_H
-#define BASE_DEFS_H
-
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <assert.h>
-
 #if defined(_WIN32)
 #   define PLATFORM_WIN32
 #elif defined(__EMSCRIPTEN__)
@@ -72,6 +64,4 @@ static_assert(sizeof(f64) == 8, "Size of double must be 8");
 #define SLL_POP_FRONT(f, l) ((f) == (l) ? \
     ((f) = (l) = NULL) :                  \
     ((f) = (f)->next))                    \
-
-#endif // BASE_DEFS_H
 

@@ -1,16 +1,10 @@
-#ifndef OPENGL_DEFS_H
-#define OPENGL_DEFS_H
-
-#include "base/base_defs.h"
-
 #if defined(PLATFORM_WIN32)
-#    define UNICODE
-#    define WIN32_LEAN_AND_MEAN
-#    include <Windows.h>
 #    include <GL/gl.h>
 #elif defined(PLATFORM_LINUX)
+#    include <X11/Xlib.h>
+#    include <X11/Xutil.h>
+#    include <GL/glx.h>
 #    include <GL/gl.h>
-#    include <unistd.h>
 #endif
 
 typedef unsigned int GLenum;
@@ -55,7 +49,7 @@ typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,
 #   define OPENGL_CALLSTYLE
 #endif
 
-#define X(ret, name, args) typedef ret (OPENGL_CALLSTYLE* gl_##name##_func)args; extern gl_##name##_func name;
+#define X(ret, name, args) typedef ret (OPENGL_CALLSTYLE* gl_##name##_func)args; static gl_##name##_func name;
 #   include "opengl_funcs_xlist.h"
 #undef X
 
@@ -712,4 +706,3 @@ typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,
 #define GL_TEXTURE_IMMUTABLE_LEVELS       0x82DF
 #define GL_SHADER_STORAGE_BUFFER          0x90D2
 
-#endif // OPENGL_DEFS_H

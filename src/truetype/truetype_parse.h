@@ -1,12 +1,3 @@
-#ifndef TRUETYPE_PARSE_H
-#define TRUETYPE_PARSE_H
-
-#include "base/base_defs.h"
-#include "base/base_str.h"
-#include "base/base_math.h"
-
-#include "truetype_segment.h"
-
 typedef struct {
     u32 offset;
     u32 length;
@@ -72,6 +63,4 @@ u32 tt_get_glyph_outline(
     mat2f transform,
     vec2f offset
 );
-
-#endif // TRUETYPE_PARSE_H
 

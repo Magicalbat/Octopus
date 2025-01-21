@@ -1,7 +1,3 @@
-#ifndef BASE_MATH_H
-#define BASE_MATH_H
-
-#include "base_defs.h"
 
 #define PI 3.14159265358979323846
 
@@ -122,6 +118,4 @@ vec2f qbezier2f_second_deriv(const qbezier2f* qbez);
 curve_dist_info qbezier2f_dist(const qbezier2f* qbez, vec2f target);
 
 b32 curve_dist_less(curve_dist_info a, curve_dist_info b);
-
-#endif // BASE_MATH_H
 

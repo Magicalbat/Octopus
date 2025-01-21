@@ -1,15 +1,4 @@
-#include "base/base_defs.h"
-
 #ifdef PLATFORM_WIN32
-
-#include "gfx/gfx.h"
-#include "platform/platform.h"
-#include "opengl_defs.h"
-
-#define UNICODE
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <GL/gl.h>
 
 typedef const char* WINAPI (wglGetExtensionsStringARB_func)(HDC hdc);
 typedef BOOL WINAPI (wglChoosePixelFormatARB_func)(HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
