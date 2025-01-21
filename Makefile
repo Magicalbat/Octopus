@@ -1,9 +1,9 @@
 CC = clang
 CFLAGS = -m64 -std=c99 -Isrc
-DEBUG_FLAGS = -DDEBUG -g -O0
+DEBUG_FLAGS = -DDEBUG -g -O0 -fsanitize=address
 RELEASE_FLAGS = -DNDEBUG -O2
 
-CFLAGS += -Weverything -Wno-error=padded -Wno-declaration-after-statement
+CFLAGS += -Wall -Wno-error=padded -Wno-declaration-after-statement
 
 config ?= debug
  
@@ -13,8 +13,22 @@ else
 	CFLAGS += $(RELEASE_CFLAGS)
 endif
 
-# TODO: add windows link flags
-LFLAGS = -lm -lX11 -lGL -lGLX
+# OS-Specific Stuff
+LFLAGS =
+MKDIR_BIN = 
+RM_BIN = 
+BIN_EXT = 
+
+ifeq ($(OS), Windows_NT)
+	LFLAGS += -lgdi32 -lkernel32 -luser32 -lBcrypt -lopengl32
+	MKDIR_BIN = if not exist bin\$(config) mkdir bin\$(config)
+	RM_BIN = rd /s /q bin
+	BIN_EXT = .exe
+else
+	LFLAGS += -lm -lX11 -lGL -lGLX
+	MKDIR_BIN = mkdir -p bin/$(config)
+	RM_BIN = rm -r bin
+endif
 
 SRC_DIR = src
 BIN = bin/$(config)/Octopus
@@ -22,12 +36,11 @@ BIN = bin/$(config)/Octopus
 all: Octopus
 
 Octopus:
-	@mkdir -p bin
-	@mkdir -p bin/$(config)
-	$(CC) $(SRC_DIR)/main.c $(CFLAGS) $(LFLAGS) -o $(BIN)
+	@$(MKDIR_BIN)
+	$(CC) $(SRC_DIR)/main.c $(CFLAGS) $(LFLAGS) -o $(BIN)$(BIN_EXT)
 
 clean:
-	rm -r bin
+	$(RM_BIN)
 
 .PHONY: all Octopus clean
 

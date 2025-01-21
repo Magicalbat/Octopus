@@ -10,7 +10,7 @@ typedef struct _gfx_win_backend {
     HGLRC context;
 } _gfx_win_backend;
 
-#define X(ret, name, args) gl_##name##_func name = NULL;
+#define X(ret, name, args) static gl_##name##_func name = NULL;
 #   include "opengl_funcs_xlist.h"
 #undef X
 
