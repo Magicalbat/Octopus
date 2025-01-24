@@ -1,9 +1,9 @@
 CC = clang
-CFLAGS = -m64 -std=c99 -Isrc
+CFLAGS = -m64 -std=c11 -Isrc
 DEBUG_FLAGS = -DDEBUG -g -O0 -fsanitize=address
 RELEASE_FLAGS = -DNDEBUG -O2
 
-CFLAGS += -Wall -Wno-error=padded -Wno-declaration-after-statement
+CFLAGS += -Wall -Wextra -pedantic -Wconversion -Wno-gnu-binary-literal
 
 config ?= debug
  

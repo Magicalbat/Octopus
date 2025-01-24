@@ -30,7 +30,7 @@ u32 prng_rand_r(prng* rng) {
 
     rng->state = old_state * 6364136223846793005ULL + rng->increment;
 
-    u32 xorshifted = ((old_state >> 18u) ^ old_state) >> 27u;
+    u32 xorshifted = (u32)(((old_state >> 18u) ^ old_state) >> 27u);
     u32 rot = old_state >> 59u;
 
     return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
@@ -40,7 +40,7 @@ u32 prng_rand(void) {
 }
 
 f32 prng_rand_f32_r(prng* rng) {
-    return ldexpf(prng_rand_r(rng), -32);
+    return ldexpf((f32)prng_rand_r(rng), -32);
 }
 f32 prng_rand_f32(void) {
     return prng_rand_f32_r(&s_rng);
@@ -53,7 +53,7 @@ f32 prng_std_norm_r(prng* rng){
         return 0;
     }
 
-    static const f32 epsilon = 1e-6;
+    static const f32 epsilon = 1e-6f;
 
     f32 u1 = epsilon;
     f32 u2 = 0.0f;
@@ -64,7 +64,7 @@ f32 prng_std_norm_r(prng* rng){
     u2 = (prng_rand_f32_r(rng)) * 2.0f - 1.0f;
 
     f32 mag = sqrtf(-2.0f * logf(u1));
-    f32 z0 = mag * cos(2.0f * 3.141592653f * u2);
+    f32 z0 = mag * cosf(2.0f * 3.141592653f * u2);
 
     // I am ignoring the second value here
     // It might be worth trying to use it

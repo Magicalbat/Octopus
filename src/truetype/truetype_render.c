@@ -37,11 +37,11 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
     for (u32 i = 0; i < num_glyphs; i++) {
         tt_bounding_box box = tt_get_glyph_box(font_info, glyph_indices[i]);
 
-        out_rects[i].w = ceilf((f32)(box.x_max - box.x_min) * glyph_scale + pixel_dist_falloff * 2);
-        out_rects[i].h = ceilf((f32)(box.y_max - box.y_min) * glyph_scale + pixel_dist_falloff * 2);
+        out_rects[i].w = ceilf((f32)(box.x_max - box.x_min) * glyph_scale + (f32)pixel_dist_falloff * 2);
+        out_rects[i].h = ceilf((f32)(box.y_max - box.y_min) * glyph_scale + (f32)pixel_dist_falloff * 2);
     }
 
-    u32 bitmap_height = ceilf(rectf_pack(out_rects, num_glyphs, bitmap_width, 1));
+    u32 bitmap_height = (u32)ceilf(rectf_pack(out_rects, num_glyphs, (f32)bitmap_width, 1));
 
     tt_bitmap bitmap = {
         .data = ARENA_PUSH_ARRAY(arena, u8, _pixel_sizes[render_mode] * bitmap_width * bitmap_height),
@@ -59,10 +59,10 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
     tt_segment* segments = ARENA_PUSH_ARRAY(scratch.arena, tt_segment, font_info->max_glyph_points);
 
     for (u32 i = 0; i < num_glyphs; i++) {
-        bitmap_view.offset_x = out_rects[i].x;
-        bitmap_view.offset_y = out_rects[i].y;
-        bitmap_view.local_width = out_rects[i].w;
-        bitmap_view.local_height = out_rects[i].h;
+        bitmap_view.offset_x = (u32)out_rects[i].x;
+        bitmap_view.offset_y = (u32)out_rects[i].y;
+        bitmap_view.local_width = (u32)out_rects[i].w;
+        bitmap_view.local_height = (u32)out_rects[i].h;
 
         render_func(font_info, glyph_indices[i], glyph_scale, pixel_dist_falloff, &bitmap_view, segments);
     }
@@ -100,7 +100,7 @@ void _tt_render_sdf(const tt_font_info* font_info, u32 glyph_index, f32 glyph_sc
     tt_bounding_box box = tt_get_glyph_box(font_info, glyph_index);
 
     vec2f offset = {
-        -box.x_min * glyph_scale + pixel_dist_falloff, box.y_max * glyph_scale + pixel_dist_falloff
+        -box.x_min * glyph_scale + (f32)pixel_dist_falloff, box.y_max * glyph_scale + (f32)pixel_dist_falloff
     };
 
     u32 num_segments = tt_get_glyph_outline(
@@ -155,7 +155,7 @@ b32 _tt_is_corner(const tt_segment* a, const tt_segment* b) {
 
 f32 _tt_calc_psuedo_dist(const tt_segment* segment, curve_dist_info dist, vec2f target) {
     if (dist.t > 0.0f || dist.t < 1.0f) {
-        return dist.dist * dist.dist_sign;
+        return dist.dist * (f32)dist.dist_sign;
     }
 
     vec2f dir = vec2f_norm(tt_segment_deriv(segment, dist.t));
@@ -167,7 +167,7 @@ f32 _tt_calc_psuedo_dist(const tt_segment* segment, curve_dist_info dist, vec2f 
         return pseudo_dist;
     }
 
-    return dist.dist * dist.dist_sign;
+    return dist.dist * (f32)dist.dist_sign;
 }
 
 #define _WHITE (TT_SEGMENT_FLAG_RED | TT_SEGMENT_FLAG_GREEN | TT_SEGMENT_FLAG_BLUE)
@@ -189,7 +189,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
     tt_bounding_box box = tt_get_glyph_box(font_info, glyph_index);
 
     vec2f offset = {
-        -box.x_min * glyph_scale + pixel_dist_falloff, box.y_max * glyph_scale + pixel_dist_falloff
+        -box.x_min * glyph_scale + (f32)pixel_dist_falloff, box.y_max * glyph_scale + (f32)pixel_dist_falloff
     };
 
     u32 num_segments = tt_get_glyph_outline(
@@ -265,7 +265,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
             // Have to find the corner and fix the colors
             if (num_magenta == contour_len) {
                 for (u32 i = 0; i < contour_len - num_end_in_first_edge; i++) {
-                    segments[contour_start + i].flags &= ~(_MAGENTA);
+                    segments[contour_start + i].flags &= ~((u32)_MAGENTA);
                     segments[contour_start + i].flags |= _YELLOW;
                 }
             }
@@ -284,7 +284,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
                 (f32)local_y + 0.5f
             };
 
-            curve_dist_info min_dists[3] = {};
+            curve_dist_info min_dists[3] = { 0 };
             min_dists[0].dist = INFINITY;
             min_dists[1].dist = INFINITY;
             min_dists[2].dist = INFINITY;
@@ -334,7 +334,7 @@ void _tt_render_msdf_impl(const tt_font_info* font_info, u32 glyph_index, f32 gl
                     }
                 }
 
-                final_dists[3] = min_dist.dist * min_dist.dist_sign;
+                final_dists[3] = min_dist.dist * (f32)min_dist.dist_sign;
             }
 
             for (u32 i = 0; i < pixel_size; i++) {

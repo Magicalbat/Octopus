@@ -4,8 +4,8 @@
 
 #define ARENA_PUSH(arena, T) (T*)arena_push((arena), sizeof(T))
 #define ARENA_PUSH_NZ(arena, T) (T*)arena_push_no_zero((arena), sizeof(T))
-#define ARENA_PUSH_ARRAY(arena, T, num) (T*)arena_push((arena), sizeof(T) * (num))
-#define ARENA_PUSH_ARRAY_NZ(arena, T, num) (T*)arena_push_no_zero((arena), sizeof(T) * (num))
+#define ARENA_PUSH_ARRAY(arena, T, num) (T*)arena_push((arena), sizeof(T) * (u64)(num))
+#define ARENA_PUSH_ARRAY_NZ(arena, T, num) (T*)arena_push_no_zero((arena), sizeof(T) * (u64)(num))
 
 typedef struct mem_arena {
     struct mem_arena* prev;

@@ -99,12 +99,12 @@ string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
 
     mem_arena_temp maybe_temp = arena_temp_begin(arena);
 
-    out.size = size;
+    out.size = (u64)size;
     // +1 is because vsnprintf HAS to add a null terminator
     // Very dumb, but necessary
     out.str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, size + 1);
 
-    if (size != vsnprintf((char*)out.str, size + 1, fmt, args2)) {
+    if (size != vsnprintf((char*)out.str, (u64)size + 1, fmt, args2)) {
         arena_temp_end(maybe_temp);
         out = (string8){ 0 };
         goto end;
@@ -193,8 +193,8 @@ string_decode utf8_decode(string8 str, u64 offset) {
         return out;
     }
 
-    u8 first_byte = str.str[offset];
-    u8 len = lengths[first_byte >> 3];
+    u32 first_byte = str.str[offset];
+    u32 len = lengths[first_byte >> 3];
 
     if (len <= 0 || offset + len > str.size) {
         return out;
@@ -202,11 +202,11 @@ string_decode utf8_decode(string8 str, u64 offset) {
 
     u32 codepoint = (first_byte & first_byte_masks[len]) << 18;
     switch (len) {
-        case 4: codepoint |= (str.str[offset+3] & 0x3f);
+        case 4: codepoint |= ((u32)str.str[offset+3] & 0x3f);
         // fallthrough
-        case 3: codepoint |= ((str.str[offset+2] & 0x3f) << 6);
+        case 3: codepoint |= (((u32)str.str[offset+2] & 0x3f) << 6);
         // fallthrough
-        case 2: codepoint |= ((str.str[offset+1] & 0x3f) << 12);
+        case 2: codepoint |= (((u32)str.str[offset+1] & 0x3f) << 12);
         default: break;
     }
 
@@ -251,25 +251,25 @@ u32 utf8_encode(u32 codepoint, u8* out) {
     u32 size = 0;
 
     if (codepoint <= 0x7f) {
-        out[0] = codepoint;
+        out[0] = (u8)(codepoint & 0xff);
 
         size = 1;
     } else if (codepoint <= 0x7ff) {
-        out[0] = 0xc0 | (codepoint >> 6);
-        out[1] = 0x80 | (codepoint & 0x3f);
+        out[0] = (u8)(0xc0 | (codepoint >> 6));
+        out[1] = (u8)(0x80 | (codepoint & 0x3f));
 
         size = 2;
     } else if (codepoint <= 0xffff) {
-        out[0] = 0xe0 | (codepoint >> 12);
-        out[1] = 0x80 | ((codepoint >> 6) & 0x3f);
-        out[2] = 0x80 | (codepoint & 0x3f);
+        out[0] = (u8)(0xe0 | (codepoint >> 12));
+        out[1] = (u8)(0x80 | ((codepoint >> 6) & 0x3f));
+        out[2] = (u8)(0x80 | (codepoint & 0x3f));
 
         size = 3;
     } else if (codepoint <= 0x10fff) {
-        out[0] = 0xf0 | (codepoint >> 18);
-        out[1] = 0x80 | ((codepoint >> 12) & 0x3f);
-        out[2] = 0x80 | ((codepoint >> 6) & 0x3f);
-        out[3] = 0x80 | (codepoint & 0x3f);
+        out[0] = (u8)(0xf0 | (codepoint >> 18));
+        out[1] = (u8)(0x80 | ((codepoint >> 12) & 0x3f));
+        out[2] = (u8)(0x80 | ((codepoint >> 6) & 0x3f));
+        out[3] = (u8)(0x80 | (codepoint & 0x3f));
 
         size = 4;
     } else {
@@ -284,14 +284,14 @@ u32 utf16_encode(u32 codepoint, u16* out) {
     u32 size = 0;
 
     if (codepoint < 0x10000) {
-        out[0] = codepoint;
+        out[0] = (u16)codepoint;
 
         size = 1;
     } else {
         codepoint -= 0x10000;
         
-        out[0] = (codepoint >> 10) + 0xd800;
-        out[1] = (codepoint & 0x3ff) + 0xdc00;
+        out[0] = (u16)((codepoint >> 10) + 0xd800);
+        out[1] = (u16)((codepoint & 0x3ff) + 0xdc00);
 
         size = 1;
     }

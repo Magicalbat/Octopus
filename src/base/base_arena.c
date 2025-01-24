@@ -158,7 +158,7 @@ void arena_temp_end(mem_arena_temp temp_arena) {
     arena_pop_to(temp_arena.arena, temp_arena.pos);
 }
 
-THREAD_LOCAL mem_arena* scratch_pool[ARENA_NUM_SCRATCH] = { NULL, NULL };
+static THREAD_LOCAL mem_arena* scratch_pool[ARENA_NUM_SCRATCH] = { NULL, NULL };
 
 mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts) {
     i32 scratch_index = -1;
@@ -173,7 +173,7 @@ mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts) {
         }
 
         if (!conflict) {
-            scratch_index = i;
+            scratch_index = (i32)i;
             break;
         }
     }

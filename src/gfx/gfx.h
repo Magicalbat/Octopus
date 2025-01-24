@@ -136,7 +136,7 @@ typedef struct {
     b8 keys[GFX_KEY_COUNT];
     b8 prev_keys[GFX_KEY_COUNT];
 
-    struct _gfx_win_backend* backend;
+    struct gfx_win_backend* backend;
 } gfx_window;
 
 gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title);

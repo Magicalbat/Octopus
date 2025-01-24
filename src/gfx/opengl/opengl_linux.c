@@ -1,13 +1,13 @@
 #ifdef PLATFORM_LINUX
 
-typedef struct _gfx_win_backend {
+typedef struct gfx_win_backend {
     Display* display;
     i32 screen;
     GLXFBConfig fb_config;
     Window window;
     GLXContext gl_context;
     Atom del_atom;
-} _gfx_win_backend;
+} gfx_win_backend;
 
 typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
@@ -24,7 +24,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
         .title = title,
         .width = width,
         .height = height,
-        .backend = ARENA_PUSH(arena, _gfx_win_backend)
+        .backend = ARENA_PUSH(arena, gfx_win_backend)
     };
 
     win->backend->display = XOpenDisplay(NULL);
@@ -147,7 +147,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 
     glXMakeCurrent(win->backend->display, win->backend->window, win->backend->gl_context);
     
-    glViewport(0, 0, width, height);
+    glViewport(0, 0, (i32)width, (i32)height);
 
     #define X(ret, name, args) name = (gl_##name##_func)glXGetProcAddress((const GLubyte*)#name);
     #    include "opengl_funcs_xlist.h"
@@ -198,8 +198,8 @@ void gfx_win_process_events(gfx_window* win) {
         switch(e.type) {
             case Expose: {
                 glViewport(0, 0, e.xexpose.width, e.xexpose.height);
-                win->width = e.xexpose.width;
-                win->height = e.xexpose.height;
+                win->width = (u32)e.xexpose.width;
+                win->height = (u32)e.xexpose.height;
             } break;
             case ButtonPress: {
                 if (e.xbutton.button == 4) {

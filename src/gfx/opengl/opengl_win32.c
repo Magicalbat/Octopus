@@ -4,11 +4,11 @@ typedef const char* WINAPI (wglGetExtensionsStringARB_func)(HDC hdc);
 typedef BOOL WINAPI (wglChoosePixelFormatARB_func)(HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 typedef HGLRC WINAPI (wglCreateContextAttribsARB_func)(HDC hdc, HGLRC hShareContext, const int *attribList);
 
-typedef struct _gfx_win_backend {
+typedef struct gfx_win_backend {
     HWND window;
     HDC dc;
     HGLRC context;
-} _gfx_win_backend;
+} gfx_win_backend;
 
 #define X(ret, name, args) static gl_##name##_func name = NULL;
 #   include "opengl_funcs_xlist.h"
@@ -45,7 +45,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     win->title = title;
     win->width = width;
     win->height = height;
-    win->backend = ARENA_PUSH(arena, _gfx_win_backend);
+    win->backend = ARENA_PUSH(arena, gfx_win_backend);
 
     RECT win_rect = { 0, 0, width, height };
     AdjustWindowRect(&win_rect, WS_OVERLAPPEDWINDOW, FALSE);

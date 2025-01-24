@@ -18,7 +18,7 @@ u64 plat_time_usec(void) {
         return 0;
     }
 
-    return ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+    return (u64)ts.tv_sec * 1000000 + (u64)ts.tv_nsec / 1000;
 }
 
 u64 plat_file_size(string8 file_name) {
@@ -36,7 +36,7 @@ u64 plat_file_size(string8 file_name) {
         return 0;
     }
 
-    return file_stats.st_size;
+    return (u64)file_stats.st_size;
 }
 
 string8 plat_file_read(mem_arena* arena, string8 file_name) {
@@ -69,7 +69,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
     mem_arena_temp maybe_temp = arena_temp_begin(arena);
 
-    out.size = file_stats.st_size;
+    out.size = (u64)file_stats.st_size;
     out.str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, out.size);
 
     u64 str_pos = 0;
@@ -77,7 +77,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     while (str_pos < out.size) {
         i64 bytes_read = read(fd, out.str + str_pos, out.size - str_pos);
 
-        if (bytes_read == -1) {
+        if (bytes_read < 0) {
             error_emitf("Failed to read from file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
 
             arena_temp_end(maybe_temp);
@@ -85,7 +85,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
             goto end;
         }
 
-        str_pos += bytes_read;
+        str_pos += (u64)bytes_read;
     }
 
 end:
@@ -122,13 +122,13 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
         while (total_written < full_file.size) {
             i64 written = write(fd, full_file.str + total_written, full_file.size - total_written);
 
-            if (written == -1) {
+            if (written < 0) {
                 error_emitf("Failed to write to file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
                 out = false;
                 break;
             }
 
-            total_written += written;
+            total_written += (u64)written;
         }
 
         arena_scratch_release(scratch);

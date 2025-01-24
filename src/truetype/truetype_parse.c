@@ -1,7 +1,7 @@
-#define _TT_READ_BE16(mem) ((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
-#define _TT_READ_BE32(mem) ((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
+#define _TT_READ_BE16(mem) (u16)((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
+#define _TT_READ_BE32(mem) (u32)((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
 
-#define _TT_TAG_TO_U32(tag) (((u32)((tag)[0]) << 24) | ((u32)((tag)[1]) << 16) | ((u32)((tag)[2]) << 8) | (u32)((tag)[3]))
+#define _TT_TAG_TO_U32(tag) (u32)(((u32)((tag)[0]) << 24) | ((u32)((tag)[1]) << 16) | ((u32)((tag)[2]) << 8) | (u32)((tag)[3]))
 
 u32 _tt_checksum(u8* data, u64 length);
 tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str);
@@ -183,7 +183,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
                 return;
             }
 
-            font_info->cmap_format = format;
+            font_info->cmap_format = (u16)format;
         }
     }
 
@@ -221,7 +221,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
 
     u32 max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2) - 1;
     if (max_glyph_index < font_info->num_glyphs) {
-        font_info->num_glyphs = max_glyph_index;
+        font_info->num_glyphs = (u16)max_glyph_index;
     }
 
     font_info->initialized = true;
@@ -235,8 +235,8 @@ f32 tt_get_scale_for_height(const tt_font_info* font_info, f32 pixels) {
     string8 file = font_info->file;
     tt_table_info hhea = font_info->tables.hhea;
 
-    i16 ascent = _TT_READ_BE16(file.str + hhea.offset + 4);
-    i16 descent = _TT_READ_BE16(file.str + hhea.offset + 6);
+    i16 ascent = (i16)_TT_READ_BE16(file.str + hhea.offset + 4);
+    i16 descent = (i16)_TT_READ_BE16(file.str + hhea.offset + 6);
     f32 font_height = (f32)ascent - descent;
 
     return pixels / font_height;
@@ -288,7 +288,7 @@ u32 tt_get_glyph_index(const tt_font_info* font_info, u32 codepoint) {
             return 0;
         }
 
-        i16 id_delta = _TT_READ_BE16(subtable + 16 + seg_count * 4 + segment * 2);
+        i16 id_delta = (i16)_TT_READ_BE16(subtable + 16 + seg_count * 4 + segment * 2);
         u16 id_range_offset = _TT_READ_BE16(subtable + 16 + seg_count * 6 + segment * 2);
 
         if (id_range_offset != 0) {
@@ -412,7 +412,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
     u32 num_segments = 0;
 
-    i16 num_contours = _TT_READ_BE16(glyph_data);
+    i16 num_contours = (i16)_TT_READ_BE16(glyph_data);
     // Last end_point_of_contour + 1
     u32 num_points = (u32)_TT_READ_BE16(glyph_data + 10 + 2 * (num_contours - 1)) + 1;
     u16 instructions_length = _TT_READ_BE16(glyph_data + 10 + num_contours * 2);
@@ -421,7 +421,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         return 0;
     }
 
-    if (num_contours == -1) {
+    if (num_contours <= -1) {
         u32 cur_offset = 10;
 
         for (u16 i = 0; i < font_info->max_component_elements; i++) {
@@ -468,7 +468,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
+                i16 scale_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset);
                 cur_offset += 2;
 
                 f32 scale = (f32)scale_2_14 / 16384.0f;
@@ -480,8 +480,8 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 x_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
-                i16 y_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 2);
+                i16 x_scale_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset);
+                i16 y_scale_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset + 2);
                 cur_offset += 4;
 
                 local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
@@ -492,10 +492,10 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
                     break;
                 }
 
-                i16 x_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset);
-                i16 scale01_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 2);
-                i16 scale10_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 4);
-                i16 y_scale_2_14 = _TT_READ_BE16(glyph_data + cur_offset + 6);
+                i16 x_scale_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset);
+                i16 scale01_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset + 2);
+                i16 scale10_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset + 4);
+                i16 y_scale_2_14 = (i16)_TT_READ_BE16(glyph_data + cur_offset + 6);
                 cur_offset += 8;
 
                 local_mat.m[0] = (f32)x_scale_2_14 / 16384.0f;
@@ -519,7 +519,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         _tt_glyph_flags* flags = ARENA_PUSH_ARRAY(scratch.arena, _tt_glyph_flags, num_points);
         vec2f* points = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_points);
 
-        u32 cur_offset = 12 + 2 * num_contours + instructions_length;
+        u32 cur_offset = (u32)(12 + 2 * num_contours + instructions_length);
 
         // Parsing flags
         for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
@@ -539,7 +539,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         i16 prev_coord = 0;
         i16 cur_coord_diff = 0;
         for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
-            u32 flag_combined = (flags[i].x_short << 1) | flags[i].x_same_or_positive;
+            u32 flag_combined = (u32)((flags[i].x_short << 1) | flags[i].x_same_or_positive);
 
             if (cur_offset == glyph_length && flag_combined != 0b01) {
                 break;
@@ -547,7 +547,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
             switch (flag_combined) {
                 case 0b00: {
-                    cur_coord_diff = _TT_READ_BE16(glyph_data + cur_offset);
+                    cur_coord_diff = (i16)_TT_READ_BE16(glyph_data + cur_offset);
                     cur_offset += 2;
                 } break;
                 case 0b01: {
@@ -562,14 +562,14 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             }
 
             points[i].x = prev_coord + cur_coord_diff;
-            prev_coord = points[i].x;
+            prev_coord = (i16)points[i].x;
         }
 
         // Parsing y-coords
         prev_coord = 0;
         cur_coord_diff = 0;
         for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {
-           u32 flag_combined = (flags[i].y_short << 1) | flags[i].y_same_or_positive;
+           u32 flag_combined = (u32)((flags[i].y_short << 1) | flags[i].y_same_or_positive);
 
             if (cur_offset == glyph_length && flag_combined != 0b01) {
                 break;
@@ -577,7 +577,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
 
             switch (flag_combined) {
                 case 0b00: {
-                    cur_coord_diff = _TT_READ_BE16(glyph_data + cur_offset);
+                    cur_coord_diff = (i16)_TT_READ_BE16(glyph_data + cur_offset);
                     cur_offset += 2;
                 } break;
                 case 0b01: {
@@ -592,7 +592,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
             }
 
             points[i].y = prev_coord + cur_coord_diff;
-            prev_coord = points[i].y;
+            prev_coord = (i16)points[i].y;
         }
 
         // Transforming points
@@ -691,7 +691,7 @@ u32 _tt_checksum(u8* data, u64 length) {
     }
 
     for (u32 shift = 24; i < length; i++, shift -= 8) {
-        sum += data[i] << shift;
+        sum += (u32)data[i] << shift;
     }
 
     return sum;
@@ -718,7 +718,7 @@ tt_table_info _tt_get_and_validate_table(string8 file, const char* tag_str) {
         u32 cur_tag = _TT_READ_BE32(file.str + table_record_offset);
 
         if (cur_tag == tag) {
-            table_index = i;
+            table_index = (i32)i;
             break;
         }
     }

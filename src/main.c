@@ -79,21 +79,21 @@ int main(int argc, char** argv) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bitmap.width, bitmap.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap.data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (i32)bitmap.width, (i32)bitmap.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap.data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     b32 filter_texture = true;
 
     u32 line_shader = glh_create_shader(line_vert_source, line_frag_source);
     glUseProgram(line_shader);
-    u32 ls_mat_loc = glGetUniformLocation(line_shader, "u_view_mat");
-    u32 ls_col_loc = glGetUniformLocation(line_shader, "u_col");
+    u32 ls_mat_loc = (u32)glGetUniformLocation(line_shader, "u_view_mat");
+    u32 ls_col_loc = (u32)glGetUniformLocation(line_shader, "u_col");
 
     u32 sdf_shader = glh_create_shader(texture_vert_source, sdf_frag_source);
     glUseProgram(sdf_shader);
-    u32 sdf_mat_loc = glGetUniformLocation(sdf_shader, "u_view_mat");
-    u32 sdf_texture_loc = glGetUniformLocation(sdf_shader, "u_texture");
-    u32 sdf_mode_loc = glGetUniformLocation(sdf_shader, "u_mode");
+    u32 sdf_mat_loc = (u32)glGetUniformLocation(sdf_shader, "u_view_mat");
+    u32 sdf_texture_loc = (u32)glGetUniformLocation(sdf_shader, "u_texture");
+    u32 sdf_mode_loc = (u32)glGetUniformLocation(sdf_shader, "u_mode");
 
     u32 sdf_mode = 0;
 
@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
     glGenVertexArrays(1, &sdf_vertex_array);
     glBindVertexArray(sdf_vertex_array);
 
-    rectf sdf_rect = { -(f32)bitmap.width * 7, -(f32)bitmap.height * 5, bitmap.width * 5, bitmap.height * 5 };
+    rectf sdf_rect = { -(f32)bitmap.width * 7, -(f32)bitmap.height * 5, (f32)bitmap.width * 5, (f32)bitmap.height * 5 };
     f32 sdf_verts[] = {
         sdf_rect.x, sdf_rect.y,   0.0f, 0.0f,
         sdf_rect.x + sdf_rect.w, sdf_rect.y,   1.0f, 0.0f,
@@ -132,8 +132,8 @@ int main(int argc, char** argv) {
     }
 
     viewf view = {
-        .aspect_ratio = (f32)win->width / win->height,
-        .width = win->width * 2
+        .aspect_ratio = (f32)win->width / (f32)win->height,
+        .width = (f32)win->width * 2
     };
     mat3f view_mat = { 0 };
     mat3f inv_view_mat = { 0 };
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
         error_frame_begin();
 
         u64 cur_frame = plat_time_usec();
-        f32 delta = (f32)(cur_frame - prev_frame) * 1e-6;
+        f32 delta = (f32)(cur_frame - prev_frame) * 1e-6f;
         prev_frame = cur_frame;
 
         gfx_win_process_events(win);
@@ -157,16 +157,16 @@ int main(int argc, char** argv) {
         vec2f mouse_pos = { 0 };
         // Updating view and getting world mouse pos
         {
-            view.aspect_ratio = (f32)win->width / win->height;
+            view.aspect_ratio = (f32)win->width / (f32)win->height;
 
             vec2f normalized_mouse_pos = (vec2f){
-                2.0f * win->mouse_pos.x / win->width - 1.0f,
-                -(2.0f * win->mouse_pos.y / win->height - 1.0f)
+                2.0f * win->mouse_pos.x / (f32)win->width - 1.0f,
+                -(2.0f * win->mouse_pos.y / (f32)win->height - 1.0f)
             };
             mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
 
             if (win->mouse_scroll != 0) {
-                target_width = target_width * (1.0f + (-10.0f * win->mouse_scroll * delta));
+                target_width = target_width * (1.0f + (-10.0f * (f32)win->mouse_scroll * delta));
 
             }
 
@@ -304,8 +304,8 @@ int main(int argc, char** argv) {
         gfx_win_clear(win);
 
         glUseProgram(line_shader);
-        glUniformMatrix3fv(ls_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform4f(ls_col_loc, 1.0f, 1.0f, 1.0f, 1.0f);
+        glUniformMatrix3fv((i32)ls_mat_loc, 1, GL_TRUE, view_mat.m);
+        glUniform4f((i32)ls_col_loc, 1.0f, 1.0f, 1.0f, 1.0f);
 
         glBindVertexArray(line_vertex_array);
         glBindBuffer(GL_ARRAY_BUFFER, line_vertex_buffer);
@@ -313,7 +313,7 @@ int main(int argc, char** argv) {
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), NULL);
 
-        glDrawArrays(GL_LINES, 0, num_verts);
+        glDrawArrays(GL_LINES, 0, (i32)num_verts);
 
         glDisableVertexAttribArray(0);
 
@@ -321,9 +321,9 @@ int main(int argc, char** argv) {
         glActiveTexture(GL_TEXTURE0);
 
         glUseProgram(sdf_shader);
-        glUniformMatrix3fv(sdf_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform1i(sdf_texture_loc, 0);
-        glUniform1i(sdf_mode_loc, sdf_mode);
+        glUniformMatrix3fv((i32)sdf_mat_loc, 1, GL_TRUE, view_mat.m);
+        glUniform1i((i32)sdf_texture_loc, 0);
+        glUniform1i((i32)sdf_mode_loc, (i32)sdf_mode);
 
         glBindVertexArray(sdf_vertex_array);
         glBindBuffer(GL_ARRAY_BUFFER, sdf_vertex_buffer);

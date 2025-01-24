@@ -1,10 +1,13 @@
+
+#define _F32_EPSILON 1e-8f
+
 u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
     if (solutions == NULL) {
         return 0;
     }
 
-    if (a == 0 || ABS(b) > 1e6f*ABS(a)) {
-        if (b == 0) {
+    if (ABS(a) < _F32_EPSILON || ABS(b) > 1e6f*ABS(a)) {
+        if (ABS(b) < _F32_EPSILON) {
             return 0;
         }
 
@@ -20,7 +23,7 @@ u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
         solutions[1] = (-b - sqrt_discr) / (2.0f * a);
 
         return 2;
-    } else if (discriminant == 0) {
+    } else if (ABS(discriminant) < _F32_EPSILON) {
         solutions[0] = -b / (2.0f * a);
 
         return 1;
@@ -50,8 +53,8 @@ u32 solve_cubic_normed(f32 solutions[3], f32 a2, f32 a1, f32 a0) {
         f32 coef = 2.0f * sqrtf(-Q);
 
         solutions[0] = coef * cosf(theta / 3.0f) - a2;
-        solutions[1] = coef * cosf((theta + 2.0f * PI) / 3.0f) - a2;
-        solutions[2] = coef * cosf((theta + 4.0f * PI) / 3.0f) - a2;
+        solutions[1] = coef * cosf((theta + 2.0f * (f32)PI) / 3.0f) - a2;
+        solutions[2] = coef * cosf((theta + 4.0f * (f32)PI) / 3.0f) - a2;
 
         return 3;
     }
@@ -75,9 +78,9 @@ u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d) {
         return 0;
     }
 
-    if (a != 0) {
+    if (ABS(a) >= _F32_EPSILON) {
         f32 b_a = b / a;
-        if (ABS(b_a) < 1e6f) {
+        if (ABS(b_a) < _F32_EPSILON) {
             return solve_cubic_normed(solutions, b_a, c/a, d/a);
         }
     }
@@ -128,7 +131,7 @@ f32 vec2f_len(vec2f v) {
 }
 vec2f vec2f_norm(vec2f v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y);
-    if (len)
+    if (ABS(len) > _F32_EPSILON)
         return (vec2f){ v.x / len, v.y / len };
     return (vec2f){ 1, 0 };
 }
@@ -175,11 +178,11 @@ f32 vec3f_sqr_len(vec3f v) {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 f32 vec3f_len(vec3f v) {
-    return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 vec3f vec3f_norm(vec3f v) {
-    f32 len = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    if (len) {
+    f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (ABS(len) > _F32_EPSILON) {
         f32 r = 1.0f / len;
         return (vec3f){ v.x * r, v.y * r, v.z * r };
     }
@@ -227,7 +230,7 @@ f32 vec4f_len(vec4f v) {
 }
 vec4f vec4f_norm(vec4f v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
-    if (len) {
+    if (ABS(len) > _F32_EPSILON) {
         f32 r = 1.0f / len;
         return (vec4f){ v.x * r, v.y * r, v.z * r, v.w * r };
     }
@@ -320,8 +323,8 @@ typedef struct {
 
 // Sorts it heighest to smallest
 i32 _indexed_rect_height_compare(const void* a_ptr, const void* b_ptr) {
-    f32 a_height = ((_indexed_rect_height*)a_ptr)->height;
-    f32 b_height = ((_indexed_rect_height*)b_ptr)->height;
+    f32 a_height = ((const _indexed_rect_height*)a_ptr)->height;
+    f32 b_height = ((const _indexed_rect_height*)b_ptr)->height;
 
     if (a_height > b_height) return -1;
     if (a_height < b_height) return  1;

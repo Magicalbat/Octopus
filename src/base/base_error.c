@@ -35,7 +35,7 @@ void error_frame_begin(void) {
     _context.cur_arena_pos = arena_get_pos(_context.arena);
 }
 string8 error_frame_end(mem_arena* arena, error_output_type output_type) {
-    u32 num_frame_errors = MAX(0, (i64)_context.num_errors - _context.cur_stack_pos);
+    u32 num_frame_errors = (u32)MAX(0, (i64)_context.num_errors - _context.cur_stack_pos);
 
     if (num_frame_errors == 0) {
         return (string8){ 0 };
@@ -151,12 +151,12 @@ void error_emitf(char* fmt, ...) {
     size = MIN(size, ERROR_MAX_MSG_LEN);
 
     if (size < ERROR_MAX_MSG_LEN) {
-        arena_pop(_context.arena, ERROR_MAX_MSG_LEN - size);
+        arena_pop(_context.arena, (u64)(ERROR_MAX_MSG_LEN - size));
     }
 
     _error_emit_impl((string8){
         .str = str_data,
-        .size = size
+        .size = (u64)size
     });
 
     va_end(args);

@@ -2,6 +2,9 @@
 -std=c17
 -Wall
 -Wextra
+-pedantic
+-Wconversion
+-Wno-gnu-binary-literal
 -Isrc
 -include src/base/base.h
 -include src/platform/platform.h

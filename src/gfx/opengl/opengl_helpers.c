@@ -48,7 +48,7 @@ u32 glh_create_buffer(u32 buffer_type, u64 size, void* data, u32 draw_type) {
 
     glGenBuffers(1, &buffer);
     glBindBuffer(buffer_type, buffer);
-    glBufferData(buffer_type, size, data, draw_type);
+    glBufferData(buffer_type, (i64)size, data, draw_type);
 
     return buffer;
 }
