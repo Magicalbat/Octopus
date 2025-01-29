@@ -186,6 +186,8 @@ void gfx_win_process_events(gfx_window* win) {
         return;
     }
 
+    win->mouse_pos_cache_size = 0;
+    memset(win->mouse_pos_cache, 0, sizeof(vec2f) * GFX_MOUSE_POS_CACHE_MAX_SIZE);
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
     memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
 
@@ -219,6 +221,10 @@ void gfx_win_process_events(gfx_window* win) {
             case MotionNotify: {
                 win->mouse_pos.x = (f32)e.xmotion.x;
                 win->mouse_pos.y = (f32)e.xmotion.y;
+
+                if (win->mouse_pos_cache_size < GFX_MOUSE_POS_CACHE_MAX_SIZE) {
+                    win->mouse_pos_cache[win->mouse_pos_cache_size++] = win->mouse_pos;
+                }
             } break;
             case KeyPress: {
                 gfx_key keydown = _x11_translate_key(&e.xkey);

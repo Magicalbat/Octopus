@@ -7,6 +7,8 @@
 
 #endif
 
+#define GFX_MOUSE_POS_CACHE_MAX_SIZE 64
+
 typedef enum {
     GFX_MB_LEFT,
     GFX_MB_MIDDLE,
@@ -123,20 +125,22 @@ typedef enum {
 } gfx_key;
 
 typedef struct {
+    struct gfx_win_backend* backend;
+
     string8 title;
     u32 width, height;
 
     b32 should_close;
 
-    vec2f mouse_pos;
     i32 mouse_scroll;
+    vec2f mouse_pos;
+    u32 mouse_pos_cache_size; 
+    vec2f mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE];
     b8 mouse_buttons[GFX_MB_COUNT];
     b8 prev_mouse_buttons[GFX_MB_COUNT];
 
     b8 keys[GFX_KEY_COUNT];
     b8 prev_keys[GFX_KEY_COUNT];
-
-    struct gfx_win_backend* backend;
 } gfx_window;
 
 gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title);

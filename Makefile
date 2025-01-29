@@ -1,7 +1,7 @@
 CC = clang
 CFLAGS = -m64 -std=c11 -Isrc
-DEBUG_FLAGS = -DDEBUG -g -O0 -fsanitize=address
-RELEASE_FLAGS = -DNDEBUG -O2
+DEBUG_CFLAGS = -DDEBUG -g -O0 -fsanitize=address
+RELEASE_CFLAGS = -DNDEBUG -O2
 
 CFLAGS += -Wall -Wextra -pedantic -Wconversion -Wno-gnu-binary-literal
 

@@ -10,14 +10,19 @@
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param);
 
-static const char* line_vert_source;
-static const char* line_frag_source;
+typedef struct {
+    vec4f col;
+    vec2f pos;
+    f32 radius;
+} point_instance_data;
 
-static const char* texture_vert_source;
-static const char* sdf_frag_source;
-
+static const char* point_vert_source;
+static const char* point_frag_source;
 
 int main(int argc, char** argv) {
+    UNUSED(argc);
+    UNUSED(argv);
+
     error_frame_begin();
 
     plat_init();
@@ -27,17 +32,6 @@ int main(int argc, char** argv) {
     prng_seed(seeds[0], seeds[1]);
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
-
-    char* font_path = argc > 1 ? argv[1] : "res/Hack.ttf";
-    string8 font_file = plat_file_read(perm_arena, str8_from_cstr((u8*)font_path));
-    tt_font_info font = { 0 };
-
-    tt_init_font(font_file, &font);
-
-    //f32 scale = tt_get_scale(&font, 24.0f);
-    tt_segment* segments = ARENA_PUSH_ARRAY(perm_arena, tt_segment, font.max_glyph_points);
-    u32 prev_codepoint = 0;
-    u32 codepoint = 'R';
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -51,76 +45,37 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    f32 font_size = 36;
-    u32 falloff = 3;
-    f32 scale = tt_get_scale_for_height(&font, font_size);
+    struct {
+        u32 program;
+        i32 view_mat_loc;
+    } point_shader = { 0 };
 
-    u32 codepoints[127-32] = { 0 };
-    for (u32 i = 33; i <= 127; i++) {
-        codepoints[i-33] = i;
-    }
-    //u32 codepoints[] = { ',' };
-    u32 num_codepoints = sizeof(codepoints) / sizeof(u32);
+    point_shader.program = glh_create_shader(point_vert_source, point_frag_source);
+    glUseProgram(point_shader.program);
+    point_shader.view_mat_loc = glGetUniformLocation(point_shader.program, "u_view_mat");
 
-    rectf* glyph_rects = ARENA_PUSH_ARRAY(perm_arena, rectf, num_codepoints);
+    u32 max_points = 0xffff;
+    u32 num_points = 0;
 
-    u64 start_time = plat_time_usec();
-    tt_bitmap bitmap = tt_render_font_atlas(perm_arena, &font, codepoints, glyph_rects, num_codepoints, TT_RENDER_TMSDF, scale, falloff, 256);
-    u64 end_time = plat_time_usec();
-    printf("Font took %fms to render\n", (f32)(end_time - start_time) * 1e-3f);
+    point_instance_data* point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
 
-    u32 texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    f32 point_pattern_verts[] = {
+        -1.0f, -1.0f, 
+         1.0f, -1.0f, 
+        -1.0f,  1.0f, 
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (i32)bitmap.width, (i32)bitmap.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap.data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    b32 filter_texture = true;
-
-    u32 line_shader = glh_create_shader(line_vert_source, line_frag_source);
-    glUseProgram(line_shader);
-    u32 ls_mat_loc = (u32)glGetUniformLocation(line_shader, "u_view_mat");
-    u32 ls_col_loc = (u32)glGetUniformLocation(line_shader, "u_col");
-
-    u32 sdf_shader = glh_create_shader(texture_vert_source, sdf_frag_source);
-    glUseProgram(sdf_shader);
-    u32 sdf_mat_loc = (u32)glGetUniformLocation(sdf_shader, "u_view_mat");
-    u32 sdf_texture_loc = (u32)glGetUniformLocation(sdf_shader, "u_texture");
-    u32 sdf_mode_loc = (u32)glGetUniformLocation(sdf_shader, "u_mode");
-
-    u32 sdf_mode = 0;
-
-    u32 sdf_vertex_array = 0;
-    glGenVertexArrays(1, &sdf_vertex_array);
-    glBindVertexArray(sdf_vertex_array);
-
-    rectf sdf_rect = { -(f32)bitmap.width * 7, -(f32)bitmap.height * 5, (f32)bitmap.width * 5, (f32)bitmap.height * 5 };
-    f32 sdf_verts[] = {
-        sdf_rect.x, sdf_rect.y,   0.0f, 0.0f,
-        sdf_rect.x + sdf_rect.w, sdf_rect.y,   1.0f, 0.0f,
-        sdf_rect.x, sdf_rect.y + sdf_rect.h,   0.0f, 1.0f,
-
-        sdf_rect.x, sdf_rect.y + sdf_rect.h,   0.0f, 1.0f,
-        sdf_rect.x + sdf_rect.w, sdf_rect.y,   1.0f, 0.0f,
-        sdf_rect.x + sdf_rect.w, sdf_rect.y + sdf_rect.h,   1.0f, 1.0f,
+        -1.0f,  1.0f, 
+         1.0f, -1.0f, 
+         1.0f,  1.0f, 
     };
 
-    u32 sdf_vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(sdf_verts), sdf_verts, GL_STATIC_DRAW);
+    u32 point_vert_array = 0;
+    glGenVertexArrays(1, &point_vert_array);
 
-    u32 line_vertex_array = 0;
-    glGenVertexArrays(1, &line_vertex_array);
-    glBindVertexArray(line_vertex_array);
+    u32 point_pattern_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(point_pattern_verts), point_pattern_verts, GL_STATIC_DRAW);
 
-    u32 max_verts = 0xffff;
-    u32 num_verts = 0;
-    u32 line_vertex_buffer = glh_create_buffer(GL_ARRAY_BUFFER, max_verts, NULL, GL_STREAM_DRAW);
+    u32 point_instance_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(point_instance_data) * max_points, NULL, GL_STREAM_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(point_instance_data) * num_points, point_data);
 
     // End of setup error frame
     {
@@ -167,7 +122,6 @@ int main(int argc, char** argv) {
 
             if (win->mouse_scroll != 0) {
                 target_width = target_width * (1.0f + (-10.0f * (f32)win->mouse_scroll * delta));
-
             }
 
             if (ABS(view.width - target_width) > 1e-6f) {
@@ -176,168 +130,100 @@ int main(int argc, char** argv) {
                 // This makes the view zoom toward the mouse
                 mat3f_from_inv_view(&inv_view_mat, view);
                 vec2f new_mouse_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_mouse_pos);
-                view.center = vec2f_add(view.center, vec2f_sub(mouse_pos, new_mouse_pos));
+                vec2f diff = vec2f_sub(mouse_pos, new_mouse_pos);
+                view.center = vec2f_add(view.center, diff);
             }
 
-            if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
+            if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_RIGHT)) {
                 drag_init_mouse_pos = mouse_pos;
             }
-            if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
-                view.center = vec2f_add(view.center, vec2f_sub(drag_init_mouse_pos, mouse_pos));
+            if (GFX_IS_MOUSE_DOWN(win, GFX_MB_RIGHT)) {
+                vec2f diff = vec2f_sub(drag_init_mouse_pos, mouse_pos);
+                view.center = vec2f_add(view.center, diff);
             }
 
             mat3f_from_view(&view_mat, view);
             mat3f_from_inv_view(&inv_view_mat, view);
         }
 
-        for (gfx_key key = GFX_KEY_1; key <= GFX_KEY_5; key++) {
-            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
-                sdf_mode = key - GFX_KEY_1;
-            }
+        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_R)) {
+            num_points = 0;
         }
 
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_TAB)) {
-            glBindTexture(GL_TEXTURE_2D, texture);
+        u32 points_written = 0;
+        if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
+            for (u32 i = 0; i < win->mouse_pos_cache_size && num_points < max_points; i++) {
+                vec2f win_pos = win->mouse_pos_cache[i];
+                vec2f normalized_pos = {
+                    2.0f * win_pos.x / (f32)win->width - 1.0f,
+                    -(2.0f * win_pos.y / (f32)win->height - 1.0f),
+                };
+                vec2f pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
 
-            filter_texture = !filter_texture;
+                if (num_points > 0) {
+                    vec2f prev_pos = point_data[num_points-1].pos;
+                    f32 dist = vec2f_dist(prev_pos, pos);
 
-            if (filter_texture) { 
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            } else {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            }
-        }
-
-        for (gfx_key key = GFX_KEY_A; key <= GFX_KEY_Z; key++) {
-            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
-                codepoint = key;
-                
-                break;
-            }
-        }
-
-        if (GFX_IS_KEY_DOWN(win, GFX_KEY_UP)) {
-            codepoint++;
-        }
-        if (GFX_IS_KEY_DOWN(win, GFX_KEY_DOWN)) {
-            codepoint--;
-        }
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_RIGHT)) {
-            codepoint++;
-        }
-        if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_LEFT)) {
-            codepoint--;
-        }
-
-        if (prev_codepoint != codepoint) {
-            u32 glyph_index = tt_get_glyph_index(&font, codepoint);
-            u32 num_segments = tt_get_glyph_outline(
-                &font, glyph_index, segments, 0,
-                (mat2f){ .m = { 1, 0, 0, 1 } },
-                (vec2f){ 0, 0 }
-            );
-
-            mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-            #define BEZ_SUBDIVISIONS 10
-
-            num_verts = 0;
-            for (u32 i = 0; i < num_segments; i++) {
-                switch (segments[i].type) {
-                    case TT_SEGMENT_LINE: {
-                        num_verts += 2;
-                    } break;
-                    case TT_SEGMENT_QBEZIER: {
-                        num_verts += BEZ_SUBDIVISIONS * 2;
-                    } break;
+                    if (dist < 1.0f) {
+                        continue;
+                    }
                 }
+
+                points_written++;
+                num_points++;
+                point_data[num_points-1] = (point_instance_data) {
+                    (vec4f){ 0, (f32)(num_points % 256) / 256.0f, 1, 1 },
+                    pos,
+                    5.0f
+                };
             }
-
-            vec2f* verts = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_verts);
-            u32 cur_vert = 0;
-            
-            for (u32 i = 0; i < num_segments; i++) {
-                vec2f scale = { 1, -1 };
-
-                switch (segments[i].type) {
-                    case TT_SEGMENT_LINE: {
-                        verts[cur_vert++] = vec2f_comp_mul(segments[i].line.p0, scale);
-                        verts[cur_vert++] = vec2f_comp_mul(segments[i].line.p1, scale);
-                    } break;
-                    case TT_SEGMENT_QBEZIER: {
-                        qbezier2f* qbez = &segments[i].qbez;
-
-                        vec2f c0 = vec2f_add(vec2f_sub(qbez->p2, vec2f_scale(qbez->p1, 2.0f)), qbez->p0);
-                        vec2f c1 = vec2f_sub(qbez->p1, qbez->p0);
-                        vec2f c2 = qbez->p0;
-
-                        vec2f prev_point = c2;
-                        for (u32 j = 1; j <= BEZ_SUBDIVISIONS; j++) {
-                            f32 t = (f32)j / BEZ_SUBDIVISIONS;
-                            vec2f point = vec2f_add(
-                                vec2f_add(
-                                    vec2f_scale(c0, t * t),
-                                    vec2f_scale(c1, 2.0f * t)
-                                ), c2
-                            );
-
-                            verts[cur_vert++] = vec2f_comp_mul(prev_point, scale);
-                            verts[cur_vert++] = vec2f_comp_mul(point, scale);
-
-                            prev_point = point;
-                        }
-                    } break;
-                }
-            }
-
-            glBindVertexArray(line_vertex_array);
-            glBindBuffer(GL_ARRAY_BUFFER, line_vertex_buffer);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * num_verts, verts);
-
-            arena_scratch_release(scratch);
         }
-
-        prev_codepoint = codepoint;
 
         gfx_win_clear(win);
 
-        glUseProgram(line_shader);
-        glUniformMatrix3fv((i32)ls_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform4f((i32)ls_col_loc, 1.0f, 1.0f, 1.0f, 1.0f);
+        if (points_written) {
+            glBindBuffer(GL_ARRAY_BUFFER, point_instance_buffer);
+            glBufferSubData(
+                GL_ARRAY_BUFFER,
+                sizeof(point_instance_data) * (num_points - points_written),
+                sizeof(point_instance_data) * points_written,
+                &point_data[num_points - points_written]
+            );
+        }
 
-        glBindVertexArray(line_vertex_array);
-        glBindBuffer(GL_ARRAY_BUFFER, line_vertex_buffer);
+        glUseProgram(point_shader.program);
+        glUniformMatrix3fv(point_shader.view_mat_loc, 1, GL_TRUE, view_mat.m);
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), NULL);
-
-        glDrawArrays(GL_LINES, 0, (i32)num_verts);
-
-        glDisableVertexAttribArray(0);
-
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glActiveTexture(GL_TEXTURE0);
-
-        glUseProgram(sdf_shader);
-        glUniformMatrix3fv((i32)sdf_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform1i((i32)sdf_texture_loc, 0);
-        glUniform1i((i32)sdf_mode_loc, (i32)sdf_mode);
-
-        glBindVertexArray(sdf_vertex_array);
-        glBindBuffer(GL_ARRAY_BUFFER, sdf_vertex_buffer);
+        glBindVertexArray(point_vert_array);
 
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glEnableVertexAttribArray(3);
 
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f) * 2, (void*)(0));
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f) * 2, (void*)(sizeof(vec2f)));
+        glBindBuffer(GL_ARRAY_BUFFER, point_pattern_buffer);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-        glDrawArrays(GL_TRIANGLES, 0, sizeof(sdf_verts) / sizeof(f32));
+        glBindBuffer(GL_ARRAY_BUFFER, point_instance_buffer);
+
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, col)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, pos)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, radius)));
+
+        glVertexAttribDivisor(1, 1);
+        glVertexAttribDivisor(2, 1);
+        glVertexAttribDivisor(3, 1);
+
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)num_points);
+
+        glVertexAttribDivisor(1, 0);
+        glVertexAttribDivisor(2, 0);
+        glVertexAttribDivisor(3, 0);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(2);
+        glDisableVertexAttribArray(3);
 
         gfx_win_swap_buffers(win);
 
@@ -350,11 +236,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    glDeleteTextures(1, &texture);
-    glDeleteProgram(line_shader);
-    glDeleteVertexArrays(1, &line_vertex_array);
-    glDeleteBuffers(1, &line_vertex_buffer);
-
     gfx_win_destroy(win);
 
     arena_destroy(perm_arena);
@@ -362,90 +243,42 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-static const char* line_vert_source = GLSL_SOURCE(
-    450,
+static const char* point_vert_source = GLSL_SOURCE(
+    330,
 
-    layout (location = 0) in vec2 a_pos;
+    layout (location = 0) in vec2 a_pos_pattern;
+    layout (location = 1) in vec4 a_col;
+    layout (location = 2) in vec2 a_pos;
+    layout (location = 3) in float a_radius;
 
-    uniform mat3 u_view_mat;
-
-    void main() {
-       vec2 pos = (u_view_mat * vec3(a_pos, 1.0)).xy;
-       gl_Position = vec4(pos, 0.0, 1.0);
-    }
-);
-
-static const char* line_frag_source = GLSL_SOURCE(
-    450,
-
-    layout (location = 0) out vec4 out_col;
-
-    uniform vec4 u_col;
-
-    void main() {
-        out_col = u_col;
-    }
-);
-
-static const char* texture_vert_source = GLSL_SOURCE(
-    450,
-
-    layout (location = 0) in vec2 a_pos;
-    layout (location = 1) in vec2 a_uv;
+    out vec2 sdf_pos;
+    out vec4 col;
 
     uniform mat3 u_view_mat;
 
-    out vec2 uv;
-
     void main() {
-        uv = a_uv;
-        vec2 pos = (u_view_mat * vec3(a_pos, 1.0)).xy;
+        col = a_col;
+        sdf_pos = a_pos_pattern;
+        vec2 pos = (u_view_mat * vec3(a_pos_pattern * a_radius + a_pos, 1)).xy;
         gl_Position = vec4(pos, 0.0, 1.0);
     }
 );
 
-static const char* sdf_frag_source = GLSL_SOURCE(
-    450,
+static const char* point_frag_source = GLSL_SOURCE(
+    330,
 
     layout (location = 0) out vec4 out_col;
 
-    uniform sampler2D u_texture;
-    uniform int u_mode;
-
-    in vec2 uv;
-
-    float median(float r, float g, float b) {
-        return max(min(r, g), min(max(r, g), b));
-    }
+    in vec2 sdf_pos;
+    in vec4 col;
 
     void main() {
-        switch (u_mode) {
-            case 0: {
-                out_col = texture(u_texture, uv);
-            } break;
-            case 1: {
-                out_col = vec4(vec3(texture(u_texture, uv).a), 1);
-            } break;
-            case 2: {
-                out_col = vec4(texture(u_texture, uv).rgb, 1);
-            } break;
-            case 3: {
-                float dist = texture(u_texture, uv).a;
-                float blending = fwidth(dist);
-                float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
-                out_col = vec4(vec3(1.), alpha);
-            } break;
-            case 4: {
-                vec3 msd = texture(u_texture, uv).rgb;
-                float dist = median(msd.r, msd.g, msd.b);
-                float blending = fwidth(dist);
-                float alpha = smoothstep(0.53 - blending, 0.53 + blending, dist);
-                out_col = vec4(vec3(1.), alpha);
-            } break;
-        }
+        float dist = length(sdf_pos) - 1.0;
+        float blending = fwidth(dist);
+        float alpha = smoothstep(blending, -blending, dist);
+        out_col = vec4(col.xyz, col.w * alpha);
     }
 );
-
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param) {
     UNUSED(source);
