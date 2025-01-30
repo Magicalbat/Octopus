@@ -44,6 +44,31 @@ int main(int argc, char** argv) {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    u32 max_points = 0xffff;
+    u32 num_points = 0;
+
+    point_instance_data* point_data = NULL;
+
+    {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+        string8 points_file = plat_file_read(scratch.arena, STR8_LIT("res/out.points"));
+
+        num_points = *(u32*)(points_file.str + points_file.size - 4);
+        max_points = num_points * 2;
+
+        point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, num_points);
+
+        vec2f* positions = (vec2f*)points_file.str;
+        for (u32 i = 0; i < num_points; i++) {
+            point_data[i].col = (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)i * (f32)PI / 128)), 1.0f, 1.0f };
+            point_data[i].pos = vec2f_scale(positions[i], 3.0f);
+            point_data[i].radius = 1;
+        }
+
+        arena_scratch_release(scratch);
+    }
 
     struct {
         u32 program;
@@ -53,11 +78,6 @@ int main(int argc, char** argv) {
     point_shader.program = glh_create_shader(point_vert_source, point_frag_source);
     glUseProgram(point_shader.program);
     point_shader.view_mat_loc = glGetUniformLocation(point_shader.program, "u_view_mat");
-
-    u32 max_points = 0xffff;
-    u32 num_points = 0;
-
-    point_instance_data* point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
 
     f32 point_pattern_verts[] = {
         -1.0f, -1.0f, 
@@ -73,7 +93,6 @@ int main(int argc, char** argv) {
     glGenVertexArrays(1, &point_vert_array);
 
     u32 point_pattern_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(point_pattern_verts), point_pattern_verts, GL_STATIC_DRAW);
-
     u32 point_instance_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(point_instance_data) * max_points, NULL, GL_STREAM_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(point_instance_data) * num_points, point_data);
 
@@ -106,6 +125,12 @@ int main(int argc, char** argv) {
         u64 cur_frame = plat_time_usec();
         f32 delta = (f32)(cur_frame - prev_frame) * 1e-6f;
         prev_frame = cur_frame;
+
+        f32 fps = 1.0f / delta;
+        if (fps < 10000) {
+            printf("%4d\r", (u32)fps);
+            fflush(stdout);
+        }
 
         gfx_win_process_events(win);
 
@@ -172,7 +197,7 @@ int main(int argc, char** argv) {
                 points_written++;
                 num_points++;
                 point_data[num_points-1] = (point_instance_data) {
-                    (vec4f){ 0, (f32)(num_points % 256) / 256.0f, 1, 1 },
+                    (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)num_points * (f32)PI / 128)), 1.0f, 1.0f },
                     pos,
                     5.0f
                 };

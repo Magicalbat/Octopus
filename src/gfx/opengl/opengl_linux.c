@@ -224,6 +224,11 @@ void gfx_win_process_events(gfx_window* win) {
 
                 if (win->mouse_pos_cache_size < GFX_MOUSE_POS_CACHE_MAX_SIZE) {
                     win->mouse_pos_cache[win->mouse_pos_cache_size++] = win->mouse_pos;
+                } else {
+                    /*for (u32 i = 0; i < GFX_MOUSE_POS_CACHE_MAX_SIZE - 1; i++) {
+                        win->mouse_pos_cache[i] = win->mouse_pos_cache[i+1];
+                    }
+                    win->mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE - 1] = win->mouse_pos;*/
                 }
             } break;
             case KeyPress: {
