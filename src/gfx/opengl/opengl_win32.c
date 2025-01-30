@@ -14,7 +14,7 @@ typedef struct gfx_win_backend {
 #   include "opengl_funcs_xlist.h"
 #undef X
 
-static u32 _w32_keymap[256] = { 0 };
+static gfx_key _w32_keymap[256] = { 0 };
 
 static wglChoosePixelFormatARB_func* wglChoosePixelFormatARB = NULL;
 static wglCreateContextAttribsARB_func* wglCreateContextAttribsARB = NULL;
@@ -47,7 +47,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     win->height = height;
     win->backend = ARENA_PUSH(arena, gfx_win_backend);
 
-    RECT win_rect = { 0, 0, width, height };
+    RECT win_rect = { 0, 0, (i32)width, (i32)height };
     AdjustWindowRect(&win_rect, WS_OVERLAPPEDWINDOW, FALSE);
 
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -152,7 +152,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
         return NULL;
     }
 
-    #define X(ret, name, args) name = (void*)wglGetProcAddress(#name);
+    #define X(ret, name, args) name = (gl_##name##_func)wglGetProcAddress(#name);
     #   include "opengl_funcs_xlist.h"
     #undef X
 
@@ -161,7 +161,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     SetWindowLongPtrW(win->backend->window, GWLP_USERDATA, (LONG_PTR)win);
 
     ShowWindow(win->backend->window, SW_SHOW);
-    glViewport(0, 0, win->width, win->height);
+    glViewport(0, 0, (i32)win->width, (i32)win->height);
 
     return win;
 }
@@ -190,8 +190,11 @@ void gfx_win_process_events(gfx_window* win) {
         return;
     }
 
+    win->mouse_pos_cache_size = 0;
+    memset(win->mouse_pos_cache, 0, sizeof(vec2f) * GFX_MOUSE_POS_CACHE_MAX_SIZE);
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
     memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
+
     win->mouse_scroll = 0;
 
     MSG msg = { 0 };
@@ -233,6 +236,15 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
         case WM_MOUSEMOVE: {
             win->mouse_pos.x = (f32)((l_param) & 0xffff);
             win->mouse_pos.y = (f32)((l_param >> 16) & 0xffff);
+
+            if (win->mouse_pos_cache_size < GFX_MOUSE_POS_CACHE_MAX_SIZE) {
+                    win->mouse_pos_cache[win->mouse_pos_cache_size++] = win->mouse_pos;
+            } else {
+                for (u32 i = 0; i < GFX_MOUSE_POS_CACHE_MAX_SIZE - 1; i++) {
+                    win->mouse_pos_cache[i] = win->mouse_pos_cache[i+1];
+                }
+                win->mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE - 1] = win->mouse_pos;
+            }
         } break;
 
         case WM_LBUTTONDOWN: {
@@ -274,7 +286,7 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
             win->width = width;
             win->height = height;
 
-            glViewport(0, 0, width, height);
+            glViewport(0, 0, (i32)width, (i32)height);
         } break;
 
         case WM_CLOSE: {
@@ -343,7 +355,7 @@ static b32 _w32_get_wgl_funcs(void) {
     }
 
     wglGetExtensionsStringARB_func* wglGetExtensionsStringARB =
-        (void*)wglGetProcAddress("wglGetExtensionsStringARB");
+        (wglGetExtensionsStringARB_func*)((void*)wglGetProcAddress("wglGetExtensionsStringARB"));
 
     if (wglGetExtensionsStringARB == NULL) {
         error_emit("OpenGL does not support WGL_ARB_extensions_string extension"); 
@@ -359,9 +371,11 @@ static b32 _w32_get_wgl_funcs(void) {
         ext_str = str8_substr(ext_str, index + 1, ext_str.size);
 
         if (str8_equals(cur_str, STR8_LIT("WGL_ARB_pixel_format"))) {
-            wglChoosePixelFormatARB = (void*)wglGetProcAddress("wglChoosePixelFormatARB");
+            wglChoosePixelFormatARB =
+                (wglChoosePixelFormatARB_func*)((void*)wglGetProcAddress("wglChoosePixelFormatARB"));
         } else if (str8_equals(cur_str, STR8_LIT("WGL_ARB_create_context"))) {
-            wglCreateContextAttribsARB = (void*)wglGetProcAddress("wglCreateContextAttribsARB");
+            wglCreateContextAttribsARB =
+                (wglCreateContextAttribsARB_func*)((void*)wglGetProcAddress("wglCreateContextAttribsARB"));
         }
     }
 

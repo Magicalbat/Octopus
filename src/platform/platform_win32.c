@@ -80,7 +80,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     mem_arena_temp maybe_temp = arena_temp_begin(arena);
 
     string8 out = { 
-        .size = file_size.QuadPart,
+        .size = (u64)file_size.QuadPart,
         .str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, file_size.QuadPart)
     };
 
@@ -173,7 +173,7 @@ b32 plat_file_delete(string8 file_name) {
 }
 
 void plat_get_entropy(void* data, u64 size) {
-    BCryptGenRandom(NULL, data, size, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    BCryptGenRandom(NULL, data, (u32)(size & (~(u32)0)), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
 }
 
 // returns NULL on failure

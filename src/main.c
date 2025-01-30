@@ -55,16 +55,28 @@ int main(int argc, char** argv) {
 
         string8 points_file = plat_file_read(scratch.arena, STR8_LIT("res/out.points"));
 
-        num_points = *(u32*)(points_file.str + points_file.size - 4);
+        const u32 copies = 16;
+
+        u32 num_orig_points = *(u32*)(points_file.str + points_file.size - 4);
+        num_points = num_orig_points * copies;
         max_points = num_points * 2;
 
-        point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, num_points);
+        point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
 
         vec2f* positions = (vec2f*)points_file.str;
-        for (u32 i = 0; i < num_points; i++) {
-            point_data[i].col = (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)i * (f32)PI / 128)), 1.0f, 1.0f };
-            point_data[i].pos = vec2f_scale(positions[i], 3.0f);
-            point_data[i].radius = 1;
+
+        for (u32 k = 0; k < 4; k++) {
+            for (u32 j = 0; j < 4; j++) {
+                for (u32 i = 0; i < num_orig_points; i++) {
+                    point_data[(j * 4 + k) * num_orig_points + i].col =
+                        (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)i * (f32)PI / 128)), 1.0f, 1.0f };
+
+                    point_data[(j * 4 + k) * num_orig_points + i].pos =
+                        vec2f_add(vec2f_scale(positions[i], 4.0f), (vec2f){ 2500.0f * (f32)j, 4000.0f * (f32)k });
+
+                    point_data[(j * 4 + k) * num_orig_points + i].radius = 2.0f;
+                }
+            }
         }
 
         arena_scratch_release(scratch);
@@ -189,7 +201,7 @@ int main(int argc, char** argv) {
                     vec2f prev_pos = point_data[num_points-1].pos;
                     f32 dist = vec2f_dist(prev_pos, pos);
 
-                    if (dist < 1.0f) {
+                    if (dist < 1e-6f) {
                         continue;
                     }
                 }
@@ -199,7 +211,7 @@ int main(int argc, char** argv) {
                 point_data[num_points-1] = (point_instance_data) {
                     (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)num_points * (f32)PI / 128)), 1.0f, 1.0f },
                     pos,
-                    5.0f
+                    1.0f
                 };
             }
         }
