@@ -21,6 +21,10 @@ u64 plat_time_usec(void) {
     return (u64)ts.tv_sec * 1000000 + (u64)ts.tv_nsec / 1000;
 }
 
+void plat_sleep_ms(u32 ms) {
+    usleep(ms * 1000);
+}
+
 u64 plat_file_size(string8 file_name) {
     struct stat file_stats = { 0 };
 
