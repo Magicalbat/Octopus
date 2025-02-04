@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     point_instance_data* point_data = NULL;
     vec2f* line_data = NULL;
 
-    if (true) {
+    if (false) {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
         string8 points_file = plat_file_read(scratch.arena, STR8_LIT("res/out.points"));
@@ -165,6 +165,8 @@ int main(int argc, char** argv) {
 
     b32 draw_points = true;
 
+    u32 line_lod = 1;
+
     u64 prev_frame = plat_time_usec();
     while (!win->should_close) {
         error_frame_begin();
@@ -239,6 +241,7 @@ int main(int argc, char** argv) {
                 num_points++;
                 point_data[num_points-1] = (point_instance_data) {
                     (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)num_points * (f32)PI / 128)), 1.0f, 1.0f },
+                    //(vec4f){ 1, 1, 1, 1 },
                     pos,
                     1.0f
                 };
@@ -248,6 +251,12 @@ int main(int argc, char** argv) {
 
         if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_SPACE)) {
             draw_points = !draw_points;
+        }
+
+        for (gfx_key key = GFX_KEY_1; key <= GFX_KEY_9; key++) {
+            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
+                line_lod = (u32)(key - GFX_KEY_0);
+            }
         }
 
         gfx_win_clear(win);
@@ -294,7 +303,7 @@ int main(int argc, char** argv) {
             glVertexAttribDivisor(2, 1);
             glVertexAttribDivisor(3, 1);
 
-            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)num_points);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)(num_points));
 
             glVertexAttribDivisor(1, 0);
             glVertexAttribDivisor(2, 0);
@@ -307,7 +316,7 @@ int main(int argc, char** argv) {
         }
 
         // Drawing lines
-        if (num_points >= 2) {
+        if (num_points / line_lod >= 2) {
             f32 radius = 1.0f;
             f32 geom_scale = 1.0f;
 
@@ -333,10 +342,10 @@ int main(int argc, char** argv) {
 
             glBindBuffer(GL_ARRAY_BUFFER, line_buffer);
 
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)(0));
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)(sizeof(vec2f)));
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(0));
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(sizeof(vec2f) * line_lod));
 
-            glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)(num_points - 1));
+            glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)(num_points / line_lod - 1));
 
             glVertexAttribDivisor(0, 0);
             glVertexAttribDivisor(1, 0);
