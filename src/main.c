@@ -141,6 +141,18 @@ int main(int argc, char** argv) {
     u32 line_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vec2f) * max_points, NULL, GL_STREAM_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * num_points, line_data);
 
+    #define MAX_STROKES 1024
+    u32 num_strokes = 0;
+    glh_draw_arrays_indirect_cmd line_indirect_cmds[MAX_STROKES] = { 0 };
+
+    u32 stroke_num_points = 0;
+
+    u32 line_indirect_buffer = glh_create_buffer(
+        GL_DRAW_INDIRECT_BUFFER,
+        sizeof(glh_draw_arrays_indirect_cmd) * MAX_STROKES,
+        NULL, GL_STREAM_DRAW
+    );
+
     // End of setup error frame
     {
         string8 err_str = error_frame_end(perm_arena, ERROR_OUTPUT_CONCAT);
@@ -152,7 +164,7 @@ int main(int argc, char** argv) {
 
     viewf view = {
         .aspect_ratio = (f32)win->width / (f32)win->height,
-        .width = (f32)win->width * 2
+        .width = (f32)win->width
     };
     mat3f view_mat = { 0 };
     mat3f inv_view_mat = { 0 };
@@ -218,6 +230,20 @@ int main(int argc, char** argv) {
             num_points = 0;
         }
 
+        if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
+            if (num_strokes < MAX_STROKES) {
+                stroke_num_points = 0;
+                num_strokes++;
+
+                line_indirect_cmds[num_strokes-1] = (glh_draw_arrays_indirect_cmd){
+                    .count = 4,
+                    .instance_count = 0,
+                    .first = 0,
+                    .base_instance = num_points,
+                };
+            }
+        }
+
         u32 points_written = 0;
         if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
             for (u32 i = 0; i < win->mouse_pos_cache_size && num_points < max_points; i++) {
@@ -235,6 +261,11 @@ int main(int argc, char** argv) {
                     if (dist < 1e-6f) {
                         continue;
                     }
+                }
+
+                stroke_num_points++;
+                if (stroke_num_points >= 2) {
+                    line_indirect_cmds[num_strokes-1].instance_count = stroke_num_points - 1;
                 }
 
                 points_written++;
@@ -276,6 +307,14 @@ int main(int argc, char** argv) {
                 sizeof(vec2f) * (num_points - points_written),
                 sizeof(vec2f) * points_written,
                 &line_data[num_points - points_written]
+            );
+
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, line_indirect_buffer);
+            glBufferSubData(
+                GL_DRAW_INDIRECT_BUFFER,
+                sizeof(glh_draw_arrays_indirect_cmd) * (num_strokes - 1),
+                sizeof(glh_draw_arrays_indirect_cmd),
+                &line_indirect_cmds[num_strokes-1]
             );
         }
 
@@ -345,7 +384,9 @@ int main(int argc, char** argv) {
             glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(0));
             glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(sizeof(vec2f) * line_lod));
 
-            glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)(num_points / line_lod - 1));
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, line_indirect_buffer);
+            glMultiDrawArraysIndirect(GL_TRIANGLE_STRIP, 0, (GLsizei)num_strokes, sizeof(glh_draw_arrays_indirect_cmd));
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
             glVertexAttribDivisor(0, 0);
             glVertexAttribDivisor(1, 0);

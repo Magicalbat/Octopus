@@ -136,7 +136,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
 
     static int context_attribs[] = {
         GLX_CONTEXT_MAJOR_VERSION_ARB, 4,
-        GLX_CONTEXT_MINOR_VERSION_ARB, 3,
+        GLX_CONTEXT_MINOR_VERSION_ARB, 5,
         None
     };
     win->backend->gl_context = glXCreateContextAttribsARB(win->backend->display, win->backend->fb_config, 0, true, context_attribs);
