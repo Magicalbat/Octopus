@@ -51,23 +51,66 @@ int main(int argc, char** argv) {
     u32 max_points = 0xffff;
     u32 num_points = 0;
 
+    u32 max_strokes = 1024;
+    u32 num_strokes = 0;
+
     point_instance_data* point_data = NULL;
     vec2f* line_data = NULL;
+    glh_indirect_draw_cmd* line_indirect_cmds = NULL;
 
-    if (false) {
+    if (true) {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-        string8 points_file = plat_file_read(scratch.arena, STR8_LIT("res/out.points"));
+        string8 file = plat_file_read(scratch.arena, STR8_LIT("res/out.strokes"));
 
-        u32 num_orig_points = *(u32*)(points_file.str + points_file.size - 4);
+        num_strokes = *(u32*)(file.str);
+        max_strokes = num_strokes * 2;
+
+        line_indirect_cmds = ARENA_PUSH_ARRAY(perm_arena, glh_indirect_draw_cmd, max_strokes);
+
+        u32 num_orig_points = *(u32*)(file.str + file.size - 4);
         num_points = num_orig_points;
         max_points = num_points * 2;
 
         point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
         line_data = ARENA_PUSH_ARRAY(perm_arena, vec2f, max_points);
 
-        vec2f* positions = (vec2f*)points_file.str;
+        u32 base_instance = 0;
 
+        u32 cur_point = 0;
+
+        u64 file_pos = 4;
+        for (u32 i = 0; i < num_strokes - 2; i++) {
+            u32 cur_num_points = *(u32*)(file.str + file_pos);
+            //printf("%u\n", cur_num_points);
+            file_pos += 4;
+
+            vec2f* points = (vec2f*)(file.str + file_pos);
+            file_pos += sizeof(vec2f) * cur_num_points;
+
+            line_indirect_cmds[i] = (glh_indirect_draw_cmd){
+                .count = 4,
+                .first = 0,
+                .base_instance = base_instance,
+                .instance_count = cur_num_points - 1
+            };
+            base_instance += line_indirect_cmds[i].instance_count + 1;
+
+            for (u32 j = 0; j < cur_num_points; j++) {
+                vec2f pos = vec2f_scale(points[j], 4.0f);
+
+                cur_point++;
+                point_data[cur_point-1] = (point_instance_data) {
+                    //.col = (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)i * (f32)PI / 128)), 1.0f, 1.0f },
+                    .col = (vec4f){ 1, 1, 1, 1 },
+                    .pos = pos,
+                    .radius = 0.5f
+                };
+                line_data[cur_point-1] = pos;
+            }
+        }
+
+        /*vec2f* positions = (vec2f*)file.str;
         for (u32 i = 0; i < num_orig_points; i++) {
             vec2f pos = vec2f_scale(positions[i], 4.0f);
 
@@ -79,17 +122,15 @@ int main(int argc, char** argv) {
             point_data[i].radius = 1.0f;
 
             line_data[i] = pos;
-        }
+        }*/
 
         arena_scratch_release(scratch);
     }
 
     if (point_data == NULL) {
         point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
-    }
-
-    if (line_data == NULL) {
         line_data = ARENA_PUSH_ARRAY(perm_arena, vec2f, max_points);
+        line_indirect_cmds = ARENA_PUSH_ARRAY(perm_arena, glh_indirect_draw_cmd, max_strokes);
     }
 
     struct {
@@ -141,17 +182,14 @@ int main(int argc, char** argv) {
     u32 line_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vec2f) * max_points, NULL, GL_STREAM_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * num_points, line_data);
 
-    #define MAX_STROKES 1024
-    u32 num_strokes = 0;
-    glh_draw_arrays_indirect_cmd line_indirect_cmds[MAX_STROKES] = { 0 };
-
     u32 stroke_num_points = 0;
 
     u32 line_indirect_buffer = glh_create_buffer(
         GL_DRAW_INDIRECT_BUFFER,
-        sizeof(glh_draw_arrays_indirect_cmd) * MAX_STROKES,
+        sizeof(glh_indirect_draw_cmd) * max_strokes,
         NULL, GL_STREAM_DRAW
     );
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(glh_indirect_draw_cmd) * num_strokes, line_indirect_cmds);
 
     // End of setup error frame
     {
@@ -176,8 +214,6 @@ int main(int argc, char** argv) {
     vec2f drag_init_mouse_pos = { 0 };
 
     b32 draw_points = true;
-
-    u32 line_lod = 1;
 
     u64 prev_frame = plat_time_usec();
     while (!win->should_close) {
@@ -231,11 +267,11 @@ int main(int argc, char** argv) {
         }
 
         if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
-            if (num_strokes < MAX_STROKES) {
+            if (num_strokes < max_strokes) {
                 stroke_num_points = 0;
                 num_strokes++;
 
-                line_indirect_cmds[num_strokes-1] = (glh_draw_arrays_indirect_cmd){
+                line_indirect_cmds[num_strokes-1] = (glh_indirect_draw_cmd){
                     .count = 4,
                     .instance_count = 0,
                     .first = 0,
@@ -284,12 +320,6 @@ int main(int argc, char** argv) {
             draw_points = !draw_points;
         }
 
-        for (gfx_key key = GFX_KEY_1; key <= GFX_KEY_9; key++) {
-            if (GFX_IS_KEY_JUST_DOWN(win, key)) {
-                line_lod = (u32)(key - GFX_KEY_0);
-            }
-        }
-
         gfx_win_clear(win);
 
         if (points_written) {
@@ -312,8 +342,8 @@ int main(int argc, char** argv) {
             glBindBuffer(GL_DRAW_INDIRECT_BUFFER, line_indirect_buffer);
             glBufferSubData(
                 GL_DRAW_INDIRECT_BUFFER,
-                sizeof(glh_draw_arrays_indirect_cmd) * (num_strokes - 1),
-                sizeof(glh_draw_arrays_indirect_cmd),
+                sizeof(glh_indirect_draw_cmd) * (num_strokes - 1),
+                sizeof(glh_indirect_draw_cmd),
                 &line_indirect_cmds[num_strokes-1]
             );
         }
@@ -355,8 +385,8 @@ int main(int argc, char** argv) {
         }
 
         // Drawing lines
-        if (num_points / line_lod >= 2) {
-            f32 radius = 1.0f;
+        if (true) {
+            f32 radius = 0.5f;
             f32 geom_scale = 1.0f;
 
             {
@@ -381,11 +411,11 @@ int main(int argc, char** argv) {
 
             glBindBuffer(GL_ARRAY_BUFFER, line_buffer);
 
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(0));
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f) * line_lod), (void*)(sizeof(vec2f) * line_lod));
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f)), (void*)(0));
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, (GLsizei)(sizeof(vec2f)), (void*)(sizeof(vec2f)));
 
             glBindBuffer(GL_DRAW_INDIRECT_BUFFER, line_indirect_buffer);
-            glMultiDrawArraysIndirect(GL_TRIANGLE_STRIP, 0, (GLsizei)num_strokes, sizeof(glh_draw_arrays_indirect_cmd));
+            glMultiDrawArraysIndirect(GL_TRIANGLE_STRIP, 0, (GLsizei)num_strokes, sizeof(glh_indirect_draw_cmd));
             glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
             glVertexAttribDivisor(0, 0);
