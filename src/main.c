@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     vec2f* line_data = NULL;
     glh_indirect_draw_cmd* line_indirect_cmds = NULL;
 
-    if (true) {
+    if (false) {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
         string8 file = plat_file_read(scratch.arena, STR8_LIT("res/out.strokes"));
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
         line_indirect_cmds = ARENA_PUSH_ARRAY(perm_arena, glh_indirect_draw_cmd, max_strokes);
 
         u32 num_orig_points = *(u32*)(file.str + file.size - 4);
-        num_points = num_orig_points;
+        num_points = num_orig_points + num_strokes;
         max_points = num_points * 2;
 
         point_data = ARENA_PUSH_ARRAY(perm_arena, point_instance_data, max_points);
@@ -92,19 +92,21 @@ int main(int argc, char** argv) {
                 .count = 4,
                 .first = 0,
                 .base_instance = base_instance,
-                .instance_count = cur_num_points - 1
+                .instance_count = cur_num_points
             };
             base_instance += line_indirect_cmds[i].instance_count + 1;
 
-            for (u32 j = 0; j < cur_num_points; j++) {
-                vec2f pos = vec2f_scale(points[j], 4.0f);
+            for (u32 j = 0; j <= cur_num_points; j++) {
+                u32 index = j == cur_num_points ? cur_num_points - 2 : j;
+
+                vec2f pos = vec2f_scale(points[index], 4.0f);
 
                 cur_point++;
                 point_data[cur_point-1] = (point_instance_data) {
                     //.col = (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)i * (f32)PI / 128)), 1.0f, 1.0f },
-                    .col = (vec4f){ 1, 1, 1, 1 },
+                    .col = (vec4f){ 1, 0, 0, 1 },
                     .pos = pos,
-                    .radius = 0.5f
+                    .radius = 0.25f
                 };
                 line_data[cur_point-1] = pos;
             }
@@ -264,6 +266,7 @@ int main(int argc, char** argv) {
 
         if (GFX_IS_KEY_JUST_DOWN(win, GFX_KEY_R)) {
             num_points = 0;
+            num_strokes = 0;
         }
 
         if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
@@ -294,7 +297,7 @@ int main(int argc, char** argv) {
                     vec2f prev_pos = point_data[num_points-1].pos;
                     f32 dist = vec2f_dist(prev_pos, pos);
 
-                    if (dist < 1e-6f) {
+                    if (dist < 0.25f) {
                         continue;
                     }
                 }
@@ -307,10 +310,10 @@ int main(int argc, char** argv) {
                 points_written++;
                 num_points++;
                 point_data[num_points-1] = (point_instance_data) {
-                    (vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)num_points * (f32)PI / 128)), 1.0f, 1.0f },
-                    //(vec4f){ 1, 1, 1, 1 },
+                    //(vec4f){ 0.0f, 0.5f * (1.0f + sinf((f32)num_points * (f32)PI / 128)), 1.0f, 1.0f },
+                    (vec4f){ 1, 0, 0, 1 },
                     pos,
-                    1.0f
+                    0.25f
                 };
                 line_data[num_points-1] = pos;
             }
@@ -348,44 +351,8 @@ int main(int argc, char** argv) {
             );
         }
 
-        if (draw_points) {
-            glUseProgram(point_shader.program);
-            glUniformMatrix3fv(point_shader.view_mat_loc, 1, GL_TRUE, view_mat.m);
-
-            glBindVertexArray(point_vert_array);
-
-            glEnableVertexAttribArray(0);
-            glEnableVertexAttribArray(1);
-            glEnableVertexAttribArray(2);
-            glEnableVertexAttribArray(3);
-
-            glBindBuffer(GL_ARRAY_BUFFER, point_pattern_buffer);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
-            glBindBuffer(GL_ARRAY_BUFFER, point_instance_buffer);
-
-            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, col)));
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, pos)));
-            glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, radius)));
-
-            glVertexAttribDivisor(1, 1);
-            glVertexAttribDivisor(2, 1);
-            glVertexAttribDivisor(3, 1);
-
-            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)(num_points));
-
-            glVertexAttribDivisor(1, 0);
-            glVertexAttribDivisor(2, 0);
-            glVertexAttribDivisor(3, 0);
-
-            glDisableVertexAttribArray(0);
-            glDisableVertexAttribArray(1);
-            glDisableVertexAttribArray(2);
-            glDisableVertexAttribArray(3);
-        }
-
         // Drawing lines
-        if (true) {
+        {
             f32 radius = 0.5f;
             f32 geom_scale = 1.0f;
 
@@ -423,6 +390,42 @@ int main(int argc, char** argv) {
 
             glDisableVertexAttribArray(0);
             glDisableVertexAttribArray(1);
+        }
+
+        if (draw_points) {
+            glUseProgram(point_shader.program);
+            glUniformMatrix3fv(point_shader.view_mat_loc, 1, GL_TRUE, view_mat.m);
+
+            glBindVertexArray(point_vert_array);
+
+            glEnableVertexAttribArray(0);
+            glEnableVertexAttribArray(1);
+            glEnableVertexAttribArray(2);
+            glEnableVertexAttribArray(3);
+
+            glBindBuffer(GL_ARRAY_BUFFER, point_pattern_buffer);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+            glBindBuffer(GL_ARRAY_BUFFER, point_instance_buffer);
+
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, col)));
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, pos)));
+            glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(point_instance_data), (void*)(offsetof(point_instance_data, radius)));
+
+            glVertexAttribDivisor(1, 1);
+            glVertexAttribDivisor(2, 1);
+            glVertexAttribDivisor(3, 1);
+
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)(num_points));
+
+            glVertexAttribDivisor(1, 0);
+            glVertexAttribDivisor(2, 0);
+            glVertexAttribDivisor(3, 0);
+
+            glDisableVertexAttribArray(0);
+            glDisableVertexAttribArray(1);
+            glDisableVertexAttribArray(2);
+            glDisableVertexAttribArray(3);
         }
 
         gfx_win_swap_buffers(win);
@@ -486,19 +489,29 @@ static const char* line_vert_source = GLSL_SOURCE(
     layout (location = 0) in vec2 a_p0;
     layout (location = 1) in vec2 a_p1;
 
-    out float edge;
+    out vec2 point_to_line;
+    out vec2 line_vec;
 
     uniform mat3 u_view_mat;
     uniform float u_radius;
     uniform float u_geom_scale;
 
     void main() {
-        edge = ((gl_VertexID / 2) * 2 - 1) * u_geom_scale;
+        float edge = ((gl_VertexID / 2) * 2 - 1);
 
-        vec2 line = a_p1 - a_p0;
-        vec2 norm = normalize(vec2(-line.y, line.x));
+        line_vec = a_p1 - a_p0;
+        vec2 norm_line_vec = normalize(line_vec);
+        vec2 norm = vec2(-norm_line_vec.y, norm_line_vec.x);
         
-        vec2 world_pos = a_p0 + line * (gl_VertexID % 2) + norm * u_radius * u_geom_scale * edge;
+        float geom_radius = u_radius * u_geom_scale;
+        vec2 end_cap_offset = -norm_line_vec * geom_radius;
+
+        vec2 world_pos = a_p0 + end_cap_offset +
+            (line_vec - end_cap_offset) * (gl_VertexID % 2) +
+            norm * geom_radius * edge;
+
+        point_to_line = world_pos - a_p0;
+
         vec2 pos = (u_view_mat * vec3(world_pos, 1)).xy;
         gl_Position = vec4(pos, 0.0, 1.0);
     }
@@ -509,14 +522,17 @@ static const char* line_frag_source = GLSL_SOURCE(
 
     layout (location = 0) out vec4 out_col;
 
-    in float edge;
+    in vec2 point_to_line;
+    in vec2 line_vec;
 
     uniform vec4 u_col;
+    uniform float u_radius;
     
     void main() {
-        float dist = abs(edge);
+        float t = max(dot(point_to_line, line_vec) / dot(line_vec, line_vec), 0.0);
+        float dist = length(point_to_line - line_vec * t) - u_radius;
         float blending = fwidth(dist);
-        float alpha = smoothstep(1.0f, 1.0f - blending * 2, dist);
+        float alpha = smoothstep(blending, -blending, dist);
         out_col = vec4(u_col.xyz, u_col.w * alpha);
     }
 );
