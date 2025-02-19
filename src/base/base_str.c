@@ -28,8 +28,13 @@ u8* str8_to_cstr(mem_arena* arena, string8 str) {
 
 u64 str8_to_u64(string8 str) {
     u64 out = 0;
+    u64 i = 0;
 
-    for (u64 i = 0; i < str.size; i++) {
+    while (str.str[i] == '0' && i < str.size) {
+        i++;
+    }
+
+    for (; i < str.size; i++) {
         if (str.str[i] < '0' || str.str[i] > '9') {
             break;
         }

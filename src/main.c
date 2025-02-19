@@ -1,12 +1,14 @@
 #include "base/base.h"
 #include "platform/platform.h"
-#include "truetype/truetype.h"
 #include "gfx/gfx.h"
+#include "truetype/truetype.h"
+#include "pdf/pdf.h"
 
 #include "base/base.c"
 #include "platform/platform.c"
-#include "truetype/truetype.c"
 #include "gfx/gfx.c"
+#include "truetype/truetype.c"
+#include "pdf/pdf.c"
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param);
 
@@ -23,6 +25,20 @@ int main(int argc, char** argv) {
     prng_seed(seeds[0], seeds[1]);
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
+
+    string8 pdf_file = plat_file_read(perm_arena, STR8_LIT("res/test.pdf"));
+
+    pdf_parse_begin(perm_arena, pdf_file);
+
+    {
+        string8 err_str = error_frame_end(perm_arena, ERROR_OUTPUT_CONCAT);
+        if (err_str.size) {
+            printf("\x1b[31mError(s): %.*s\x1b[0m\n", (int)err_str.size, err_str.str);
+            return 1;
+        }
+    }
+
+    return 0;
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);

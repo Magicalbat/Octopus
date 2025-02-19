@@ -10,3 +10,4 @@
 -include src/platform/platform.h
 -include src/gfx/gfx.h
 -include src/truetype/truetype.h
+-include src/pdf/pdf.h
