@@ -1,3 +1,4 @@
+
 string8 str8_from_cstr(u8* cstr) {
     if (cstr == NULL) {
         return (string8){ 0 };

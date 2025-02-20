@@ -1,6 +1,38 @@
 
-// Gets the string inside the << >>
-string8 _pdf_get_dict_str(string8 str);
+#define _PDF_IS_WHITESPACE(c) ((c) == '\0' || (c) == '\t' || (c) == '\r' || (c) == '\n' || (c) == '\f' || (c) == ' ')
+#define _PDF_IS_EOL(c) ((c) == '\r' || (c) == '\n')
+
+typedef enum {
+    _PDF_OBJ_NULL,
+    _PDF_OBJ_BOOL,
+    _PDF_OBJ_NUM,
+    _PDF_OBJ_LIT_STR,
+    _PDF_OBJ_HEX_STR,
+    _PDF_OBJ_NAME,
+    _PDF_OBJ_ARRAY,
+    _PDF_OBJ_DICT,
+    _PDF_OBJ_STREAM,
+    _PDF_OBJ_REF
+} _pdf_obj_type;
+
+typedef struct {
+    _pdf_obj_type type;
+
+    // Stores the string contents of the obj
+    // This includes any delimiters
+    string8 str;
+
+    // Offset of this str relative to the str passed into _pdf_next_obj_str
+    u64 offset;
+} _pdf_typed_obj_str;
+
+// Increments index to next non-comment character
+// Assumes that the character is not in a string or stream
+// Can increment past str.size; caller must perform their own bounds checking
+void _pdf_str_index_increment(string8 str, u64* index);
+
+// Returns the next object after any whitespace
+_pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset);
 
 pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     if (file.size <= 7 || 
@@ -34,9 +66,10 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
         return NULL;
     }
 
-    u64 xref_offset = str8_to_u64(str8_substr(file, startxref_loc + startxref_str.size + 1, file.size));
-    string8 trailer_body = _pdf_get_dict_str(str8_substr(file, trailer_loc, file.size));
-    
+    //u64 xref_offset = str8_to_u64(
+    //    str8_substr(file, startxref_loc + startxref_str.size + 1, file.size)
+    //);
+
     pdf_parse_context* context = ARENA_PUSH(arena, pdf_parse_context);
 
     context->file = file;
@@ -44,29 +77,212 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     return context;
 }
 
-string8 _pdf_get_dict_str(string8 str) {
-    u64 start_index = 0;
+void _pdf_str_index_increment(string8 str, u64* index) {
+    (*index)++;
 
-    while (!str8_equals(str8_substr(str, start_index, start_index + 2), STR8_LIT("<<")) && start_index < str.size) {
-        start_index++;
-    }
-
-
-    u64 end_index = start_index + 2;
-    i32 open_dicts = 1;
-
-    while (open_dicts > 0 && end_index < str.size) {
-        string8 sub = str8_substr(str, end_index, end_index + 2);
-
-        if (str8_equals(sub, STR8_LIT("<<"))) {
-            open_dicts++;
-        } else if (str8_equals(sub, STR8_LIT(">>"))) {
-            open_dicts--;
+    if (*index < str.size && str.str[*index] == '%') {
+        while (*index < str.size && !_PDF_IS_EOL(str.str[*index])) {
+            (*index)++;
         }
+    }
+}
 
-        end_index++;
+_pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
+    while (offset < str.size && _PDF_IS_WHITESPACE(str.str[offset])) {
+        _pdf_str_index_increment(str, &offset);
     }
 
-    return str8_substr(str, start_index + 2, end_index - 2);
+    _pdf_typed_obj_str obj = {
+        .type = _PDF_OBJ_NULL,
+        .offset = offset
+    };
+
+    if (offset == str.size) {
+        return obj;
+    }
+
+    switch (str.str[offset]) {
+        case 't': {
+            string8 true_str = str8_substr(str, offset, offset + 4);
+            if (str8_equals(true_str, STR8_LIT("true"))) {
+                obj.type = _PDF_OBJ_BOOL;
+                obj.str = true_str; 
+            }
+        } break;
+        case 'f': {
+            string8 false_str = str8_substr(str, offset, offset + 5);
+            if (str8_equals(false_str, STR8_LIT("false"))) {
+                obj.type = _PDF_OBJ_BOOL;
+                obj.str = false_str;
+            }
+        } break;
+        case 'n': {
+            string8 null_str = str8_substr(str, offset, offset + 4);
+            if (str8_equals(null_str, STR8_LIT("null"))) {
+                // type is already null
+                obj.str = null_str;
+            }
+        } break;
+
+        case '-':
+        case '+':
+        case '.':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9': {
+            u64 i = offset;
+            u32 num_decimals = 0;
+            b32 just_num = true;
+
+            if (str.str[i] == '-' || str.str[i] == '+') {
+                just_num = false;
+                i++;
+            }
+
+            while (i < str.size && num_decimals <= 1 &&  (
+                str.str[i] == '.' || 
+                (str.str[i] >= '0' && str.str[i] <= '9')
+            )) {
+                i++;
+                num_decimals += str.str[i] == '.';
+            }
+
+            obj.type = _PDF_OBJ_NUM;
+            obj.str = str8_substr(str, offset, i);
+
+            if (just_num && num_decimals == 0) {
+
+                // This is a positive integer,
+                // so it could be the first number in an object reference
+                // which is two numbers and 'R' separated by whitespace 
+
+                i++;
+                while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
+                    _pdf_str_index_increment(str, &i);
+                }
+
+                u64 second_num_start = i;
+                while (i < str.size && str.str[i] >= '0' && str.str[i] <= '9') {
+                    _pdf_str_index_increment(str, &i);
+                }
+
+                if (i != second_num_start) {
+                    // There is a second num, check for R
+                    while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
+                        _pdf_str_index_increment(str, &i);
+                    }
+
+                    if (i < str.size && str.str[i] == 'R') {
+                        obj.type = _PDF_OBJ_REF;
+                        obj.str = str8_substr(str, offset, i + 1);
+                    }
+                }
+            }
+        } break;
+
+        case '(': {
+            u64 i = offset + 1;
+            i32 open_parens = 1;
+
+            while (i < str.size && open_parens >= 1) {
+                if (str.str[i] == '(') {
+                    open_parens++;
+                } else if (str.str[i] == ')') {
+                    open_parens--;
+                } else if (str.str[i] == '\\') {
+                    // Move past escaped character
+                    // This should still work with the octal character codes (\xxx)
+                    // because this is not parsing the string yet
+                    i++;
+                }
+
+                i++;
+            }
+
+            if (open_parens == 0) { // null otherwise
+                obj.type = _PDF_OBJ_LIT_STR;
+                obj.str = str8_substr(str, offset, i);
+            }
+        } break;
+
+        case '<': {
+            if (offset + 1 < str.size && str.str[offset + 1] == '<') {
+                // Opening of a dict or stream (which begins with a dict)
+
+                u64 i = offset + 2;
+                i32 open_obj_brackets = 1;
+
+                while (i < str.size && open_obj_brackets >= 1) {
+                    if (str8_equals(str8_substr(str, i, i + 2), STR8_LIT("<<"))) {
+                        open_obj_brackets++;
+                    } else if (str8_equals(str8_substr(str, i, i + 2), STR8_LIT(">>"))) {
+                        open_obj_brackets--;
+                    }
+
+                    _pdf_str_index_increment(str, &i);
+                }
+
+                if (open_obj_brackets == 0) {
+                    obj.type = _PDF_OBJ_DICT;
+                    obj.str = str8_substr(str, offset, i + 1);
+                }
+            } else {
+                // Opening of a hex string
+
+                u64 i = offset + 1;
+
+                while (i < str.size && str.str[i] != '>') {
+                    _pdf_str_index_increment(str, &i);
+                }
+
+                if (i != str.size) { // null otherwise
+                    obj.type = _PDF_OBJ_HEX_STR;
+                    obj.str = str8_substr(str, offset, i + 1);
+                }
+            }
+        } break;
+
+        case '/': {
+            u64 i = offset + 1;
+
+            while (i < str.size && str.str[i] >= '!' && str.str[i] <= '~' && str.str[i] != '%') {
+                i++;
+            }
+
+            obj.type = _PDF_OBJ_NAME;
+            obj.str = str8_substr(str, offset, i);
+        } break;
+
+        case '[': {
+            u64 i = offset + 1;
+            i32 open_brackets = 1;
+
+            while (i < str.size && open_brackets >= 1) {
+                if (str.str[i] == '[') {
+                    open_brackets++;
+                } else if (str.str[i] == ']') {
+                    open_brackets--;
+                }
+
+                _pdf_str_index_increment(str, &i);
+            }
+
+            if (open_brackets == 0) { // null otherwise
+                obj.type = _PDF_OBJ_ARRAY;
+                obj.str = str8_substr(str, offset, i);
+            }
+        } break;
+
+        default: break;
+    }
+
+    return obj;
 }
 
