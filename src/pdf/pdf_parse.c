@@ -233,6 +233,30 @@ _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
                     obj.type = _PDF_OBJ_DICT;
                     obj.str = str8_substr(str, offset, i + 1);
                 }
+
+                i++;
+
+                while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
+                    _pdf_str_index_increment(str, &i);
+                }
+
+                if (str8_equals(str8_substr(str, i, i + 6), STR8_LIT("stream"))) {
+                    i += 6;
+
+                    b32 endstream_found = false;
+
+                    while (
+                        i < str.size && !endstream_found
+                    ) {
+                        endstream_found |= str8_equals(str8_substr(str, i, i + 9), STR8_LIT("endstream"));
+                        i++;
+                    }
+
+                    if (endstream_found) {
+                        obj.type = _PDF_OBJ_STREAM;
+                        obj.str = str8_substr(str, offset, i + 8);
+                    }
+                }
             } else {
                 // Opening of a hex string
 
