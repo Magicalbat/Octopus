@@ -1,6 +1,11 @@
 
 #define _PDF_IS_WHITESPACE(c) ((c) == '\0' || (c) == '\t' || (c) == '\r' || (c) == '\n' || (c) == '\f' || (c) == ' ')
 #define _PDF_IS_EOL(c) ((c) == '\r' || (c) == '\n')
+#define _PDF_HEX_TO_NUM(c) ( \
+    (c) >= '0' && (c) <= '9' ? (c) - '0' : \
+    (c) >= 'a' && (c) <= 'f' ? (c) - 'a' + 10 : \
+    (c) >= 'A' && (c) <= 'F' ? (c) - 'A' + 10 : \
+    0 )
 
 typedef enum {
     _PDF_OBJ_NULL,
@@ -33,6 +38,15 @@ void _pdf_str_index_increment(string8 str, u64* index);
 
 // Returns the next object after any whitespace
 _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset);
+
+// name_str should come directly from a _pdf_typed_obj_str
+string8 _pdf_parse_name(mem_arena* arena, string8 name_str);
+
+b32 _pdf_next_dict_elem(
+    mem_arena* arena, string8 str,
+    string8* out_name, _pdf_typed_obj_str* out_elem,
+    u64* offset
+);
 
 pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     if (file.size <= 7 || 
@@ -69,6 +83,27 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     //u64 xref_offset = str8_to_u64(
     //    str8_substr(file, startxref_loc + startxref_str.size + 1, file.size)
     //);
+
+    _pdf_typed_obj_str trailer_obj = _pdf_next_obj_str(file, trailer_loc + trailer_str.size);
+    if (trailer_obj.type != _PDF_OBJ_DICT) {
+        error_emit("Cannot parse PDF: invalid trailer obj type");
+        return NULL;
+    }
+
+    {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+        string8 name = { 0 };
+        _pdf_typed_obj_str obj = { 0 };
+        u64 offset = 0;
+
+        while (_pdf_next_dict_elem(scratch.arena, trailer_obj.str, &name, &obj, &offset)) {
+            printf("'%.*s': (%u '%.*s')\n", (int)name.size, name.str, obj.type, (int)obj.str.size, obj.str.str);
+
+            arena_temp_end(scratch);
+        }
+
+        arena_scratch_release(scratch);
+    }
 
     pdf_parse_context* context = ARENA_PUSH(arena, pdf_parse_context);
 
@@ -308,5 +343,79 @@ _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
     }
 
     return obj;
+}
+
+string8 _pdf_parse_name(mem_arena* arena, string8 name_str) {
+    if (name_str.size <= 0) {
+        return (string8){ 0 };
+    }
+
+    if (name_str.str[0] != '/') {
+        return (string8){ 0 };
+    }
+
+    name_str = str8_substr(name_str, 1, name_str.size);
+
+    u64 out_size = 0;
+    u8* out_data = ARENA_PUSH_ARRAY(arena, u8, name_str.size);
+
+    for (u64 i = 0; i < name_str.size; i++) {
+        u8 c = name_str.str[i];
+        
+        if (c == '#') {
+            c = 0;
+            u32 j = 1;
+            for (; i + j < name_str.size && j <= 2; j++) {
+                c <<= 4;
+                c |= _PDF_HEX_TO_NUM(name_str.str[i + j]);
+            }
+
+            i += j - 1;
+        }
+
+        out_data[out_size++] = c;
+    }
+
+    string8 out = (string8){
+        .size = out_size,
+        .str = out_data
+    };
+
+    return out;
+}
+
+b32 _pdf_next_dict_elem(mem_arena* arena, string8 str, string8* out_name, _pdf_typed_obj_str* out_elem, u64* offset) {
+    while (*offset < str.size && _PDF_IS_WHITESPACE(str.str[*offset])) {
+        _pdf_str_index_increment(str, offset);
+    }
+
+    string8 next_2 = str8_substr(str, *offset, *offset + 2);
+
+    if (str8_equals(next_2, STR8_LIT("<<"))) {
+        *offset += 2;
+
+        while (*offset < str.size && _PDF_IS_WHITESPACE(str.str[*offset])) {
+            _pdf_str_index_increment(str, offset);
+        }
+    }
+
+    if (str8_equals(next_2, STR8_LIT(">>"))) {
+        return false;
+    }
+
+    _pdf_typed_obj_str name_obj = _pdf_next_obj_str(str, *offset);
+
+    if (name_obj.type != _PDF_OBJ_NAME) {
+        return false;
+    }
+
+    *offset = name_obj.offset + name_obj.str.size;
+
+    *out_name = _pdf_parse_name(arena, name_obj.str);
+    *out_elem = _pdf_next_obj_str(str, *offset);
+
+    *offset = out_elem->offset + out_elem->str.size;
+
+    return true;
 }
 
