@@ -1,4 +1,7 @@
 
+// TODO: handle the care where an indirect object reference is present in place of another value
+// (Example 3 of setion 7.3.10 - Indirect objects)
+
 #define _PDF_IS_WHITESPACE(c) ((c) == '\0' || (c) == '\t' || (c) == '\r' || (c) == '\n' || (c) == '\f' || (c) == ' ')
 #define _PDF_IS_EOL(c) ((c) == '\r' || (c) == '\n')
 #define _PDF_IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
@@ -39,12 +42,16 @@ typedef struct {
 typedef struct {
     u32 obj;
     u32 gen;
-} _pdf_obj_ref;
+} _pdf_obj_info;
 
 // Increments index to next non-comment character
 // Assumes that the character is not in a string or stream
 // Can increment past str.size; caller must perform their own bounds checking
 void _pdf_str_index_increment(string8 str, u64* index);
+
+void _pdf_skip_whitespace(string8 str, u64* index);
+
+u64 _pdf_parse_whole_num(string8 str, u64* index);
 
 // Returns the next object after any whitespace
 _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset);
@@ -68,7 +75,11 @@ b32 _pdf_next_dict_elem(
 );
 // If there is no compression applied, it will not allocate on the arena
 string8 _pdf_parse_stream(mem_arena* arena, string8 str);
-_pdf_obj_ref _pdf_parse_obj_ref(string8 str);
+// This can be used for indirect object definitions and indirect object references
+_pdf_obj_info _pdf_parse_obj_info(string8 str);
+
+// str is the string that contains the xref table
+b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* offsets, u32* generations);
 
 pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     if (file.size <= 7 || 
@@ -102,36 +113,51 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
         return NULL;
     }
 
-    //u64 xref_offset = str8_to_u64(
-    //    str8_substr(file, startxref_loc + startxref_str.size + 1, file.size)
-    //);
-
     _pdf_typed_obj_str trailer_obj = _pdf_next_obj_str(file, trailer_loc + trailer_str.size);
     if (trailer_obj.type != _PDF_OBJ_DICT) {
-        error_emit("Cannot parse PDF: invalid trailer obj type");
+        error_emit("Cannot parse PDF: invalid trailer object type");
         return NULL;
     }
 
-    {
-        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-        string8 name = { 0 };
-        _pdf_typed_obj_str obj = { 0 };
-        u64 offset = 0;
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-        while (_pdf_next_dict_elem(scratch.arena, trailer_obj.str, &name, &obj, &offset)) {
-            //printf("'%.*s': (%u '%.*s')\n", (int)name.size, name.str, obj.type, (int)obj.str.size, obj.str.str);
+    string8 key = { 0 };
+    _pdf_typed_obj_str value = { 0 };
+    u64 offset = 0;
 
-            if (str8_equals(name, STR8_LIT("Test")) && obj.type == _PDF_OBJ_REF) {
-                _pdf_obj_ref ref = _pdf_parse_obj_ref(obj.str);
+    u32 xref_size = 0;
+    _pdf_obj_info root_ref = { 0 };
 
-                printf("Root: %u %u R\n", ref.obj, ref.gen);
-            }
-
-            arena_temp_end(scratch);
+    while (_pdf_next_dict_elem(scratch.arena, trailer_obj.str, &key, &value, &offset)) {
+        if (str8_equals(key, STR8_LIT("Root")) && value.type == _PDF_OBJ_REF) {
+            root_ref = _pdf_parse_obj_info(value.str);
+        } else if (str8_equals(key, STR8_LIT("Size")) && value.type == _PDF_OBJ_INT) {
+            xref_size = (u32)_pdf_parse_int(value.str);
         }
 
-        arena_scratch_release(scratch);
+        arena_temp_end(scratch);
     }
+
+    u64 xref_offset = str8_to_u64(
+        str8_substr(file, startxref_loc + startxref_str.size + 1, file.size)
+    );
+
+    u64* temp_offsets = ARENA_PUSH_ARRAY(scratch.arena, u64, xref_size);
+    u32* temp_generations = ARENA_PUSH_ARRAY(scratch.arena, u32, xref_size);
+
+    if (!_pdf_parse_and_verify_xrefs(
+        file, str8_substr(file, xref_offset, trailer_loc),
+        xref_size, temp_offsets, temp_generations
+    )) {
+        error_emit("Cannot parse PDF: invalid cross reference table");
+        return false;
+    }
+
+    for (u32 i = 0; i < xref_size; i++) {
+        printf("%lu %u\n", temp_offsets[i], temp_generations[i]);
+    }
+
+    arena_scratch_release(scratch);
 
     pdf_parse_context* context = ARENA_PUSH(arena, pdf_parse_context);
 
@@ -150,10 +176,25 @@ void _pdf_str_index_increment(string8 str, u64* index) {
     }
 }
 
-_pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
-    while (offset < str.size && _PDF_IS_WHITESPACE(str.str[offset])) {
-        _pdf_str_index_increment(str, &offset);
+void _pdf_skip_whitespace(string8 str, u64* index) {
+    while (*index < str.size && _PDF_IS_WHITESPACE(str.str[*index])) {
+        _pdf_str_index_increment(str, index);
     }
+}
+
+u64 _pdf_parse_whole_num(string8 str, u64* index) {
+    u64 num = 0;
+
+    for (; *index < str.size && _PDF_IS_DIGIT(str.str[*index]); (*index)++) {
+        num *= 10;
+        num += str.str[*index] - '0';
+    }
+
+    return num;
+}
+
+_pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
+    _pdf_skip_whitespace(str, &offset);
 
     _pdf_typed_obj_str obj = {
         .type = _PDF_OBJ_NULL,
@@ -227,9 +268,7 @@ _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
                 // which is two numbers and 'R' separated by whitespace 
 
                 i++;
-                while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
-                    _pdf_str_index_increment(str, &i);
-                }
+                _pdf_skip_whitespace(str, &i);
 
                 u64 second_num_start = i;
                 while (i < str.size && str.str[i] >= '0' && str.str[i] <= '9') {
@@ -238,9 +277,7 @@ _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
 
                 if (i != second_num_start) {
                     // There is a second num, check for R
-                    while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
-                        _pdf_str_index_increment(str, &i);
-                    }
+                    _pdf_skip_whitespace(str, &i);
 
                     if (i < str.size && str.str[i] == 'R') {
                         obj.type = _PDF_OBJ_REF;
@@ -299,9 +336,7 @@ _pdf_typed_obj_str _pdf_next_obj_str(string8 str, u64 offset) {
 
                 i++;
 
-                while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
-                    _pdf_str_index_increment(str, &i);
-                }
+                _pdf_skip_whitespace(str, &i);
 
                 if (str8_equals(str8_substr(str, i, i + 6), STR8_LIT("stream"))) {
                     i += 6;
@@ -621,9 +656,7 @@ b32 _pdf_next_array_elem(string8 str, _pdf_typed_obj_str* out_obj, u64* offset) 
         }
     }
 
-    while (*offset < str.size && _PDF_IS_WHITESPACE(str.str[*offset])) {
-        _pdf_str_index_increment(str, offset);
-    }
+    _pdf_skip_whitespace(str, offset);
 
     if (*offset >= str.size || str.str[*offset] == ']') {
         return false;
@@ -645,9 +678,7 @@ b32 _pdf_next_dict_elem(mem_arena* arena, string8 str, string8* out_name, _pdf_t
     if (str8_equals(first2, STR8_LIT("<<"))) {
         *offset += 2;
 
-        while (*offset < str.size && _PDF_IS_WHITESPACE(str.str[*offset])) {
-            _pdf_str_index_increment(str, offset);
-        }
+        _pdf_skip_whitespace(str, offset);
     } else if (str8_equals(first2, STR8_LIT(">>"))) {
         return false;
     }
@@ -672,24 +703,104 @@ string8 _pdf_parse_stream(mem_arena* arena, string8 str) {
     // TODO
 }
 
-_pdf_obj_ref _pdf_parse_obj_ref(string8 str) {
-    _pdf_obj_ref out = { 0 };
+_pdf_obj_info _pdf_parse_obj_info(string8 str) {
+    _pdf_obj_info out = { 0 };
 
     u64 i = 0;
-    for (;i < str.size && _PDF_IS_DIGIT(str.str[i]); i++) {
-        out.obj *= 10;
-        out.obj += str.str[i] - '0';
-    }
 
-    while (i < str.size && _PDF_IS_WHITESPACE(str.str[i])) {
-        _pdf_str_index_increment(str, &i);
-    }
-
-    for (;i < str.size && _PDF_IS_DIGIT(str.str[i]); i++) {
-        out.gen *= 10;
-        out.gen += str.str[i] - '0';
-    }
+    out.obj = (u32)_pdf_parse_whole_num(str, &i);
+    _pdf_skip_whitespace(str, &i);
+    out.gen = (u32)_pdf_parse_whole_num(str, &i);
 
     return out;
+}
+
+b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* offsets, u32* generations) {
+    if (!str8_equals(str8_substr(str, 0, 4), STR8_LIT("xref"))) {
+        return false;
+    }
+
+    memset(generations, 0, sizeof(u32) * xref_size);
+
+    u64 i = 4;
+    u32 populated_entries = 0;
+    u32 subsection_start = 0;
+    u32 subsection_pos = 0;
+    u32 subsection_size = 0;
+    while (i < str.size && populated_entries < xref_size) {
+        u64 nums[2] = { 0 };
+
+        for (u32 j = 0; j < 2; j++) {
+            _pdf_skip_whitespace(str, &i);
+
+            while (i < str.size && str.str[i] == '0') {
+                i++;
+            }
+
+            nums[j] = _pdf_parse_whole_num(str, &i);
+        }
+
+        _pdf_skip_whitespace(str, &i);
+
+        if (i >= str.size) {
+            break;
+        }
+
+        u8 c = str.str[i];
+        b32 is_entry = c == 'n' || c == 'f';
+
+        if (is_entry && subsection_pos == subsection_size) {
+            return false;
+        }
+
+        if (is_entry) {
+            // go past n/f character
+            i++;
+
+            u64 offset = nums[0];
+            u32 generation = (u32)nums[1];
+            u32 cur_obj = subsection_start + subsection_pos;
+
+
+            b32 valid_ref = true;
+
+            if (c == 'n') {
+                // Not a free object, checking to ensure it is actually there
+
+                u64 j = 0;
+                string8 obj_str = str8_substr(file, offset, file.size);
+
+                u64 obj_num = _pdf_parse_whole_num(obj_str, &j);
+                _pdf_skip_whitespace(obj_str, &j);
+                u64 gen_num = _pdf_parse_whole_num(obj_str, &j);
+                _pdf_skip_whitespace(obj_str, &j);
+
+                valid_ref = obj_num == cur_obj && gen_num == generation &&
+                    str8_equals(str8_substr(obj_str, j, j + 3), STR8_LIT("obj"));
+            }
+
+            // generations is initialized to zero 
+            if (valid_ref && generation >= generations[cur_obj]) {
+                // Already did bounds checking in the subsection start parsing
+                offsets[cur_obj] = offset;
+                generations[cur_obj] = generation;
+                populated_entries++;
+            }
+
+
+            subsection_pos++;
+        } else {
+            // subsection start
+            subsection_start = (u32)nums[0];
+            subsection_pos = 0;
+            subsection_size = (u32)nums[1];
+
+            if (subsection_start + subsection_size > xref_size) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 

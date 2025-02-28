@@ -2,9 +2,11 @@
 typedef struct {
     string8 file;
 
-    u32 xref_size;
-    u64* xref_offsets;
-    u32* generations;
+    struct {
+        u32 size;
+        u64* offsets;
+        u32* generations;
+    } xref;
 
     u32 root_obj;
 } pdf_parse_context;
