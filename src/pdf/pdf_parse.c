@@ -154,7 +154,10 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     }
 
     for (u32 i = 0; i < xref_size; i++) {
-        printf("%lu %u\n", temp_offsets[i], temp_generations[i]);
+        printf("\n-----------------\n%lu %u\n----------------\n\n", temp_offsets[i], temp_generations[i]);
+        u64 offset2 = i == xref_size - 1 ? file.size : temp_offsets[i+1];
+        string8 str = str8_substr(file, temp_offsets[i], offset2);
+        printf("%.*s\n", (int)str.size, str.str);
     }
 
     arena_scratch_release(scratch);
@@ -162,6 +165,13 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     pdf_parse_context* context = ARENA_PUSH(arena, pdf_parse_context);
 
     context->file = file;
+
+    context->xref.size = xref_size;
+    context->xref.offsets = ARENA_PUSH_ARRAY_NZ(arena, u64, xref_size);
+    context->xref.generations = ARENA_PUSH_ARRAY_NZ(arena, u32, xref_size);
+
+    memcpy(context->xref.offsets, temp_offsets, sizeof(u64) * xref_size);
+    memcpy(context->xref.generations, temp_generations, sizeof(u32) * xref_size);
 
     return context;
 }
@@ -720,6 +730,7 @@ b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* o
         return false;
     }
 
+    memset(offsets, 0, sizeof(u64) * xref_size);
     memset(generations, 0, sizeof(u32) * xref_size);
 
     u64 i = 4;
@@ -727,6 +738,7 @@ b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* o
     u32 subsection_start = 0;
     u32 subsection_pos = 0;
     u32 subsection_size = 0;
+
     while (i < str.size && populated_entries < xref_size) {
         u64 nums[2] = { 0 };
 
@@ -750,6 +762,7 @@ b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* o
         b32 is_entry = c == 'n' || c == 'f';
 
         if (is_entry && subsection_pos == subsection_size) {
+            // Not expecting an entry
             return false;
         }
 
@@ -758,11 +771,11 @@ b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* o
             i++;
 
             u64 offset = nums[0];
+            u64 offset_bias = 0;
             u32 generation = (u32)nums[1];
             u32 cur_obj = subsection_start + subsection_pos;
 
-
-            b32 valid_ref = true;
+            b32 valid_ref = false;
 
             if (c == 'n') {
                 // Not a free object, checking to ensure it is actually there
@@ -777,12 +790,14 @@ b32 _pdf_parse_and_verify_xrefs(string8 file, string8 str, u32 xref_size, u64* o
 
                 valid_ref = obj_num == cur_obj && gen_num == generation &&
                     str8_equals(str8_substr(obj_str, j, j + 3), STR8_LIT("obj"));
+
+                offset_bias = j + 3;
             }
 
             // generations is initialized to zero 
             if (valid_ref && generation >= generations[cur_obj]) {
                 // Already did bounds checking in the subsection start parsing
-                offsets[cur_obj] = offset;
+                offsets[cur_obj] = offset + offset_bias;
                 generations[cur_obj] = generation;
                 populated_entries++;
             }
