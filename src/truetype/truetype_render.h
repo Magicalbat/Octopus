@@ -12,6 +12,12 @@ typedef enum {
 } tt_render_mode;
 
 typedef struct {
+    rectf bitmap_rect;
+    vec2f offset;
+    f32 x_advance;
+} tt_render_glyph_info;
+
+typedef struct {
     u8* data;
 
     u32 width;
@@ -33,9 +39,9 @@ tt_bitmap tt_render_font_atlas(
     mem_arena* arena,
     const tt_font_info* font_info,
     u32* codepoints,
-    // out_rects must be of size num_codepoints, 
+    // out_infos must be of size num_codepoints, 
     // and will be set by the function
-    rectf* out_rects, 
+    tt_render_glyph_info* out_infos,
     u32 num_codepoints,
     tt_render_mode render_mode,
     f32 glyph_scale,

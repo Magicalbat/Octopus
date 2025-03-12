@@ -1,3 +1,4 @@
+
 #define _TT_READ_BE16(mem) (u16)((((u8*)(mem))[0] << 8) | (((u8*)(mem))[1]))
 #define _TT_READ_BE32(mem) (u32)((((u8*)(mem))[0] << 24) | (((u8*)(mem))[1] << 16) | (((u8*)(mem))[2] << 8) | (((u8*)(mem))[3]))
 
@@ -92,6 +93,8 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         return;
     }
 
+    font_info->num_hmetrics = _TT_READ_BE16(file.str + font_info->tables.hhea.offset + 34);
+
     tt_table_info cmap = _tt_get_and_validate_table(file, "cmap");
     if (cmap.offset == 0) {
         error_emit("Failed to load cmap font table");
@@ -153,12 +156,12 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
                 return;
             }
 
-            u32 format = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset);
+            u16 format = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset);
             u32 subtable_length = 0;
             if (format == 4) {
                 subtable_length = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset + 2);
 
-                u32 seg_count = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset + 6) / 2;
+                u16 seg_count = _TT_READ_BE16(file.str + font_info->cmap_subtable_offset + 6) / 2;
 
                 if (subtable_length < 16 + 2 * seg_count * 4) {
                     error_emit("Invalid format 4 cmap font subtable");
@@ -183,7 +186,7 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
                 return;
             }
 
-            font_info->cmap_format = (u16)format;
+            font_info->cmap_format = format;
         }
     }
 
@@ -219,9 +222,9 @@ void tt_init_font(string8 file, tt_font_info* font_info) {
         }
     }
 
-    u32 max_glyph_index = font_info->tables.loca.length / ((font_info->loca_format + 1) * 2) - 1;
+    u16 max_glyph_index = (u16)(font_info->tables.loca.length / ((font_info->loca_format + 1) * 2) - 1);
     if (max_glyph_index < font_info->num_glyphs) {
-        font_info->num_glyphs = (u16)max_glyph_index;
+        font_info->num_glyphs = max_glyph_index;
     }
 
     font_info->initialized = true;
@@ -362,6 +365,49 @@ tt_bounding_box tt_get_glyph_box(const tt_font_info* font_info, u32 glyph_index)
     return box;
 }
 
+tt_h_metrics tt_get_glyph_h_metrics(const tt_font_info* font_info, u32 glyph_index) {
+    tt_h_metrics out = { 0 };
+
+    if (font_info == NULL || !font_info->initialized) {
+        return out;
+    }
+
+    string8 file = font_info->file;
+    tt_table_info hmtx = font_info->tables.hmtx;
+
+    if (glyph_index < font_info->num_hmetrics) {
+        if (glyph_index * 4 >= font_info->tables.hmtx.length) {
+            return out;
+        }
+
+        out.advance_width = (u16)_TT_READ_BE16(file.str + hmtx.offset + glyph_index * 4);
+        out.left_side_bearing = (i16)_TT_READ_BE16(file.str + hmtx.offset + glyph_index * 4 + 2);
+    } else {
+        u32 advance_index = font_info->num_hmetrics-1;
+
+        if (glyph_index * 4 >= hmtx.length) {
+            return out;
+        }
+
+        out.advance_width = (u16)_TT_READ_BE16(file.str + hmtx.offset + advance_index * 4);
+
+        u32 lsb_offset = font_info->num_hmetrics * 4 + (glyph_index - font_info->num_hmetrics) * 2;
+
+        if (lsb_offset >= hmtx.length) {
+            return out;
+        }
+
+        out.left_side_bearing = (i16)_TT_READ_BE16(file.str + hmtx.offset + lsb_offset);
+    }
+
+    u32 index = MIN(glyph_index, font_info->num_hmetrics);
+
+
+    out.advance_width = (u16)_TT_READ_BE16(font_info->file.str + font_info->tables.hmtx.offset + index * 4);
+
+    return out;
+}
+
 typedef union {
     struct {
         u8 on_curve: 1;
@@ -421,7 +467,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         return 0;
     }
 
-    if (num_contours <= -1) {
+    if (num_contours == -1) {
         u32 cur_offset = 10;
 
         for (u16 i = 0; i < font_info->max_component_elements; i++) {
@@ -519,7 +565,7 @@ u32 tt_get_glyph_outline(const tt_font_info* font_info, u32 glyph_index, tt_segm
         _tt_glyph_flags* flags = ARENA_PUSH_ARRAY(scratch.arena, _tt_glyph_flags, num_points);
         vec2f* points = ARENA_PUSH_ARRAY(scratch.arena, vec2f, num_points);
 
-        u32 cur_offset = (u32)(12 + 2 * num_contours + instructions_length);
+        u32 cur_offset = 12 + 2 * (u32)num_contours + instructions_length;
 
         // Parsing flags
         for (u32 i = 0; i < num_points && cur_offset <= glyph_length; i++) {

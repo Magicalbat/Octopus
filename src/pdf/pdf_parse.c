@@ -126,11 +126,11 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     u64 offset = 0;
 
     u32 xref_size = 0;
-    _pdf_obj_info root_ref = { 0 };
+    //_pdf_obj_info root_ref = { 0 };
 
     while (_pdf_next_dict_elem(scratch.arena, trailer_obj.str, &key, &value, &offset)) {
         if (str8_equals(key, STR8_LIT("Root")) && value.type == _PDF_OBJ_REF) {
-            root_ref = _pdf_parse_obj_info(value.str);
+            //root_ref = _pdf_parse_obj_info(value.str);
         } else if (str8_equals(key, STR8_LIT("Size")) && value.type == _PDF_OBJ_INT) {
             xref_size = (u32)_pdf_parse_int(value.str);
         }
@@ -709,9 +709,9 @@ b32 _pdf_next_dict_elem(mem_arena* arena, string8 str, string8* out_name, _pdf_t
     return true;
 }
 
-string8 _pdf_parse_stream(mem_arena* arena, string8 str) {
+/*string8 _pdf_parse_stream(mem_arena* arena, string8 str) {
     // TODO
-}
+}*/
 
 _pdf_obj_info _pdf_parse_obj_info(string8 str) {
     _pdf_obj_info out = { 0 };

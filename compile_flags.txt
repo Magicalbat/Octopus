@@ -11,3 +11,4 @@
 -include src/gfx/gfx.h
 -include src/truetype/truetype.h
 -include src/pdf/pdf.h
+-include src/debug_draw/debug_draw.h
