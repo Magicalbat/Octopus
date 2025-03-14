@@ -56,8 +56,19 @@ tt_bitmap tt_render_font_atlas(mem_arena* arena, const tt_font_info* font_info, 
 
     u32 bitmap_height = (u32)ceilf(rectf_pack(glyph_rects, num_glyphs, (f32)bitmap_width, 1));
 
+    vec2f uv_scale = {
+        1.0f / (f32)bitmap_width,
+        1.0f / (f32)bitmap_height
+    };
+
     for (u32 i = 0; i < num_glyphs; i++) {
         out_infos[i].bitmap_rect = glyph_rects[i];
+        out_infos[i].uv_rect = (rectf) {
+            glyph_rects[i].x * uv_scale.x,
+            glyph_rects[i].y * uv_scale.y,
+            glyph_rects[i].w * uv_scale.x,
+            glyph_rects[i].h * uv_scale.y,
+        };
 
         tt_h_metrics h_metrics = tt_get_glyph_h_metrics(font_info, glyph_indices[i]);
         out_infos[i].x_advance = h_metrics.advance_width * glyph_scale;

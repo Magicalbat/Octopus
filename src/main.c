@@ -3,12 +3,14 @@
 #include "gfx/gfx.h"
 #include "truetype/truetype.h"
 #include "pdf/pdf.h"
+#include "debug_draw/debug_draw.h"
 
 #include "base/base.c"
 #include "platform/platform.c"
 #include "gfx/gfx.c"
 #include "truetype/truetype.c"
 #include "pdf/pdf.c"
+#include "debug_draw/debug_draw.c"
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param);
 
@@ -26,7 +28,7 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
 
-    string8 pdf_file = plat_file_read(perm_arena, STR8_LIT("res/test.pdf"));
+    /*string8 pdf_file = plat_file_read(perm_arena, STR8_LIT("res/test.pdf"));
 
     pdf_parse_begin(perm_arena, pdf_file);
 
@@ -38,7 +40,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    return 0;
+    return 0;*/
 
     gfx_window* win = gfx_win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     gfx_win_make_current(win);
@@ -51,7 +53,9 @@ int main(int argc, char** argv) {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    
+
+    debug_draw_init(STR8_LIT("res/Envy Code R.ttf"));
+
     // End of setup error frame
     {
         string8 err_str = error_frame_end(perm_arena, ERROR_OUTPUT_CONCAT);
@@ -109,10 +113,10 @@ int main(int argc, char** argv) {
                 view.center = vec2f_add(view.center, diff);
             }
 
-            if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_RIGHT)) {
+            if (GFX_IS_MOUSE_JUST_DOWN(win, GFX_MB_LEFT)) {
                 drag_init_mouse_pos = mouse_pos;
             }
-            if (GFX_IS_MOUSE_DOWN(win, GFX_MB_RIGHT)) {
+            if (GFX_IS_MOUSE_DOWN(win, GFX_MB_LEFT)) {
                 vec2f diff = vec2f_sub(drag_init_mouse_pos, mouse_pos);
                 view.center = vec2f_add(view.center, diff);
             }
@@ -122,6 +126,14 @@ int main(int argc, char** argv) {
         }
 
         gfx_win_clear(win);
+
+        debug_draw_set_view(&view_mat);
+
+        debug_draw_text(
+            (vec2f){ 0, 0 },
+            24, (vec4f){ 1, 1, 1, 1 },
+            STR8_LIT("The quick brown fox jumps over\nthe lazy dog.")
+        );
 
         gfx_win_swap_buffers(win);
 
@@ -133,6 +145,8 @@ int main(int argc, char** argv) {
             }
         }
     }
+
+    debug_draw_destroy();
 
     gfx_win_destroy(win);
 

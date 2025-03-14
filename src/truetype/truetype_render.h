@@ -13,6 +13,7 @@ typedef enum {
 
 typedef struct {
     rectf bitmap_rect;
+    rectf uv_rect;
     vec2f offset;
     f32 x_advance;
 } tt_render_glyph_info;
