@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    debug_draw_init(STR8_LIT("res/Envy Code R.ttf"));
+    debug_draw_init();
 
     // End of setup error frame
     {
@@ -78,12 +78,16 @@ int main(int argc, char** argv) {
 
     vec2f drag_init_mouse_pos = { 0 };
 
+    vec2f points[100 * 100] = { 0 };
+
+    f64 time = 0.0f;
     u64 prev_frame = plat_time_usec();
     while (!win->should_close) {
         error_frame_begin();
 
         u64 cur_frame = plat_time_usec();
         f32 delta = (f32)(cur_frame - prev_frame) * 1e-6f;
+        time += delta;
         prev_frame = cur_frame;
 
         gfx_win_process_events(win);
@@ -123,17 +127,22 @@ int main(int argc, char** argv) {
 
             mat3f_from_view(&view_mat, view);
             mat3f_from_inv_view(&inv_view_mat, view);
+
+            debug_draw_set_view(&view_mat);
         }
 
         gfx_win_clear(win);
 
-        debug_draw_set_view(&view_mat);
+        for (u32 y = 0; y < 100; y++) {
+            for (u32 x = 0; x < 100; x++) {
+                points[x + y * 100] = (vec2f){
+                    (f32)x * 10 + 10 * cosf((f32)time + (f32)y),
+                    (f32)y * 10 + 10 * sinf((f32)time + (f32)x)
+                };
+            }
+        }
 
-        debug_draw_text(
-            (vec2f){ 0, 0 },
-            24, (vec4f){ 1, 1, 1, 1 },
-            STR8_LIT("The quick brown fox jumps over\nthe lazy dog.")
-        );
+        debug_draw_circles(points, 100 * 100, 1.0f, (vec4f){ 1, 1, 1, 1 });
 
         gfx_win_swap_buffers(win);
 
