@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    debug_draw_init();
+    debug_draw_init(win);
 
     // End of setup error frame
     {
@@ -67,7 +67,8 @@ int main(int argc, char** argv) {
 
     viewf view = {
         .aspect_ratio = (f32)win->width / (f32)win->height,
-        .width = (f32)win->width
+        .width = (f32)win->width * 0.5f,
+        .center = (vec2f){ 200, 200 }
     };
     mat3f view_mat = { 0 };
     mat3f inv_view_mat = { 0 };
@@ -128,7 +129,7 @@ int main(int argc, char** argv) {
             mat3f_from_view(&view_mat, view);
             mat3f_from_inv_view(&inv_view_mat, view);
 
-            debug_draw_set_view(&view_mat);
+            debug_draw_set_view(&view);
         }
 
         gfx_win_clear(win);
@@ -136,8 +137,8 @@ int main(int argc, char** argv) {
         for (u32 y = 0; y < 100; y++) {
             for (u32 x = 0; x < 100; x++) {
                 points[x + y * 100] = (vec2f){
-                    (f32)x * 10 + 10 * cosf((f32)time + (f32)y),
-                    (f32)y * 10 + 10 * sinf((f32)time + (f32)x)
+                    (f32)x * 10,// + 10 * cosf((f32)time + (f32)y),
+                    (f32)y * 10// + 10 * sinf((f32)time + (f32)x)
                 };
             }
         }

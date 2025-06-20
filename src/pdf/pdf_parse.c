@@ -154,7 +154,7 @@ pdf_parse_context* pdf_parse_begin(mem_arena* arena, string8 file) {
     }
 
     for (u32 i = 0; i < xref_size; i++) {
-        printf("\n-----------------\n%lu %u\n----------------\n\n", temp_offsets[i], temp_generations[i]);
+        printf("\n-----------------\n%u %u\n----------------\n\n", (u32)temp_offsets[i], temp_generations[i]);
         u64 offset2 = i == xref_size - 1 ? file.size : temp_offsets[i+1];
         string8 str = str8_substr(file, temp_offsets[i], offset2);
         printf("%.*s\n", (int)str.size, str.str);

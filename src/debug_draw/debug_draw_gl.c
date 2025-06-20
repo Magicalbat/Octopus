@@ -17,14 +17,18 @@ static const char* _dd_circle_vert_source;
 static const char* _dd_circle_frag_source;
 
 static struct {
+    const gfx_window* win;
+
     mem_arena* arena;
 
     _dd_circles circles;
 
+    const viewf* view_ref;
     mat3f view_mat;
 } _dd_state = { 0 };
 
-void debug_draw_init(void) {
+void debug_draw_init(const gfx_window* win) {
+    _dd_state.win = win;
     _dd_state.arena = arena_create(MiB(2), KiB(256), false);
 
     // Circles init 
@@ -76,8 +80,9 @@ void debug_draw_destroy(void) {
     arena_destroy(_dd_state.arena);
 }
 
-void debug_draw_set_view(const mat3f* view_mat) {
-    memcpy(_dd_state.view_mat.m, view_mat->m, sizeof(f32) * 9);
+void debug_draw_set_view(const viewf* view) {
+    _dd_state.view_ref = view;
+    mat3f_from_view(&_dd_state.view_mat, *view);
 }
 
 void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) {
@@ -87,10 +92,13 @@ void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) 
 
     _dd_circles* circles = &_dd_state.circles;
 
+    // Calculating geom scale
+    f32 screen_radius = radius * (f32)_dd_state.win->width / _dd_state.view_ref->width;
+    f32 geom_scale = 1.0f + sqrtf(2.0f) / screen_radius;
+
     glUseProgram(circles->shader_prog);
     glUniformMatrix3fv(circles->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);
-    // TODO: geom scale correctly
-    glUniform1f(circles->geom_scale_loc, 1.0f);
+    glUniform1f(circles->geom_scale_loc, geom_scale);
     glUniform1f(circles->radius_loc, radius);
     glUniform4f(circles->col_loc, color.x, color.y, color.z, color.w);
 
