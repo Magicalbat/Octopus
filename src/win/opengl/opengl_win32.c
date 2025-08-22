@@ -4,17 +4,17 @@ typedef const char* WINAPI (wglGetExtensionsStringARB_func)(HDC hdc);
 typedef BOOL WINAPI (wglChoosePixelFormatARB_func)(HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 typedef HGLRC WINAPI (wglCreateContextAttribsARB_func)(HDC hdc, HGLRC hShareContext, const int *attribList);
 
-typedef struct gfx_win_backend {
+typedef struct _win_backend {
     HWND window;
     HDC dc;
     HGLRC context;
-} gfx_win_backend;
+} _win_backend;
 
 #define X(ret, name, args) static gl_##name##_func name = NULL;
 #   include "opengl_funcs_xlist.h"
 #undef X
 
-static gfx_key _w32_keymap[256] = { 0 };
+static win_key _w32_keymap[256] = { 0 };
 
 static wglChoosePixelFormatARB_func* wglChoosePixelFormatARB = NULL;
 static wglCreateContextAttribsARB_func* wglCreateContextAttribsARB = NULL;
@@ -30,22 +30,22 @@ static LRESULT CALLBACK _w32_window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 static b32 _w32_get_wgl_funcs(void);
 static b32 _w32_register_class(void);
 static void _w32_init_keymap(void);
-static b32 _w32_gfx_init(void);
+static b32 _w32_win_init(void);
 
-gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
+win_window* window_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     if (_w32_first_win) {
         _w32_first_win = false;
 
-        if (!_w32_gfx_init()) {
+        if (!_w32_win_init()) {
             return NULL;
         }
     }
 
-    gfx_window* win = ARENA_PUSH(arena, gfx_window);
+    win_window* win = ARENA_PUSH(arena, win_window);
     win->title = title;
     win->width = width;
     win->height = height;
-    win->backend = ARENA_PUSH(arena, gfx_win_backend);
+    win->backend = ARENA_PUSH(arena, _win_backend);
 
     RECT win_rect = { 0, 0, (i32)width, (i32)height };
     AdjustWindowRect(&win_rect, WS_OVERLAPPEDWINDOW, FALSE);
@@ -166,7 +166,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     return win;
 }
 
-void gfx_win_destroy(gfx_window* win) { 
+void window_destroy(win_window* win) { 
     if (win == NULL) {
         return;
     }
@@ -177,7 +177,7 @@ void gfx_win_destroy(gfx_window* win) {
     DestroyWindow(win->backend->window);
 }
 
-b32 gfx_win_make_current(gfx_window* win) { 
+b32 window_make_current(win_window* win) { 
     if (win == NULL) {
         return false;
     }
@@ -185,13 +185,13 @@ b32 gfx_win_make_current(gfx_window* win) {
     return wglMakeCurrent(win->backend->dc, win->backend->context);
 }
 
-void gfx_win_process_events(gfx_window* win) { 
+void window_process_events(win_window* win) { 
     if (win == NULL) {
         return;
     }
 
-    memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
-    memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
+    memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
+    memcpy(win->prev_keys, win->keys, WIN_KEY_COUNT);
 
     win->mouse_scroll = 0;
 
@@ -202,7 +202,7 @@ void gfx_win_process_events(gfx_window* win) {
     }
 }
 
-void gfx_win_clear_color(gfx_window* win, vec4f col) { 
+void window_clear_color(win_window* win, vec4f col) { 
     if (win == NULL) {
         return;
     }
@@ -211,7 +211,7 @@ void gfx_win_clear_color(gfx_window* win, vec4f col) {
     glClearColor(col.x, col.y, col.z, col.w);
 }
 
-void gfx_win_clear(gfx_window* win) { 
+void window_clear(win_window* win) { 
     if (win == NULL) {
         return;
     }
@@ -219,7 +219,7 @@ void gfx_win_clear(gfx_window* win) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void gfx_win_swap_buffers(gfx_window* win) { 
+void window_swap_buffers(win_window* win) { 
     if (win == NULL) {
         return;
     }
@@ -228,7 +228,7 @@ void gfx_win_swap_buffers(gfx_window* win) {
 }
 
 static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPARAM l_param) {
-    gfx_window* win = (gfx_window*)GetWindowLongPtrW(wnd, GWLP_USERDATA);
+    win_window* win = (win_window*)GetWindowLongPtrW(wnd, GWLP_USERDATA);
 
     switch (msg) {
         case WM_MOUSEMOVE: {
@@ -237,22 +237,22 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
         } break;
 
         case WM_LBUTTONDOWN: {
-            win->mouse_buttons[GFX_MB_LEFT] = true;
+            win->mouse_buttons[WIN_MB_LEFT] = true;
         } break;
         case WM_LBUTTONUP: {
-            win->mouse_buttons[GFX_MB_LEFT] = false;
+            win->mouse_buttons[WIN_MB_LEFT] = false;
         } break;
         case WM_MBUTTONDOWN: {
-            win->mouse_buttons[GFX_MB_MIDDLE] = true;
+            win->mouse_buttons[WIN_MB_MIDDLE] = true;
         } break;
         case WM_MBUTTONUP: {
-            win->mouse_buttons[GFX_MB_MIDDLE] = false;
+            win->mouse_buttons[WIN_MB_MIDDLE] = false;
         } break;
         case WM_RBUTTONDOWN: {
-            win->mouse_buttons[GFX_MB_RIGHT] = true;
+            win->mouse_buttons[WIN_MB_RIGHT] = true;
         } break;
         case WM_RBUTTONUP: {
-            win->mouse_buttons[GFX_MB_RIGHT] = false;
+            win->mouse_buttons[WIN_MB_RIGHT] = false;
         } break;
 
         case WM_MOUSEWHEEL: {
@@ -260,11 +260,11 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
         } break;
 
         case WM_KEYDOWN: {
-            gfx_key down_key = _w32_keymap[w_param];
+            win_key down_key = _w32_keymap[w_param];
             win->keys[down_key] = true;
         } break;
         case WM_KEYUP: {
-            gfx_key up_key = _w32_keymap[w_param];
+            win_key up_key = _w32_keymap[w_param];
             win->keys[up_key] = false;
         } break;
 
@@ -401,107 +401,107 @@ static b32 _w32_register_class(void) {
 }
 
 static void _w32_init_keymap(void) {
-    _w32_keymap[VK_BACK] = GFX_KEY_BACKSPACE;
-    _w32_keymap[VK_TAB] = GFX_KEY_TAB;
-    _w32_keymap[VK_RETURN] = GFX_KEY_ENTER;
-    _w32_keymap[VK_CAPITAL] = GFX_KEY_CAPSLOCK;
-    _w32_keymap[VK_ESCAPE] = GFX_KEY_ESCAPE;
-    _w32_keymap[VK_SPACE] = GFX_KEY_SPACE;
-    _w32_keymap[VK_PRIOR] = GFX_KEY_PAGEUP;
-    _w32_keymap[VK_NEXT] = GFX_KEY_PAGEDOWN;
-    _w32_keymap[VK_END] = GFX_KEY_END;
-    _w32_keymap[VK_HOME] = GFX_KEY_HOME;
-    _w32_keymap[VK_LEFT] = GFX_KEY_LEFT;
-    _w32_keymap[VK_UP] = GFX_KEY_UP;
-    _w32_keymap[VK_RIGHT] = GFX_KEY_RIGHT;
-    _w32_keymap[VK_DOWN] = GFX_KEY_DOWN;
-    _w32_keymap[VK_INSERT] = GFX_KEY_INSERT;
-    _w32_keymap[VK_DELETE] = GFX_KEY_DELETE;
-    _w32_keymap[0x30] = GFX_KEY_0;
-    _w32_keymap[0x31] = GFX_KEY_1;
-    _w32_keymap[0x32] = GFX_KEY_2;
-    _w32_keymap[0x33] = GFX_KEY_3;
-    _w32_keymap[0x34] = GFX_KEY_4;
-    _w32_keymap[0x35] = GFX_KEY_5;
-    _w32_keymap[0x36] = GFX_KEY_6;
-    _w32_keymap[0x37] = GFX_KEY_7;
-    _w32_keymap[0x38] = GFX_KEY_8;
-    _w32_keymap[0x39] = GFX_KEY_9;
-    _w32_keymap[0x41] = GFX_KEY_A;
-    _w32_keymap[0x42] = GFX_KEY_B;
-    _w32_keymap[0x43] = GFX_KEY_C;
-    _w32_keymap[0x44] = GFX_KEY_D;
-    _w32_keymap[0x45] = GFX_KEY_E;
-    _w32_keymap[0x46] = GFX_KEY_F;
-    _w32_keymap[0x47] = GFX_KEY_G;
-    _w32_keymap[0x48] = GFX_KEY_H;
-    _w32_keymap[0x49] = GFX_KEY_I;
-    _w32_keymap[0x4A] = GFX_KEY_J;
-    _w32_keymap[0x4B] = GFX_KEY_K;
-    _w32_keymap[0x4C] = GFX_KEY_L;
-    _w32_keymap[0x4D] = GFX_KEY_M;
-    _w32_keymap[0x4E] = GFX_KEY_N;
-    _w32_keymap[0x4F] = GFX_KEY_O;
-    _w32_keymap[0x50] = GFX_KEY_P;
-    _w32_keymap[0x51] = GFX_KEY_Q;
-    _w32_keymap[0x52] = GFX_KEY_R;
-    _w32_keymap[0x53] = GFX_KEY_S;
-    _w32_keymap[0x54] = GFX_KEY_T;
-    _w32_keymap[0x55] = GFX_KEY_U;
-    _w32_keymap[0x56] = GFX_KEY_V;
-    _w32_keymap[0x57] = GFX_KEY_W;
-    _w32_keymap[0x58] = GFX_KEY_X;
-    _w32_keymap[0x59] = GFX_KEY_Y;
-    _w32_keymap[0x5A] = GFX_KEY_Z;
-    _w32_keymap[VK_NUMPAD0] = GFX_KEY_NUMPAD_0;
-    _w32_keymap[VK_NUMPAD1] = GFX_KEY_NUMPAD_1;
-    _w32_keymap[VK_NUMPAD2] = GFX_KEY_NUMPAD_2;
-    _w32_keymap[VK_NUMPAD3] = GFX_KEY_NUMPAD_3;
-    _w32_keymap[VK_NUMPAD4] = GFX_KEY_NUMPAD_4;
-    _w32_keymap[VK_NUMPAD5] = GFX_KEY_NUMPAD_5;
-    _w32_keymap[VK_NUMPAD6] = GFX_KEY_NUMPAD_6;
-    _w32_keymap[VK_NUMPAD7] = GFX_KEY_NUMPAD_7;
-    _w32_keymap[VK_NUMPAD8] = GFX_KEY_NUMPAD_8;
-    _w32_keymap[VK_NUMPAD9] = GFX_KEY_NUMPAD_9;
-    _w32_keymap[VK_MULTIPLY] = GFX_KEY_NUMPAD_MULTIPLY;
-    _w32_keymap[VK_ADD] = GFX_KEY_NUMPAD_ADD;
-    _w32_keymap[VK_SUBTRACT] = GFX_KEY_NUMPAD_SUBTRACT;
-    _w32_keymap[VK_DECIMAL] = GFX_KEY_NUMPAD_DECIMAL;
-    _w32_keymap[VK_DIVIDE] = GFX_KEY_NUMPAD_DIVIDE;
-    _w32_keymap[VK_F1] = GFX_KEY_F1;
-    _w32_keymap[VK_F2] = GFX_KEY_F2;
-    _w32_keymap[VK_F3] = GFX_KEY_F3;
-    _w32_keymap[VK_F4] = GFX_KEY_F4;
-    _w32_keymap[VK_F5] = GFX_KEY_F5;
-    _w32_keymap[VK_F6] = GFX_KEY_F6;
-    _w32_keymap[VK_F7] = GFX_KEY_F7;
-    _w32_keymap[VK_F8] = GFX_KEY_F8;
-    _w32_keymap[VK_F9] = GFX_KEY_F9;
-    _w32_keymap[VK_F10] = GFX_KEY_F10;
-    _w32_keymap[VK_F11] = GFX_KEY_F11;
-    _w32_keymap[VK_F12] = GFX_KEY_F12;
-    _w32_keymap[VK_NUMLOCK] = GFX_KEY_NUM_LOCK;
-    _w32_keymap[VK_SCROLL] = GFX_KEY_SCROLL_LOCK;
-    _w32_keymap[VK_LSHIFT] = GFX_KEY_LSHIFT;
-    _w32_keymap[VK_RSHIFT] = GFX_KEY_RSHIFT;
-    _w32_keymap[VK_LCONTROL] = GFX_KEY_LCONTROL;
-    _w32_keymap[VK_RCONTROL] = GFX_KEY_RCONTROL;
-    _w32_keymap[VK_LMENU] = GFX_KEY_LALT;
-    _w32_keymap[VK_RMENU] = GFX_KEY_RALT;
-    _w32_keymap[VK_OEM_1] = GFX_KEY_SEMICOLON;
-    _w32_keymap[VK_OEM_PLUS] = GFX_KEY_EQUAL;
-    _w32_keymap[VK_OEM_COMMA] = GFX_KEY_COMMA;
-    _w32_keymap[VK_OEM_MINUS] = GFX_KEY_MINUS;
-    _w32_keymap[VK_OEM_PERIOD] = GFX_KEY_PERIOD;
-    _w32_keymap[VK_OEM_2] = GFX_KEY_FORWARDSLASH;
-    _w32_keymap[VK_OEM_3] = GFX_KEY_BACKTICK;
-    _w32_keymap[VK_OEM_4] = GFX_KEY_LBRACKET;
-    _w32_keymap[VK_OEM_5] = GFX_KEY_BACKSLASH;
-    _w32_keymap[VK_OEM_6] = GFX_KEY_RBRACKET;
-    _w32_keymap[VK_OEM_7] = GFX_KEY_APOSTROPHE;
+    _w32_keymap[VK_BACK] = WIN_KEY_BACKSPACE;
+    _w32_keymap[VK_TAB] = WIN_KEY_TAB;
+    _w32_keymap[VK_RETURN] = WIN_KEY_ENTER;
+    _w32_keymap[VK_CAPITAL] = WIN_KEY_CAPSLOCK;
+    _w32_keymap[VK_ESCAPE] = WIN_KEY_ESCAPE;
+    _w32_keymap[VK_SPACE] = WIN_KEY_SPACE;
+    _w32_keymap[VK_PRIOR] = WIN_KEY_PAGEUP;
+    _w32_keymap[VK_NEXT] = WIN_KEY_PAGEDOWN;
+    _w32_keymap[VK_END] = WIN_KEY_END;
+    _w32_keymap[VK_HOME] = WIN_KEY_HOME;
+    _w32_keymap[VK_LEFT] = WIN_KEY_LEFT;
+    _w32_keymap[VK_UP] = WIN_KEY_UP;
+    _w32_keymap[VK_RIGHT] = WIN_KEY_RIGHT;
+    _w32_keymap[VK_DOWN] = WIN_KEY_DOWN;
+    _w32_keymap[VK_INSERT] = WIN_KEY_INSERT;
+    _w32_keymap[VK_DELETE] = WIN_KEY_DELETE;
+    _w32_keymap[0x30] = WIN_KEY_0;
+    _w32_keymap[0x31] = WIN_KEY_1;
+    _w32_keymap[0x32] = WIN_KEY_2;
+    _w32_keymap[0x33] = WIN_KEY_3;
+    _w32_keymap[0x34] = WIN_KEY_4;
+    _w32_keymap[0x35] = WIN_KEY_5;
+    _w32_keymap[0x36] = WIN_KEY_6;
+    _w32_keymap[0x37] = WIN_KEY_7;
+    _w32_keymap[0x38] = WIN_KEY_8;
+    _w32_keymap[0x39] = WIN_KEY_9;
+    _w32_keymap[0x41] = WIN_KEY_A;
+    _w32_keymap[0x42] = WIN_KEY_B;
+    _w32_keymap[0x43] = WIN_KEY_C;
+    _w32_keymap[0x44] = WIN_KEY_D;
+    _w32_keymap[0x45] = WIN_KEY_E;
+    _w32_keymap[0x46] = WIN_KEY_F;
+    _w32_keymap[0x47] = WIN_KEY_G;
+    _w32_keymap[0x48] = WIN_KEY_H;
+    _w32_keymap[0x49] = WIN_KEY_I;
+    _w32_keymap[0x4A] = WIN_KEY_J;
+    _w32_keymap[0x4B] = WIN_KEY_K;
+    _w32_keymap[0x4C] = WIN_KEY_L;
+    _w32_keymap[0x4D] = WIN_KEY_M;
+    _w32_keymap[0x4E] = WIN_KEY_N;
+    _w32_keymap[0x4F] = WIN_KEY_O;
+    _w32_keymap[0x50] = WIN_KEY_P;
+    _w32_keymap[0x51] = WIN_KEY_Q;
+    _w32_keymap[0x52] = WIN_KEY_R;
+    _w32_keymap[0x53] = WIN_KEY_S;
+    _w32_keymap[0x54] = WIN_KEY_T;
+    _w32_keymap[0x55] = WIN_KEY_U;
+    _w32_keymap[0x56] = WIN_KEY_V;
+    _w32_keymap[0x57] = WIN_KEY_W;
+    _w32_keymap[0x58] = WIN_KEY_X;
+    _w32_keymap[0x59] = WIN_KEY_Y;
+    _w32_keymap[0x5A] = WIN_KEY_Z;
+    _w32_keymap[VK_NUMPAD0] = WIN_KEY_NUMPAD_0;
+    _w32_keymap[VK_NUMPAD1] = WIN_KEY_NUMPAD_1;
+    _w32_keymap[VK_NUMPAD2] = WIN_KEY_NUMPAD_2;
+    _w32_keymap[VK_NUMPAD3] = WIN_KEY_NUMPAD_3;
+    _w32_keymap[VK_NUMPAD4] = WIN_KEY_NUMPAD_4;
+    _w32_keymap[VK_NUMPAD5] = WIN_KEY_NUMPAD_5;
+    _w32_keymap[VK_NUMPAD6] = WIN_KEY_NUMPAD_6;
+    _w32_keymap[VK_NUMPAD7] = WIN_KEY_NUMPAD_7;
+    _w32_keymap[VK_NUMPAD8] = WIN_KEY_NUMPAD_8;
+    _w32_keymap[VK_NUMPAD9] = WIN_KEY_NUMPAD_9;
+    _w32_keymap[VK_MULTIPLY] = WIN_KEY_NUMPAD_MULTIPLY;
+    _w32_keymap[VK_ADD] = WIN_KEY_NUMPAD_ADD;
+    _w32_keymap[VK_SUBTRACT] = WIN_KEY_NUMPAD_SUBTRACT;
+    _w32_keymap[VK_DECIMAL] = WIN_KEY_NUMPAD_DECIMAL;
+    _w32_keymap[VK_DIVIDE] = WIN_KEY_NUMPAD_DIVIDE;
+    _w32_keymap[VK_F1] = WIN_KEY_F1;
+    _w32_keymap[VK_F2] = WIN_KEY_F2;
+    _w32_keymap[VK_F3] = WIN_KEY_F3;
+    _w32_keymap[VK_F4] = WIN_KEY_F4;
+    _w32_keymap[VK_F5] = WIN_KEY_F5;
+    _w32_keymap[VK_F6] = WIN_KEY_F6;
+    _w32_keymap[VK_F7] = WIN_KEY_F7;
+    _w32_keymap[VK_F8] = WIN_KEY_F8;
+    _w32_keymap[VK_F9] = WIN_KEY_F9;
+    _w32_keymap[VK_F10] = WIN_KEY_F10;
+    _w32_keymap[VK_F11] = WIN_KEY_F11;
+    _w32_keymap[VK_F12] = WIN_KEY_F12;
+    _w32_keymap[VK_NUMLOCK] = WIN_KEY_NUM_LOCK;
+    _w32_keymap[VK_SCROLL] = WIN_KEY_SCROLL_LOCK;
+    _w32_keymap[VK_LSHIFT] = WIN_KEY_LSHIFT;
+    _w32_keymap[VK_RSHIFT] = WIN_KEY_RSHIFT;
+    _w32_keymap[VK_LCONTROL] = WIN_KEY_LCONTROL;
+    _w32_keymap[VK_RCONTROL] = WIN_KEY_RCONTROL;
+    _w32_keymap[VK_LMENU] = WIN_KEY_LALT;
+    _w32_keymap[VK_RMENU] = WIN_KEY_RALT;
+    _w32_keymap[VK_OEM_1] = WIN_KEY_SEMICOLON;
+    _w32_keymap[VK_OEM_PLUS] = WIN_KEY_EQUAL;
+    _w32_keymap[VK_OEM_COMMA] = WIN_KEY_COMMA;
+    _w32_keymap[VK_OEM_MINUS] = WIN_KEY_MINUS;
+    _w32_keymap[VK_OEM_PERIOD] = WIN_KEY_PERIOD;
+    _w32_keymap[VK_OEM_2] = WIN_KEY_FORWARDSLASH;
+    _w32_keymap[VK_OEM_3] = WIN_KEY_BACKTICK;
+    _w32_keymap[VK_OEM_4] = WIN_KEY_LBRACKET;
+    _w32_keymap[VK_OEM_5] = WIN_KEY_BACKSLASH;
+    _w32_keymap[VK_OEM_6] = WIN_KEY_RBRACKET;
+    _w32_keymap[VK_OEM_7] = WIN_KEY_APOSTROPHE;
 }
 
-static b32 _w32_gfx_init(void) {
+static b32 _w32_win_init(void) {
     _w32_instance = GetModuleHandleW(NULL);
 
     if (_w32_instance == NULL) {

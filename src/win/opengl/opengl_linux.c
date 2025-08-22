@@ -1,13 +1,13 @@
 #ifdef PLATFORM_LINUX
 
-typedef struct gfx_win_backend {
+typedef struct _win_backend {
     Display* display;
     i32 screen;
     GLXFBConfig fb_config;
     Window window;
     GLXContext gl_context;
     Atom del_atom;
-} gfx_win_backend;
+} _win_backend;
 
 typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
@@ -15,16 +15,16 @@ typedef GLXContext (*glXCreateContextAttribsARBProc) (Display*, GLXFBConfig, GLX
 #   include "opengl_funcs_xlist.h"
 #undef X
 
-static gfx_key _x11_translate_key(XKeyEvent* e);
+static win_key _x11_translate_key(XKeyEvent* e);
 
-gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
-    gfx_window* win = ARENA_PUSH(arena, gfx_window);
+win_window* window_create(mem_arena* arena, u32 width, u32 height, string8 title) {
+    win_window* win = ARENA_PUSH(arena, win_window);
 
-    *win = (gfx_window){
+    *win = (win_window){
         .title = title,
         .width = width,
         .height = height,
-        .backend = ARENA_PUSH(arena, gfx_win_backend)
+        .backend = ARENA_PUSH(arena, _win_backend)
     };
 
     win->backend->display = XOpenDisplay(NULL);
@@ -161,7 +161,7 @@ gfx_window* gfx_win_create(mem_arena* arena, u32 width, u32 height, string8 titl
     return win;
 }
 
-void gfx_win_destroy(gfx_window* win) {
+void window_destroy(win_window* win) {
     if (win == NULL) {
         return;
     }
@@ -173,7 +173,7 @@ void gfx_win_destroy(gfx_window* win) {
     XCloseDisplay(win->backend->display);
 }
 
-b32 gfx_win_make_current(gfx_window* win) {
+b32 window_make_current(win_window* win) {
     if (win == NULL) {
         return false;
     }
@@ -181,15 +181,13 @@ b32 gfx_win_make_current(gfx_window* win) {
     return glXMakeCurrent(win->backend->display, win->backend->window, win->backend->gl_context);
 }
 
-void gfx_win_process_events(gfx_window* win) {
+void window_process_events(win_window* win) {
     if (win == NULL) {
         return;
     }
 
-    win->mouse_pos_cache_size = 0;
-    memset(win->mouse_pos_cache, 0, sizeof(vec2f) * GFX_MOUSE_POS_CACHE_MAX_SIZE);
-    memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
-    memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
+    memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
+    memcpy(win->prev_keys, win->keys, win_key_COUNT);
 
     win->mouse_scroll = 0;
     
@@ -221,24 +219,15 @@ void gfx_win_process_events(gfx_window* win) {
             case MotionNotify: {
                 win->mouse_pos.x = (f32)e.xmotion.x;
                 win->mouse_pos.y = (f32)e.xmotion.y;
-
-                if (win->mouse_pos_cache_size < GFX_MOUSE_POS_CACHE_MAX_SIZE) {
-                    win->mouse_pos_cache[win->mouse_pos_cache_size++] = win->mouse_pos;
-                } else {
-                    for (u32 i = 0; i < GFX_MOUSE_POS_CACHE_MAX_SIZE - 1; i++) {
-                        win->mouse_pos_cache[i] = win->mouse_pos_cache[i+1];
-                    }
-                    win->mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE - 1] = win->mouse_pos;
-                }
             } break;
             case KeyPress: {
-                gfx_key keydown = _x11_translate_key(&e.xkey);
+                win_key keydown = _x11_translate_key(&e.xkey);
                 win->keys[keydown] = true;
             } break;
             case KeyRelease: {
-                gfx_key keyup = _x11_translate_key(&e.xkey);
+                win_key keyup = _x11_translate_key(&e.xkey);
                 win->keys[keyup] = false;
-            } break;
+            } break
             case ClientMessage: {
                 if ((i64)e.xclient.data.l[0] == (i64)win->backend->del_atom) {
                     win->should_close = true;
@@ -248,7 +237,7 @@ void gfx_win_process_events(gfx_window* win) {
     }
 }
 
-void gfx_win_clear_color(gfx_window* win, vec4f col) {
+void window_clear_color(win_window* win, vec4f col) {
     if (win == NULL) {
         return;
     }
@@ -256,7 +245,7 @@ void gfx_win_clear_color(gfx_window* win, vec4f col) {
     glClearColor(col.x, col.y, col.z, col.w);
 }
 
-void gfx_win_clear(gfx_window* win) {
+void window_clear(win_window* win) {
     if (win == NULL) {
         return;
     }
@@ -265,7 +254,7 @@ void gfx_win_clear(gfx_window* win) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void gfx_win_swap_buffers(gfx_window* win) {
+void window_swap_buffers(win_window* win) {
     if (win == NULL) {
         return;
     }
@@ -275,120 +264,120 @@ void gfx_win_swap_buffers(gfx_window* win) {
 
 // Adapted from sokol_app.h
 // https://github.com/floooh/sokol/blob/master/sokol_app.h#L10175 
-static gfx_key _x11_translate_key(XKeyEvent* e) {
+static win_key _x11_translate_key(XKeyEvent* e) {
     KeySym keysym = XLookupKeysym(e, 0);
 
     switch (keysym) {
-        case XK_Escape:         return GFX_KEY_ESCAPE;
-        case XK_Tab:            return GFX_KEY_TAB;
-        case XK_Shift_L:        return GFX_KEY_LSHIFT;
-        case XK_Shift_R:        return GFX_KEY_RSHIFT;
-        case XK_Control_L:      return GFX_KEY_LCONTROL;
-        case XK_Control_R:      return GFX_KEY_RCONTROL;
+        case XK_Escape:         return WIN_KEY_ESCAPE;
+        case XK_Tab:            return WIN_KEY_TAB;
+        case XK_Shift_L:        return WIN_KEY_LSHIFT;
+        case XK_Shift_R:        return WIN_KEY_RSHIFT;
+        case XK_Control_L:      return WIN_KEY_LCONTROL;
+        case XK_Control_R:      return WIN_KEY_RCONTROL;
         case XK_Meta_L:
-        case XK_Alt_L:          return GFX_KEY_LALT;
+        case XK_Alt_L:          return WIN_KEY_LALT;
         case XK_Mode_switch:    /* Mapped to Alt_R on many keyboards */
         case XK_ISO_Level3_Shift: /* AltGr on at least some machines */
         case XK_Meta_R:
-        case XK_Alt_R:          return GFX_KEY_RALT;
-        case XK_Num_Lock:       return GFX_KEY_NUM_LOCK;
-        case XK_Caps_Lock:      return GFX_KEY_CAPSLOCK;
-        case XK_Scroll_Lock:    return GFX_KEY_SCROLL_LOCK;
-        case XK_Delete:         return GFX_KEY_DELETE;
-        case XK_BackSpace:      return GFX_KEY_BACKSPACE;
-        case XK_Return:         return GFX_KEY_ENTER;
-        case XK_Home:           return GFX_KEY_HOME;
-        case XK_End:            return GFX_KEY_END;
-        case XK_Page_Up:        return GFX_KEY_PAGEUP;
-        case XK_Page_Down:      return GFX_KEY_PAGEDOWN;
-        case XK_Insert:         return GFX_KEY_INSERT;
-        case XK_Left:           return GFX_KEY_LEFT;
-        case XK_Right:          return GFX_KEY_RIGHT;
-        case XK_Down:           return GFX_KEY_DOWN;
-        case XK_Up:             return GFX_KEY_UP;
-        case XK_F1:             return GFX_KEY_F1;
-        case XK_F2:             return GFX_KEY_F2;
-        case XK_F3:             return GFX_KEY_F3;
-        case XK_F4:             return GFX_KEY_F4;
-        case XK_F5:             return GFX_KEY_F5;
-        case XK_F6:             return GFX_KEY_F6;
-        case XK_F7:             return GFX_KEY_F7;
-        case XK_F8:             return GFX_KEY_F8;
-        case XK_F9:             return GFX_KEY_F9;
-        case XK_F10:            return GFX_KEY_F10;
-        case XK_F11:            return GFX_KEY_F11;
-        case XK_F12:            return GFX_KEY_F12;
+        case XK_Alt_R:          return WIN_KEY_RALT;
+        case XK_Num_Lock:       return WIN_KEY_NUM_LOCK;
+        case XK_Caps_Lock:      return WIN_KEY_CAPSLOCK;
+        case XK_Scroll_Lock:    return WIN_KEY_SCROLL_LOCK;
+        case XK_Delete:         return WIN_KEY_DELETE;
+        case XK_BackSpace:      return WIN_KEY_BACKSPACE;
+        case XK_Return:         return WIN_KEY_ENTER;
+        case XK_Home:           return WIN_KEY_HOME;
+        case XK_End:            return WIN_KEY_END;
+        case XK_Page_Up:        return WIN_KEY_PAGEUP;
+        case XK_Page_Down:      return WIN_KEY_PAGEDOWN;
+        case XK_Insert:         return WIN_KEY_INSERT;
+        case XK_Left:           return WIN_KEY_LEFT;
+        case XK_Right:          return WIN_KEY_RIGHT;
+        case XK_Down:           return WIN_KEY_DOWN;
+        case XK_Up:             return WIN_KEY_UP;
+        case XK_F1:             return WIN_KEY_F1;
+        case XK_F2:             return WIN_KEY_F2;
+        case XK_F3:             return WIN_KEY_F3;
+        case XK_F4:             return WIN_KEY_F4;
+        case XK_F5:             return WIN_KEY_F5;
+        case XK_F6:             return WIN_KEY_F6;
+        case XK_F7:             return WIN_KEY_F7;
+        case XK_F8:             return WIN_KEY_F8;
+        case XK_F9:             return WIN_KEY_F9;
+        case XK_F10:            return WIN_KEY_F10;
+        case XK_F11:            return WIN_KEY_F11;
+        case XK_F12:            return WIN_KEY_F12;
 
-        case XK_KP_Divide:      return GFX_KEY_NUMPAD_DIVIDE;
-        case XK_KP_Multiply:    return GFX_KEY_NUMPAD_MULTIPLY;
-        case XK_KP_Subtract:    return GFX_KEY_NUMPAD_SUBTRACT;
-        case XK_KP_Add:         return GFX_KEY_NUMPAD_ADD;
+        case XK_KP_Divide:      return WIN_KEY_NUMPAD_DIVIDE;
+        case XK_KP_Multiply:    return WIN_KEY_NUMPAD_MULTIPLY;
+        case XK_KP_Subtract:    return WIN_KEY_NUMPAD_SUBTRACT;
+        case XK_KP_Add:         return WIN_KEY_NUMPAD_ADD;
 
-        case XK_KP_Insert:      return GFX_KEY_NUMPAD_0;
-        case XK_KP_End:         return GFX_KEY_NUMPAD_1;
-        case XK_KP_Down:        return GFX_KEY_NUMPAD_2;
-        case XK_KP_Page_Down:   return GFX_KEY_NUMPAD_3;
-        case XK_KP_Left:        return GFX_KEY_NUMPAD_4;
-        case XK_KP_Begin:       return GFX_KEY_NUMPAD_5;
-        case XK_KP_Right:       return GFX_KEY_NUMPAD_6;
-        case XK_KP_Home:        return GFX_KEY_NUMPAD_7;
-        case XK_KP_Up:          return GFX_KEY_NUMPAD_8;
-        case XK_KP_Page_Up:     return GFX_KEY_NUMPAD_9;
-        case XK_KP_Delete:      return GFX_KEY_NUMPAD_DECIMAL;
-        case XK_KP_Enter:       return GFX_KEY_NUMPAD_ENTER;
+        case XK_KP_Insert:      return WIN_KEY_NUMPAD_0;
+        case XK_KP_End:         return WIN_KEY_NUMPAD_1;
+        case XK_KP_Down:        return WIN_KEY_NUMPAD_2;
+        case XK_KP_Page_Down:   return WIN_KEY_NUMPAD_3;
+        case XK_KP_Left:        return WIN_KEY_NUMPAD_4;
+        case XK_KP_Begin:       return WIN_KEY_NUMPAD_5;
+        case XK_KP_Right:       return WIN_KEY_NUMPAD_6;
+        case XK_KP_Home:        return WIN_KEY_NUMPAD_7;
+        case XK_KP_Up:          return WIN_KEY_NUMPAD_8;
+        case XK_KP_Page_Up:     return WIN_KEY_NUMPAD_9;
+        case XK_KP_Delete:      return WIN_KEY_NUMPAD_DECIMAL;
+        case XK_KP_Enter:       return WIN_KEY_NUMPAD_ENTER;
 
-        case XK_a:              return GFX_KEY_A;
-        case XK_b:              return GFX_KEY_B;
-        case XK_c:              return GFX_KEY_C;
-        case XK_d:              return GFX_KEY_D;
-        case XK_e:              return GFX_KEY_E;
-        case XK_f:              return GFX_KEY_F;
-        case XK_g:              return GFX_KEY_G;
-        case XK_h:              return GFX_KEY_H;
-        case XK_i:              return GFX_KEY_I;
-        case XK_j:              return GFX_KEY_J;
-        case XK_k:              return GFX_KEY_K;
-        case XK_l:              return GFX_KEY_L;
-        case XK_m:              return GFX_KEY_M;
-        case XK_n:              return GFX_KEY_N;
-        case XK_o:              return GFX_KEY_O;
-        case XK_p:              return GFX_KEY_P;
-        case XK_q:              return GFX_KEY_Q;
-        case XK_r:              return GFX_KEY_R;
-        case XK_s:              return GFX_KEY_S;
-        case XK_t:              return GFX_KEY_T;
-        case XK_u:              return GFX_KEY_U;
-        case XK_v:              return GFX_KEY_V;
-        case XK_w:              return GFX_KEY_W;
-        case XK_x:              return GFX_KEY_X;
-        case XK_y:              return GFX_KEY_Y;
-        case XK_z:              return GFX_KEY_Z;
-        case XK_1:              return GFX_KEY_1;
-        case XK_2:              return GFX_KEY_2;
-        case XK_3:              return GFX_KEY_3;
-        case XK_4:              return GFX_KEY_4;
-        case XK_5:              return GFX_KEY_5;
-        case XK_6:              return GFX_KEY_6;
-        case XK_7:              return GFX_KEY_7;
-        case XK_8:              return GFX_KEY_8;
-        case XK_9:              return GFX_KEY_9;
-        case XK_0:              return GFX_KEY_0;
-        case XK_space:          return GFX_KEY_SPACE;
-        case XK_minus:          return GFX_KEY_MINUS;
-        case XK_equal:          return GFX_KEY_EQUAL;
-        case XK_bracketleft:    return GFX_KEY_LBRACKET;
-        case XK_bracketright:   return GFX_KEY_RBRACKET;
-        case XK_backslash:      return GFX_KEY_BACKSLASH;
-        case XK_semicolon:      return GFX_KEY_SEMICOLON;
-        case XK_apostrophe:     return GFX_KEY_APOSTROPHE;
-        case XK_grave:          return GFX_KEY_BACKTICK;
-        case XK_comma:          return GFX_KEY_COMMA;
-        case XK_period:         return GFX_KEY_PERIOD;
-        case XK_slash:          return GFX_KEY_FORWARDSLASH;
-        default:                return GFX_KEY_NONE;
+        case XK_a:              return WIN_KEY_A;
+        case XK_b:              return WIN_KEY_B;
+        case XK_c:              return WIN_KEY_C;
+        case XK_d:              return WIN_KEY_D;
+        case XK_e:              return WIN_KEY_E;
+        case XK_f:              return WIN_KEY_F;
+        case XK_g:              return WIN_KEY_G;
+        case XK_h:              return WIN_KEY_H;
+        case XK_i:              return WIN_KEY_I;
+        case XK_j:              return WIN_KEY_J;
+        case XK_k:              return WIN_KEY_K;
+        case XK_l:              return WIN_KEY_L;
+        case XK_m:              return WIN_KEY_M;
+        case XK_n:              return WIN_KEY_N;
+        case XK_o:              return WIN_KEY_O;
+        case XK_p:              return WIN_KEY_P;
+        case XK_q:              return WIN_KEY_Q;
+        case XK_r:              return WIN_KEY_R;
+        case XK_s:              return WIN_KEY_S;
+        case XK_t:              return WIN_KEY_T;
+        case XK_u:              return WIN_KEY_U;
+        case XK_v:              return WIN_KEY_V;
+        case XK_w:              return WIN_KEY_W;
+        case XK_x:              return WIN_KEY_X;
+        case XK_y:              return WIN_KEY_Y;
+        case XK_z:              return WIN_KEY_Z;
+        case XK_1:              return WIN_KEY_1;
+        case XK_2:              return WIN_KEY_2;
+        case XK_3:              return WIN_KEY_3;
+        case XK_4:              return WIN_KEY_4;
+        case XK_5:              return WIN_KEY_5;
+        case XK_6:              return WIN_KEY_6;
+        case XK_7:              return WIN_KEY_7;
+        case XK_8:              return WIN_KEY_8;
+        case XK_9:              return WIN_KEY_9;
+        case XK_0:              return WIN_KEY_0;
+        case XK_space:          return WIN_KEY_SPACE;
+        case XK_minus:          return WIN_KEY_MINUS;
+        case XK_equal:          return WIN_KEY_EQUAL;
+        case XK_bracketleft:    return WIN_KEY_LBRACKET;
+        case XK_bracketright:   return WIN_KEY_RBRACKET;
+        case XK_backslash:      return WIN_KEY_BACKSLASH;
+        case XK_semicolon:      return WIN_KEY_SEMICOLON;
+        case XK_apostrophe:     return WIN_KEY_APOSTROPHE;
+        case XK_grave:          return WIN_KEY_BACKTICK;
+        case XK_comma:          return WIN_KEY_COMMA;
+        case XK_period:         return WIN_KEY_PERIOD;
+        case XK_slash:          return WIN_KEY_FORWARDSLASH;
+        default:                return WIN_KEY_NONE;
     }
 
-    return GFX_KEY_NONE;
+    return WIN_KEY_NONE;
 }
 
 

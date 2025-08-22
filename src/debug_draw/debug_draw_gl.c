@@ -17,7 +17,7 @@ static const char* _dd_circle_vert_source;
 static const char* _dd_circle_frag_source;
 
 static struct {
-    const gfx_window* win;
+    const win_window* win;
 
     mem_arena* arena;
 
@@ -27,7 +27,7 @@ static struct {
     mat3f view_mat;
 } _dd_state = { 0 };
 
-void debug_draw_init(const gfx_window* win) {
+void debug_draw_init(const win_window* win) {
     _dd_state.win = win;
     _dd_state.arena = arena_create(MiB(2), KiB(256), false);
 

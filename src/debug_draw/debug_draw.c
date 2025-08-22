@@ -1,4 +1,4 @@
-#if defined(GFX_API_OPENGL)
+#if defined(WIN_API_OPENGL)
 
 #include "debug_draw_gl.c"
 

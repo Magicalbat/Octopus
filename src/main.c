@@ -1,13 +1,13 @@
 #include "base/base.h"
 #include "platform/platform.h"
-#include "gfx/gfx.h"
+#include "win/win.h"
 #include "truetype/truetype.h"
 #include "pdf/pdf.h"
 #include "debug_draw/debug_draw.h"
 
 #include "base/base.c"
 #include "platform/platform.c"
-#include "gfx/gfx.c"
+#include "win/win.c"
 #include "truetype/truetype.c"
 #include "pdf/pdf.c"
 #include "debug_draw/debug_draw.c"
@@ -42,9 +42,9 @@ int main(int argc, char** argv) {
 
     return 0;*/
 
-    gfx_window* win = gfx_win_create(perm_arena, 800, 450, STR8_LIT("Octopus"));
-    gfx_win_make_current(win);
-    gfx_win_clear_color(win, (vec4f){ 0.1f, 0.1f, 0.25f, 1.0f });
+    win_window* win = window_create(perm_arena, 800, 450, STR8_LIT("Octopus"));
+    window_make_current(win);
+    window_clear_color(win, (vec4f){ 0.1f, 0.1f, 0.25f, 1.0f });
 
 #ifndef NDEBUG
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -89,17 +89,17 @@ int main(int argc, char** argv) {
         time += delta;
         prev_frame = cur_frame;
 
-        gfx_win_process_events(win);
+        window_process_events(win);
 
-        gfx_win_clear(win);
+        window_clear(win);
 
         debug_draw_set_view(&view);
 
         debug_draw_circles(points, num_points, 1.0f, (vec4f){ 1, 1, 1, 1 });
 
-        gfx_win_swap_buffers(win);
+        window_swap_buffers(win);
 
-        if (GFX_IS_KEY_DOWN(win, GFX_KEY_SPACE)) {
+        if (WIN_KEY_DOWN(win, WIN_KEY_SPACE)) {
             plat_sleep_ms(10);
         }
 
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
 
     debug_draw_destroy();
 
-    gfx_win_destroy(win);
+    window_destroy(win);
 
     arena_destroy(perm_arena);
 
