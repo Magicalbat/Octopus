@@ -94,7 +94,7 @@ void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) 
 
     // Calculating geom scale
     f32 screen_radius = radius * (f32)_dd_state.win->width / _dd_state.view_ref->width;
-    f32 geom_scale = 1.0f + sqrtf(2.0f) / screen_radius;
+    f32 geom_scale = 1.0f + 1.0f / screen_radius;
 
     glUseProgram(circles->shader_prog);
     glUniformMatrix3fv(circles->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);

@@ -7,7 +7,10 @@
 
 #endif
 
-#define GFX_MOUSE_POS_CACHE_MAX_SIZE 64
+// TODO: rename gfx to something else (window?)
+
+// Used for pen and touch caches
+#define GFX_MAX_POS_CACHE_SIZE 64
 
 typedef enum {
     GFX_MB_LEFT,
@@ -134,8 +137,6 @@ typedef struct {
 
     i32 mouse_scroll;
     vec2f mouse_pos;
-    u32 mouse_pos_cache_size; 
-    vec2f mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE];
     b8 mouse_buttons[GFX_MB_COUNT];
     b8 prev_mouse_buttons[GFX_MB_COUNT];
 

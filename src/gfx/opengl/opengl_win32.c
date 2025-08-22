@@ -190,8 +190,6 @@ void gfx_win_process_events(gfx_window* win) {
         return;
     }
 
-    win->mouse_pos_cache_size = 0;
-    memset(win->mouse_pos_cache, 0, sizeof(vec2f) * GFX_MOUSE_POS_CACHE_MAX_SIZE);
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, GFX_MB_COUNT);
     memcpy(win->prev_keys, win->keys, GFX_KEY_COUNT);
 
@@ -236,15 +234,6 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
         case WM_MOUSEMOVE: {
             win->mouse_pos.x = (f32)((l_param) & 0xffff);
             win->mouse_pos.y = (f32)((l_param >> 16) & 0xffff);
-
-            if (win->mouse_pos_cache_size < GFX_MOUSE_POS_CACHE_MAX_SIZE) {
-                    win->mouse_pos_cache[win->mouse_pos_cache_size++] = win->mouse_pos;
-            } else {
-                for (u32 i = 0; i < GFX_MOUSE_POS_CACHE_MAX_SIZE - 1; i++) {
-                    win->mouse_pos_cache[i] = win->mouse_pos_cache[i+1];
-                }
-                win->mouse_pos_cache[GFX_MOUSE_POS_CACHE_MAX_SIZE - 1] = win->mouse_pos;
-            }
         } break;
 
         case WM_LBUTTONDOWN: {
