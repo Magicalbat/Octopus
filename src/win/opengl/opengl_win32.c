@@ -190,6 +190,9 @@ void window_process_events(win_window* win) {
         return;
     }
 
+    win->num_pen_samples = 0;
+    memset(win->pen_samples, 0, sizeof(win_pen_sample) * WIN_PEN_CACHE_SIZE);
+
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
     memcpy(win->prev_keys, win->keys, WIN_KEY_COUNT);
 
@@ -231,6 +234,98 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
     win_window* win = (win_window*)GetWindowLongPtrW(wnd, GWLP_USERDATA);
 
     switch (msg) {
+        case WM_POINTERDOWN:
+        case WM_POINTERUP: 
+        case WM_POINTERUPDATE: {
+            u32 pointer_id = GET_POINTERID_WPARAM(w_param);
+            POINTER_INPUT_TYPE pointer_type = PT_POINTER;
+
+            if (!GetPointerType(pointer_id, &pointer_type)) {
+                break;
+            }
+
+            if (pointer_type == PT_PEN) {
+                if (win->num_pen_samples >= WIN_PEN_CACHE_SIZE) {
+                    break;
+                }
+
+                POINTER_PEN_INFO pen_info = { 0 };
+
+                if (!GetPointerPenInfo(pointer_id, &pen_info)) {
+                    break;
+                }
+
+                mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+                u32 history_count = pen_info.pointerInfo.historyCount;
+
+                POINTER_PEN_INFO* pen_infos = ARENA_PUSH_ARRAY(
+                    scratch.arena,
+                    POINTER_PEN_INFO,
+                    history_count
+                );
+
+                if (
+                    !GetPointerPenInfoHistory(pointer_id, &history_count, pen_infos) ||
+                    history_count != pen_info.pointerInfo.historyCount
+                ) {
+                    break;
+                }
+
+                if (win->num_pen_samples + history_count > WIN_PEN_CACHE_SIZE) {
+                    history_count = WIN_PEN_CACHE_SIZE - win->num_pen_samples;
+                }
+
+                for (i32 i = (i32)history_count-1; i >= 0; i--) {
+                    win_pen_sample cur_sample = { 
+                        .pressure = 1,
+                    };
+
+                    POINT win_pos = pen_infos[i].pointerInfo.ptPixelLocation;
+                    ScreenToClient(win->backend->window, &win_pos);
+
+                    cur_sample.pos.x = (f32)win_pos.x;
+                    cur_sample.pos.y = (f32)win_pos.y;
+
+                    if (pen_infos[i].penMask & PEN_MASK_PRESSURE) {
+                        cur_sample.pressure = (f32)pen_infos[i].pressure / 1024;
+                    }
+                    if (pen_infos[i].penMask & PEN_MASK_ROTATION) {
+                        cur_sample.rotation = (f32)pen_infos[i].rotation / 180.0f * (f32)PI;
+                    }
+                    if (pen_infos[i].penMask & PEN_MASK_TILT_X) {
+                        cur_sample.tilt.x = (f32)pen_infos[i].tiltX / 180.0f * (f32)PI;
+                    }
+                    if (pen_infos[i].penMask & PEN_MASK_TILT_Y) {
+                        cur_sample.tilt.y = (f32)pen_infos[i].tiltY / 180.0f * (f32)PI;
+                    }
+
+                    if (pen_infos[i].penFlags & PEN_FLAG_ERASER)
+                        cur_sample.flags |= WIN_PEN_FLAG_ERASER;
+
+                    POINTER_FLAGS flags = pen_infos[i].pointerInfo.pointerFlags;
+
+                    b32 in_range = flags & POINTER_FLAG_INRANGE;
+                    b32 in_contact = flags & POINTER_FLAG_INCONTACT;
+
+                    if (in_range && !in_contact)
+                        cur_sample.flags |= WIN_PEN_FLAG_HOVERING;
+                    if (in_contact)
+                        cur_sample.flags |= WIN_PEN_FLAG_DOWN;
+                    if (flags & POINTER_FLAG_DOWN)
+                        cur_sample.flags |= WIN_PEN_FLAG_JUST_DOWN;
+                    if (flags & POINTER_FLAG_UP)
+                        cur_sample.flags |= WIN_PEN_FLAG_JUST_UP;
+
+                    win->pen_samples[win->num_pen_samples++] = cur_sample;
+                }
+
+                win->last_pen_sample = win->pen_samples[win->num_pen_samples-1];
+
+                arena_scratch_release(scratch);
+            }
+        } break;
+
         case WM_MOUSEMOVE: {
             win->mouse_pos.x = (f32)((l_param) & 0xffff);
             win->mouse_pos.y = (f32)((l_param >> 16) & 0xffff);

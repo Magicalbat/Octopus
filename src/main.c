@@ -91,6 +91,20 @@ int main(int argc, char** argv) {
 
         window_process_events(win);
 
+        for (u32 i = 0; i < win->num_pen_samples; i++) {
+            win_pen_sample sample = win->pen_samples[i];
+
+            if (sample.flags & WIN_PEN_FLAG_DOWN) {
+                vec2f normalized_pos = {
+                    (2.0f * sample.pos.x - (f32)win->width) / (f32)win->width,
+                    -(2.0f * sample.pos.y - (f32)win->height) / (f32)win->height,
+                };
+                vec2f world_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
+
+                points[num_points++] = world_pos;
+            }
+        }
+
         window_clear(win);
 
         debug_draw_set_view(&view);

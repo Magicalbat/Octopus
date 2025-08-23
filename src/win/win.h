@@ -7,8 +7,31 @@
 
 #endif
 
-// Used for pen and touch caches
-#define WIN_MAX_POS_CACHE_SIZE 64
+#define WIN_PEN_CACHE_SIZE 64
+
+typedef enum {
+    WIN_PEN_FLAG_NONE      = 0b00000001,
+    WIN_PEN_FLAG_ERASER    = 0b00000010,
+    WIN_PEN_FLAG_HOVERING  = 0b00000100,
+    WIN_PEN_FLAG_DOWN      = 0b00001000,
+    WIN_PEN_FLAG_JUST_DOWN = 0b00010000,
+    WIN_PEN_FLAG_JUST_UP   = 0b00100000,
+} win_pen_flags;
+
+typedef struct {
+    vec2f pos;
+    // From 0 to 1
+    // If the pen does not support pressure,
+    // pressure will be 1 by default
+    f32 pressure;
+    // From 0 to 2pi
+    f32 rotation;
+    // From -pi/2 to +pi/2
+    vec2f tilt;
+
+    // See win_pen_flags enum
+    u32 flags;
+} win_pen_sample;
 
 typedef enum {
     WIN_MB_LEFT,
@@ -132,6 +155,14 @@ typedef struct {
     u32 width, height;
 
     b32 should_close;
+
+    win_pen_sample last_pen_sample;
+    // If num_pen_samples is 0,
+    // you can assume the pen is not hovering and not in contact
+    u32 num_pen_samples;
+    // pen_samples[0] is the oldest sample, and 
+    // pen_samples[num_pen_samples-1] is the newest
+    win_pen_sample pen_samples[WIN_PEN_CACHE_SIZE];
 
     i32 mouse_scroll;
     vec2f mouse_pos;
