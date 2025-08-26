@@ -11,5 +11,4 @@
 -include src/platform/platform.h
 -include src/win/win.h
 -include src/truetype/truetype.h
--include src/pdf/pdf.h
 -include src/debug_draw/debug_draw.h
