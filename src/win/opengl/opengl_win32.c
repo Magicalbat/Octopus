@@ -191,7 +191,26 @@ void window_process_events(win_window* win) {
     }
 
     win->num_pen_samples = 0;
-    memset(win->pen_samples, 0, sizeof(win_pen_sample) * WIN_PEN_CACHE_SIZE);
+    memset(win->pen_samples, 0, sizeof(win_pen_sample) * WIN_PEN_MAX_SAMPLES);
+
+    for (u32 i = 0; i < win->num_touches; i++) {
+        if (win->touches[i].cur_flag & WIN_TOUCH_FLAG_JUST_UP) {
+            // Remove this touch
+            for (u32 j = i; j < win->num_touches-1; j++) {
+                win->touches[j] = win->touches[j+1];
+            }
+
+            win->num_touches--;
+        }
+
+        if (win->touches[i].cur_flag & WIN_TOUCH_FLAG_JUST_DOWN) {
+            win->touches[i].cur_flag ^= WIN_TOUCH_FLAG_JUST_DOWN;
+        }
+
+        win->touches[i].num_samples = 0;
+        memset(win->touches[i].positions, 0, sizeof(vec2f) * WIN_TOUCH_MAX_SAMPLES);
+        memset(win->touches[i].flags, 0, sizeof(u8) * WIN_TOUCH_MAX_SAMPLES);
+    }
 
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
     memcpy(win->prev_keys, win->keys, WIN_KEY_COUNT);
@@ -245,7 +264,7 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
             }
 
             if (pointer_type == PT_PEN) {
-                if (win->num_pen_samples >= WIN_PEN_CACHE_SIZE) {
+                if (win->num_pen_samples >= WIN_PEN_MAX_SAMPLES) {
                     break;
                 }
 
@@ -269,11 +288,12 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
                     !GetPointerPenInfoHistory(pointer_id, &history_count, pen_infos) ||
                     history_count != pen_info.pointerInfo.historyCount
                 ) {
+                    arena_scratch_release(scratch);
                     break;
                 }
 
-                if (win->num_pen_samples + history_count > WIN_PEN_CACHE_SIZE) {
-                    history_count = WIN_PEN_CACHE_SIZE - win->num_pen_samples;
+                if (win->num_pen_samples + history_count > WIN_PEN_MAX_SAMPLES) {
+                    history_count = WIN_PEN_MAX_SAMPLES - win->num_pen_samples;
                 }
 
                 for (i32 i = (i32)history_count-1; i >= 0; i--) {
@@ -321,6 +341,78 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
                 }
 
                 win->last_pen_sample = win->pen_samples[win->num_pen_samples-1];
+
+                arena_scratch_release(scratch);
+            } else if (pointer_type == PT_TOUCH) {
+                POINTER_INFO pointer_info = { 0 };
+                
+                if (!GetPointerInfo(pointer_id, &pointer_info)) {
+                    break;
+                }
+
+                i32 touch_index = -1;
+                for (u32 i = 0; i < win->num_touches; i++) {
+                    if (win->touches[i].id == pointer_id) {
+                        touch_index = (i32)i;
+                        break;
+                    }
+                }
+
+                if (touch_index == -1) {
+                    if (win->num_touches >= WIN_MAX_TOUCHES) {
+                        break;
+                    }
+
+                    touch_index = (i32)(win->num_touches++);
+                    win->touches[touch_index].id = pointer_id;
+                }
+
+                win_touch_info* cur_touch = &win->touches[touch_index];
+
+                if (cur_touch->num_samples >= WIN_TOUCH_MAX_SAMPLES) {
+                    break;
+                }
+
+                u32 history_count = pointer_info.historyCount;
+
+                mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+                POINTER_INFO* infos = ARENA_PUSH_ARRAY(scratch.arena, POINTER_INFO, history_count);
+
+                if (
+                    !GetPointerInfoHistory(pointer_id, &history_count, infos) ||
+                    history_count != pointer_info.historyCount
+                ) {
+                    arena_scratch_release(scratch);
+                    break;
+                }
+
+                if (cur_touch->num_samples + history_count > WIN_TOUCH_MAX_SAMPLES) {
+                    history_count = WIN_TOUCH_MAX_SAMPLES - cur_touch->num_samples;
+                }
+
+                for (i32 i = (i32)history_count - 1; i >= 0; i--) {
+                    POINT win_pos = infos[i].ptPixelLocation;
+                    ScreenToClient(win->backend->window, &win_pos);
+
+                    vec2f cur_pos = { (f32)win_pos.x, (f32)win_pos.y };
+
+                    u8 cur_flags = 0;
+
+                    if (infos[i].pointerFlags & POINTER_FLAG_INCONTACT)
+                        cur_flags |= WIN_TOUCH_FLAG_DOWN;
+                    if (infos[i].pointerFlags & POINTER_FLAG_DOWN) 
+                        cur_flags |= WIN_TOUCH_FLAG_JUST_DOWN;
+                    if (infos[i].pointerFlags & POINTER_FLAG_UP)
+                        cur_flags |= WIN_TOUCH_FLAG_JUST_UP;
+
+                    u32 index = cur_touch->num_samples++;
+                    cur_touch->positions[index] = cur_pos;
+                    cur_touch->flags[index] = cur_flags;
+                }
+
+                cur_touch->cur_pos = cur_touch->positions[cur_touch->num_samples-1];
+                cur_touch->cur_flag = cur_touch->flags[cur_touch->num_samples-1];
 
                 arena_scratch_release(scratch);
             }
@@ -601,6 +693,12 @@ static b32 _w32_win_init(void) {
 
     if (_w32_instance == NULL) {
         error_emit("Failed to get module handle");
+        return false;
+    }
+
+    // TODO: make helpers to account for scaling
+    if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+        error_emit("Failed to set DPI awareness context");
         return false;
     }
 

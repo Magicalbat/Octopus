@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     return 0;*/
 
-    win_window* win = window_create(perm_arena, 800, 450, STR8_LIT("Octopus"));
+    win_window* win = window_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     window_make_current(win);
     window_clear_color(win, (vec4f){ 0.1f, 0.1f, 0.25f, 1.0f });
 
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 
         window_process_events(win);
 
-        for (u32 i = 0; i < win->num_pen_samples; i++) {
+        /*for (u32 i = 0; i < win->num_pen_samples; i++) {
             win_pen_sample sample = win->pen_samples[i];
 
             if (sample.flags & WIN_PEN_FLAG_DOWN) {
@@ -103,18 +103,32 @@ int main(int argc, char** argv) {
 
                 points[num_points++] = world_pos;
             }
+        }*/
+
+        for (u32 i = 0; i < win->num_touches; i++) {
+            for (u32 j = 0; j < win->touches[i].num_samples; j++) {
+                vec2f screen_pos = win->touches[i].positions[j];
+
+                vec2f normalized_pos = {
+                    (2.0f * screen_pos.x - (f32)win->width) / (f32)win->width,
+                    -(2.0f * screen_pos.y - (f32)win->height) / (f32)win->height,
+                };
+                vec2f world_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
+
+                points[num_points++] = world_pos;
+            }
         }
 
         window_clear(win);
 
         debug_draw_set_view(&view);
 
-        debug_draw_circles(points, num_points, 1.0f, (vec4f){ 1, 1, 1, 1 });
+        debug_draw_circles(points, num_points, 2.0f, (vec4f){ 1, 1, 1, 1 });
 
         window_swap_buffers(win);
 
         if (WIN_KEY_DOWN(win, WIN_KEY_SPACE)) {
-            plat_sleep_ms(10);
+            plat_sleep_ms((u32)(1000.0f/60.0f));
         }
 
         {

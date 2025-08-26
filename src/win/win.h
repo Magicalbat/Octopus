@@ -7,15 +7,18 @@
 
 #endif
 
-#define WIN_PEN_CACHE_SIZE 64
+#define WIN_PEN_MAX_SAMPLES 32
+
+#define WIN_MAX_TOUCHES 10
+#define WIN_TOUCH_MAX_SAMPLES 32
 
 typedef enum {
-    WIN_PEN_FLAG_NONE      = 0b00000001,
-    WIN_PEN_FLAG_ERASER    = 0b00000010,
-    WIN_PEN_FLAG_HOVERING  = 0b00000100,
-    WIN_PEN_FLAG_DOWN      = 0b00001000,
-    WIN_PEN_FLAG_JUST_DOWN = 0b00010000,
-    WIN_PEN_FLAG_JUST_UP   = 0b00100000,
+    WIN_PEN_FLAG_NONE      = 0b00000,
+    WIN_PEN_FLAG_ERASER    = 0b00001,
+    WIN_PEN_FLAG_HOVERING  = 0b00010,
+    WIN_PEN_FLAG_DOWN      = 0b00100,
+    WIN_PEN_FLAG_JUST_DOWN = 0b01000,
+    WIN_PEN_FLAG_JUST_UP   = 0b10000,
 } win_pen_flags;
 
 typedef struct {
@@ -32,6 +35,25 @@ typedef struct {
     // See win_pen_flags enum
     u32 flags;
 } win_pen_sample;
+
+typedef enum {
+    WIN_TOUCH_FLAG_NONE      = 0b000,
+    WIN_TOUCH_FLAG_DOWN      = 0b001,
+    WIN_TOUCH_FLAG_JUST_DOWN = 0b010,
+    WIN_TOUCH_FLAG_JUST_UP   = 0b100,
+} win_touch_flags;
+
+typedef struct {
+    u32 id;
+
+    vec2f cur_pos;
+    u32 cur_flag;
+
+    u32 num_samples;
+    // positions[0] and flags[0] are the oldest samples
+    vec2f positions[WIN_TOUCH_MAX_SAMPLES];
+    u8 flags[WIN_TOUCH_MAX_SAMPLES];
+} win_touch_info;
 
 typedef enum {
     WIN_MB_LEFT,
@@ -157,12 +179,13 @@ typedef struct {
     b32 should_close;
 
     win_pen_sample last_pen_sample;
-    // If num_pen_samples is 0,
-    // you can assume the pen is not hovering and not in contact
     u32 num_pen_samples;
     // pen_samples[0] is the oldest sample, and 
     // pen_samples[num_pen_samples-1] is the newest
-    win_pen_sample pen_samples[WIN_PEN_CACHE_SIZE];
+    win_pen_sample pen_samples[WIN_PEN_MAX_SAMPLES];
+
+    u32 num_touches;
+    win_touch_info touches[WIN_MAX_TOUCHES];
 
     i32 mouse_scroll;
     vec2f mouse_pos;
