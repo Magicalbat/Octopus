@@ -12,6 +12,8 @@
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param);
 
+vec2f screen_to_world(vec2f screen_pos, const win_window* win, const mat3f inv_view_mat);
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -63,6 +65,11 @@ int main(int argc, char** argv) {
     u32 num_points = 0;
     vec2f* points = ARENA_PUSH_ARRAY(perm_arena, vec2f, max_points);
 
+    i64 motion0_touch_id = -1;
+    vec2f motion0_touch_pos = { 0 };
+    i64 motion1_touch_id = -1;
+    f32 motion01_dist = 0.0f;
+
     f64 time = 0.0f;
     u64 prev_frame = plat_time_usec();
     while (!win->should_close) {
@@ -75,31 +82,73 @@ int main(int argc, char** argv) {
 
         window_process_events(win);
 
-        /*for (u32 i = 0; i < win->num_pen_samples; i++) {
+        // Establish primary motion touch
+        if (win->num_touches > 0 && motion0_touch_id == -1) {
+            motion0_touch_id = win->touches[0].id;
+            motion0_touch_pos = screen_to_world(win->touches[0].cur_pos, win, inv_view_mat);
+        }
+
+        // Establish secondary motion touch
+        if (win->num_touches > 1 && motion0_touch_id != -1 && motion1_touch_id == -1) {
+            u32 index = 0;
+            while (win->touches[index].id == motion0_touch_id) {
+                index++;
+            }
+
+            motion1_touch_id = win->touches[index].id;
+            vec2f touch1_pos = screen_to_world(win->touches[index].cur_pos, win, inv_view_mat);
+
+            motion01_dist = vec2f_dist(motion0_touch_pos, touch1_pos);
+        }
+
+        if (motion0_touch_id >= 0) {
+            i64 index0 = -1;
+            for (u32 i = 0; i < win->num_touches; i++) {
+                if (win->touches[i].id == motion0_touch_id) {
+                    index0 = i;
+                    break;
+                }
+            }
+
+            if (index0 == -1) {
+                motion0_touch_id = -1;
+                motion1_touch_id = -1;
+            } else {
+                vec2f cur_pos0 = screen_to_world(win->touches[index0].cur_pos, win, inv_view_mat);
+
+                vec2f diff = vec2f_sub(motion0_touch_pos, cur_pos0);
+
+                view.center = vec2f_add(view.center, diff);
+
+                if (motion1_touch_id >= 0) {
+                    i64 index1 = -1;
+                    for (u32 i = 0; i < win->num_touches; i++) {
+                        if (win->touches[i].id == motion1_touch_id) {
+                            index1 = i;
+                            break;
+                        }
+                    }
+
+                    if (index1 == -1) {
+                        motion1_touch_id = -1;
+                    } else {
+                        vec2f cur_pos1 = screen_to_world(win->touches[index1].cur_pos, win, inv_view_mat);
+                        f32 cur_dist = vec2f_dist(cur_pos0, cur_pos1);
+
+                        view.width *= motion01_dist / cur_dist;
+                    }
+                }
+            }
+        }
+        
+        mat3f_from_view(&view_mat, view);
+        mat3f_from_inv_view(&inv_view_mat, view);
+
+        for (u32 i = 0; i < win->num_pen_samples; i++) {
             win_pen_sample sample = win->pen_samples[i];
 
             if (sample.flags & WIN_PEN_FLAG_DOWN) {
-                vec2f normalized_pos = {
-                    (2.0f * sample.pos.x - (f32)win->width) / (f32)win->width,
-                    -(2.0f * sample.pos.y - (f32)win->height) / (f32)win->height,
-                };
-                vec2f world_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
-
-                points[num_points++] = world_pos;
-            }
-        }*/
-
-        for (u32 i = 0; i < win->num_touches; i++) {
-            for (u32 j = 0; j < win->touches[i].num_samples; j++) {
-                vec2f screen_pos = win->touches[i].positions[j];
-
-                vec2f normalized_pos = {
-                    (2.0f * screen_pos.x - (f32)win->width) / (f32)win->width,
-                    -(2.0f * screen_pos.y - (f32)win->height) / (f32)win->height,
-                };
-                vec2f world_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
-
-                points[num_points++] = world_pos;
+                points[num_points++] = screen_to_world(sample.pos, win, inv_view_mat);
             }
         }
 
@@ -131,6 +180,17 @@ int main(int argc, char** argv) {
     arena_destroy(perm_arena);
 
     return 0;
+}
+
+vec2f screen_to_world(vec2f screen_pos, const win_window* win, const mat3f inv_view_mat) {
+    vec2f normalized_pos = {
+        (2.0f * screen_pos.x - (f32)win->width) / (f32)win->width,
+        -(2.0f * screen_pos.y - (f32)win->height) / (f32)win->height,
+    };
+
+    vec2f world_pos = mat3f_mul_vec2f(&inv_view_mat, normalized_pos);
+
+    return world_pos;
 }
 
 void gl_on_error(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param) {
