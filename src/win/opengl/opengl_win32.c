@@ -14,6 +14,8 @@ typedef struct _win_backend {
 #   include "opengl_funcs_xlist.h"
 #undef X
 
+static u64 _w32_win_ticks_per_sec = 1;
+
 static win_key _w32_keymap[256] = { 0 };
 
 static wglChoosePixelFormatARB_func* wglChoosePixelFormatARB = NULL;
@@ -190,6 +192,7 @@ void window_process_events(win_window* win) {
         return;
     }
 
+    // Clearing old event info
     win->num_pen_samples = 0;
     memset(win->pen_samples, 0, sizeof(win_pen_sample) * WIN_PEN_MAX_SAMPLES);
 
@@ -217,6 +220,7 @@ void window_process_events(win_window* win) {
 
     win->mouse_scroll = 0;
 
+    // Processing events
     MSG msg = { 0 };
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
@@ -299,6 +303,9 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
                 for (i32 i = (i32)history_count-1; i >= 0; i--) {
                     win_pen_sample cur_sample = { 
                         .pressure = 1,
+
+                        .time_us = pen_infos[i].pointerInfo.PerformanceCount *
+                            1000000 / _w32_win_ticks_per_sec
                     };
 
                     POINT win_pos = pen_infos[i].pointerInfo.ptPixelLocation;
@@ -407,6 +414,7 @@ static LRESULT CALLBACK _w32_window_proc(HWND wnd, UINT msg, WPARAM w_param, LPA
                         cur_flags |= WIN_TOUCH_FLAG_JUST_UP;
 
                     u32 index = cur_touch->num_samples++;
+
                     cur_touch->positions[index] = cur_pos;
                     cur_touch->flags[index] = cur_flags;
                 }
@@ -598,10 +606,10 @@ static void _w32_init_keymap(void) {
     _w32_keymap[VK_NEXT] = WIN_KEY_PAGEDOWN;
     _w32_keymap[VK_END] = WIN_KEY_END;
     _w32_keymap[VK_HOME] = WIN_KEY_HOME;
-    _w32_keymap[VK_LEFT] = WIN_KEY_LEFT;
-    _w32_keymap[VK_UP] = WIN_KEY_UP;
-    _w32_keymap[VK_RIGHT] = WIN_KEY_RIGHT;
-    _w32_keymap[VK_DOWN] = WIN_KEY_DOWN;
+    _w32_keymap[VK_LEFT] = WIN_KEY_ARROW_LEFT;
+    _w32_keymap[VK_UP] = WIN_KEY_ARROW_UP;
+    _w32_keymap[VK_RIGHT] = WIN_KEY_ARROW_RIGHT;
+    _w32_keymap[VK_DOWN] = WIN_KEY_ARROW_DOWN;
     _w32_keymap[VK_INSERT] = WIN_KEY_INSERT;
     _w32_keymap[VK_DELETE] = WIN_KEY_DELETE;
     _w32_keymap[0x30] = WIN_KEY_0;
@@ -694,6 +702,11 @@ static b32 _w32_win_init(void) {
     if (_w32_instance == NULL) {
         error_emit("Failed to get module handle");
         return false;
+    }
+
+    LARGE_INTEGER perf_freq = { 0 };
+    if (QueryPerformanceFrequency(&perf_freq)) {
+        _w32_win_ticks_per_sec = (u64)perf_freq.QuadPart;
     }
 
     // TODO: make helpers to account for scaling

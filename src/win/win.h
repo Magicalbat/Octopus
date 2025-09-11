@@ -32,6 +32,8 @@ typedef struct {
     // From -pi/2 to +pi/2
     vec2f tilt;
 
+    u64 time_us;
+
     // See win_pen_flags enum
     u32 flags;
 } win_pen_sample;
@@ -50,7 +52,7 @@ typedef struct {
     u32 cur_flag;
 
     u32 num_samples;
-    // positions[0] and flags[0] are the oldest samples
+    // Samples at index 0 are the oldest samples
     vec2f positions[WIN_TOUCH_MAX_SAMPLES];
     u8 flags[WIN_TOUCH_MAX_SAMPLES];
 } win_touch_info;
@@ -77,10 +79,10 @@ typedef enum {
     WIN_KEY_PAGEDOWN,
     WIN_KEY_END,
     WIN_KEY_HOME,
-    WIN_KEY_LEFT,
-    WIN_KEY_UP,
-    WIN_KEY_RIGHT,
-    WIN_KEY_DOWN,
+    WIN_KEY_ARROW_LEFT,
+    WIN_KEY_ARROW_UP,
+    WIN_KEY_ARROW_RIGHT,
+    WIN_KEY_ARROW_DOWN,
     WIN_KEY_INSERT,
     WIN_KEY_DELETE,
     WIN_KEY_NUMPAD_0,
