@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
             1, 0,
             0, -1
         } },
-        (vec2f){ 0, 0 }
+        (vec2f){ 0, 500 }
     );
 
     u32 max_points = 4096;
@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
 
         glUseProgram(sdf_shader_prog);
         glUniformMatrix3fv(sdf_view_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform1f(sdf_dist_radius_loc, 50.0f);
+        glUniform1f(sdf_dist_radius_loc, 10.0f);
 
         glBindVertexArray(sdf_vert_array);
 
@@ -265,7 +265,13 @@ int main(int argc, char** argv) {
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f) * 3, (void*)(sizeof(vec2f)));
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f) * 3, (void*)(sizeof(vec2f) * 2));
 
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
+        glDepthFunc(GL_LEQUAL);
+
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 6, (GLsizei)num_bez_segments);
+
+        glDisable(GL_DEPTH_TEST);
 
         glVertexAttribDivisor(0, 0);
         glVertexAttribDivisor(1, 0);
@@ -350,12 +356,16 @@ static const char* sdf_vert_source = GLSL_SOURCE(
     uniform float u_dist_radius;
     uniform mat3 u_view_mat;
 
+    flat out float dist_scale;
+
     out vec2 world_pos;
     flat out vec2 p0;
     flat out vec2 p1;
     flat out vec2 p2;
 
     void main() {
+        dist_scale = 1.0 / u_dist_radius;
+
         p0 = a_p0;
         p1 = a_p1;
         p2 = a_p2;
@@ -387,7 +397,7 @@ static const char* sdf_frag_source = GLSL_SOURCE(
 
     layout (location = 0) out vec4 out_col;
 
-    uniform float u_dist_radius;
+    flat in float dist_scale;
 
     in vec2 world_pos;
     flat in vec2 p0;
@@ -459,9 +469,10 @@ static const char* sdf_frag_source = GLSL_SOURCE(
         //float alpha = smoothstep(blending, -blending, dist);
         //out_col = vec4(1, 1, 1, max(alpha, 0.1));
 
-        float dist = res / u_dist_radius;
+        float dist = min(1.0, sqrt(res) * dist_scale);
+        gl_FragDepth = dist;
         float col = 1.0 - dist;
-        out_col = vec4(vec3(col), max(0.25, col));
+        out_col = vec4(vec3(col), 1.0);
     }
 );
 

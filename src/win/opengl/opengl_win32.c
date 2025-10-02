@@ -233,7 +233,6 @@ void window_clear_color(win_window* win, vec4f col) {
         return;
     }
 
-
     glClearColor(col.x, col.y, col.z, col.w);
 }
 
@@ -242,7 +241,7 @@ void window_clear(win_window* win) {
         return;
     }
 
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void window_swap_buffers(win_window* win) { 
