@@ -1,6 +1,4 @@
 bin
-bin-int
-compile_commands.json
-.cache
+compile_flags.txt
 res
 

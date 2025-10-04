@@ -1,5 +1,5 @@
 -m64
--std=c17
+-std=c11
 -Wall
 -Wextra
 -pedantic
