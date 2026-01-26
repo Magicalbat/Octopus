@@ -1,3 +1,4 @@
+
 CC = clang
 CFLAGS = -m64 -std=c11 -Isrc
 DEBUG_CFLAGS = -DDEBUG -g -O0 -fsanitize=address

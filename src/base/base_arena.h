@@ -1,44 +1,52 @@
-#define ARENA_NUM_SCRATCH 2
-#define ARENA_SCRATCH_RESERVE_SIZE MiB(64)
-#define ARENA_SCRATCH_COMMIT_SIZE KiB(256)
 
-#define ARENA_PUSH(arena, T) (T*)arena_push((arena), sizeof(T))
-#define ARENA_PUSH_NZ(arena, T) (T*)arena_push_no_zero((arena), sizeof(T))
-#define ARENA_PUSH_ARRAY(arena, T, num) (T*)arena_push((arena), sizeof(T) * (u64)(num))
-#define ARENA_PUSH_ARRAY_NZ(arena, T, num) (T*)arena_push_no_zero((arena), sizeof(T) * (u64)(num))
+#define ARENA_HEADER_SIZE (sizeof(mem_arena))
+#define ARENA_ALIGN (2 * sizeof(void*))
+
+#define ARENA_NUM_SCRATCH 2
+#define ARENA_SCRATCH_RESERVE MiB(64)
+#define ARENA_SCRATCH_COMMIT KiB(64)
+
+typedef enum {
+    ARENA_FLAG_NONE = 0,
+    ARENA_FLAG_GROWABLE = (1 << 0),
+    ARENA_FLAG_DECOMMIT = (1 << 1),
+} mem_arena_flag;
 
 typedef struct mem_arena {
-    struct mem_arena* prev;
     struct mem_arena* current;
+    struct mem_arena* prev;
 
-    // Both of these are rounded up to be powers of two
     u64 reserve_size;
-    // Memory is commited in factors of block_size
-    u64 block_size;
-
-    // Do not access these directly, use arena_get_pos instead
-    u64 base_pos;
-    u64 pos;
     u64 commit_size;
 
-    b32 chained;
+    u64 base_pos;
+    u64 pos;
+    u64 commit_pos;
+
+    u32 flags;
 } mem_arena;
 
 typedef struct {
     mem_arena* arena;
-    u64 pos;
+    u64 start_pos;
 } mem_arena_temp;
 
-mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size, b32 chained);
+#define PUSH_STRUCT(arena, T) (T*)arena_push((arena), sizeof(T), false)
+#define PUSH_STRUCT_NZ(arena, T) (T*)arena_push((arena), sizeof(T), true)
+#define PUSH_ARRAY(arena, T, n) (T*)arena_push((arena), sizeof(T) * (u64)(n), false)
+#define PUSH_ARRAY_NZ(arena, T, n) (T*)arena_push((arena), sizeof(T) * (u64)(n), true)
+
+mem_arena* arena_create(u64 reserve_size, u64 commit_size, u32 flags);
 void arena_destroy(mem_arena* arena);
 u64 arena_get_pos(mem_arena* arena);
-void* arena_push_no_zero(mem_arena* arena, u64 size);
-void* arena_push(mem_arena* arena, u64 size);
+void* arena_push(mem_arena* arena, u64 size, b32 non_zero);
+void arena_pop(mem_arena* arena, u64 size);
 void arena_pop_to(mem_arena* arena, u64 pos);
-void arena_pop(mem_arena* arena, u64 amount);
+void arena_clear(mem_arena* arena);
 
 mem_arena_temp arena_temp_begin(mem_arena* arena);
-void arena_temp_end(mem_arena_temp temp_arena);
+void arena_temp_end(mem_arena_temp temp);
 
 mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts);
 void arena_scratch_release(mem_arena_temp scratch);
+

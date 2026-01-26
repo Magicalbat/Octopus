@@ -1,4 +1,3 @@
-#ifdef PLATFORM_LINUX
 
 void plat_init(void) { }
 
@@ -6,9 +5,9 @@ string8 plat_get_name(void) {
     return STR8_LIT("linux");
 }
 
-void plat_fatal_error(const char* msg) {
+void plat_fatal_error(const char* msg, i32 code) {
     fprintf(stderr, "\x1b[31mFatal Error: %s\x1b[0m\n", msg);
-    exit(1);
+    exit(code);
 }
 
 u64 plat_time_usec(void) {
@@ -74,7 +73,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     mem_arena_temp maybe_temp = arena_temp_begin(arena);
 
     out.size = (u64)file_stats.st_size;
-    out.str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, out.size);
+    out.str = PUSH_ARRAY(maybe_temp.arena, u8, out.size);
 
     u64 str_pos = 0;
 
@@ -184,9 +183,7 @@ void plat_mem_release(void* mem, u64 size) {
     munmap(mem, size);
 }
 
-u32 plat_mem_page_size(void) {
+u32 plat_page_size(void) {
     return (u32)sysconf(_SC_PAGESIZE);
 }
-
-#endif // PLATFORM_LINUX
 

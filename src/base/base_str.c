@@ -14,7 +14,7 @@ string8 str8_from_cstr(u8* cstr) {
 }
 
 string8 str8_copy(mem_arena* arena, string8 str) {
-    u8* data = ARENA_PUSH_ARRAY_NZ(arena, u8, str.size);
+    u8* data = PUSH_ARRAY_NZ(arena, u8, str.size);
     memcpy(data, str.str, str.size);
     return (string8){ data, str.size };
 }
@@ -22,7 +22,7 @@ string8 str8_copy(mem_arena* arena, string8 str) {
 u8* str8_to_cstr(mem_arena* arena, string8 str) {
     // out is automatically filled with zeros,
     // so I do not have to explicitly set the null terminator
-    u8* out = ARENA_PUSH_ARRAY(arena, u8, str.size + 1);
+    u8* out = PUSH_ARRAY(arena, u8, str.size + 1);
     memcpy(out, str.str, str.size);
     return out;
 }
@@ -108,7 +108,7 @@ string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
     out.size = (u64)size;
     // +1 is because vsnprintf HAS to add a null terminator
     // Very dumb, but necessary
-    out.str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, size + 1);
+    out.str = PUSH_ARRAY(maybe_temp.arena, u8, size + 1);
 
     if (size != vsnprintf((char*)out.str, (u64)size + 1, fmt, args2)) {
         arena_temp_end(maybe_temp);
@@ -139,7 +139,7 @@ void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
 
     if (list->last == NULL || list->last->size == STR8_LIST_BUCKET_SIZE) {
         // Need to create a new bucket
-        string8_bucket* bucket = ARENA_PUSH(arena, string8_bucket);
+        string8_bucket* bucket = PUSH_STRUCT(arena, string8_bucket);
 
         SLL_PUSH_BACK(list->first, list->last, bucket);
     }
@@ -159,7 +159,7 @@ string8 str8_concat(mem_arena* arena, const string8_list* list) {
     }
 
     string8 out = {
-        .str = ARENA_PUSH_ARRAY(arena, u8, list->total_length),
+        .str = PUSH_ARRAY(arena, u8, list->total_length),
         .size = list->total_length,
     };
     u64 pos = 0;
@@ -307,7 +307,7 @@ u32 utf16_encode(u32 codepoint, u16* out) {
 
 string8 str8_from_str16(mem_arena* arena, string16 str, b32 null_terminate) {
     u64 max_size = str.size * 3 + (null_terminate ? 1 : 0);
-    u8* out = ARENA_PUSH_ARRAY(arena, u8, max_size);
+    u8* out = PUSH_ARRAY(arena, u8, max_size);
 
     u64 out_size = 0;
     u64 offset = 0;
@@ -332,7 +332,7 @@ string8 str8_from_str16(mem_arena* arena, string16 str, b32 null_terminate) {
 
 string16 str16_from_str8(mem_arena* arena, string8 str, b32 null_terminate) {
     u64 max_size = str.size + (null_terminate ? 1 : 0);
-    u16* out = ARENA_PUSH_ARRAY(arena, u16, max_size);
+    u16* out = PUSH_ARRAY(arena, u16, max_size);
 
     u64 out_size = 0;
     u64 offset = 0;

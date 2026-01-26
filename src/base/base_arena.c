@@ -1,193 +1,220 @@
-#define ARENA_ALIGN (sizeof(void*))
 
-static u64 round_up_pow2(u64 n) {
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n |= n >> 32;
-    n++;
 
-    return n;
-}
+mem_arena* arena_create(u64 reserve_size, u64 commit_size, u32 flags) {
+    u32 page_size = plat_page_size();
 
-mem_arena* arena_create(u64 desired_reserve_size, u64 desired_block_size, b32 chained) {
-    if (desired_reserve_size < MiB(1)) {
-        desired_reserve_size += sizeof(mem_arena);
+    reserve_size = ALIGN_UP_POW2(reserve_size, page_size);
+    commit_size = ALIGN_UP_POW2(commit_size, page_size);
+
+    mem_arena* arena = plat_mem_reserve(reserve_size);
+
+    if (plat_mem_commit(arena, commit_size) == false) {
+        arena = NULL;
     }
 
-    u32 page_size = plat_mem_page_size();
-    u64 block_size = round_up_pow2(ALIGN_UP_POW2(desired_block_size, page_size));
-    u64 reserve_size = round_up_pow2(desired_reserve_size);
-    mem_arena* out = plat_mem_reserve(reserve_size);
-
-    u64 base_commit = ALIGN_UP_POW2(sizeof(mem_arena), block_size);
-
-    if (out == NULL || !plat_mem_commit(out, base_commit)) {
-        plat_fatal_error("Failed to allocate memory for arena");
-
-        return NULL;
+    if (arena == NULL) {
+        plat_fatal_error("Fatal error: unable to commit memory for arena", 1);
     }
 
-    memset(out, 0, sizeof(mem_arena));
+    // TODO: ASAN stuff for memory
 
-    out->current = out;
-    out->reserve_size = reserve_size;
-    out->block_size = block_size;
-    out->pos = sizeof(mem_arena);
-    out->commit_size = base_commit;
-    out->chained = chained;
+    arena->current = arena;
+    arena->prev = NULL;
 
-    return out;
+    arena->reserve_size = reserve_size;
+    arena->commit_size = commit_size;
+
+    arena->flags = flags;
+
+    arena->base_pos = 0;
+    arena->pos = ARENA_HEADER_SIZE;
+    arena->commit_pos = commit_size;
+
+    return arena;
 }
+
 void arena_destroy(mem_arena* arena) {
     mem_arena* current = arena->current;
 
-    for (mem_arena* node = current, *prev = NULL; node != NULL; node = prev) {
-        prev = node->prev;
-        plat_mem_release(node, node->reserve_size);
+    while (current != NULL) {
+        mem_arena* prev = current->prev;
+        plat_mem_release(current, current->reserve_size);
+
+        current = prev;
     }
 }
+
 u64 arena_get_pos(mem_arena* arena) {
-    mem_arena* current = arena->current;
-
-    return current->base_pos + current->pos;
+    return arena->current->base_pos + arena->current->pos;
 }
 
-void* arena_push_no_zero(mem_arena* arena, u64 size) {
+void* arena_push(mem_arena* arena, u64 size, b32 non_zero) {
+    void* out = NULL;
+
     mem_arena* current = arena->current;
 
-    // Fast path
     u64 pos_aligned = ALIGN_UP_POW2(current->pos, ARENA_ALIGN);
-    u64 new_pos = pos_aligned + size;
-    void* out = (u8*)current + pos_aligned;
-
-    if (new_pos <= current->commit_size) {
-        current->pos = new_pos;
-        return out;
-    }
-
-    out = NULL;
-
-    // Need a new arena?
-    if (new_pos > current->reserve_size) {
-        if (!arena->chained) {
-            goto fail;
-        }
-
-        mem_arena* new_arena = arena_create(
-            // Make sure there is enough space in this arena
-            ALIGN_UP_POW2(size + sizeof(mem_arena), current->reserve_size),
-            current->block_size, true
-        );
-
-        if (new_arena == NULL) {
-            goto fail;
-        }
-
-        new_arena->base_pos = current->base_pos + current->reserve_size;
-        new_arena->prev = current;
-        current = new_arena;
-        arena->current = new_arena;
-
-        pos_aligned = ALIGN_UP_POW2(current->pos, ARENA_ALIGN);
-        new_pos = pos_aligned + size;
-    }
-
-    u64 new_commit_size = ALIGN_UP_POW2(new_pos, current->block_size);
-    new_commit_size = MIN(new_commit_size, current->reserve_size);
-    if (!plat_mem_commit((u8*)current + current->commit_size, new_commit_size - current->commit_size)) {
-        goto fail;
-    }
-
     out = (u8*)current + pos_aligned;
-    current->pos = new_pos;
-    current->commit_size = new_commit_size;
+    u64 new_pos = pos_aligned + size;
 
-    if (out != NULL) {
-        return out;
+    if (new_pos > current->reserve_size) {
+        out = NULL;
+
+        if (arena->flags & ARENA_FLAG_GROWABLE) {
+            u64 reserve_size = arena->reserve_size;
+            u64 commit_size = arena->commit_size;
+
+            if (size + ARENA_HEADER_SIZE > reserve_size) {
+                u32 page_size = plat_page_size();
+
+                reserve_size = ALIGN_UP_POW2(
+                    size + ARENA_HEADER_SIZE, page_size
+                );
+            }
+
+            mem_arena* new_arena = arena_create(
+                reserve_size, commit_size, arena->flags
+            );
+            new_arena->base_pos = current->base_pos + current->reserve_size;
+
+            mem_arena* prev_cur = current;
+            current = new_arena;
+            current->prev = prev_cur;
+            arena->current = current;
+
+            pos_aligned = ALIGN_UP_POW2(current->pos, ARENA_ALIGN);
+            out = (u8*)current + pos_aligned;
+            new_pos = pos_aligned + size;
+        }
     }
 
-fail:
-    plat_fatal_error("Failed to allocate memory");
-    return NULL;
-}
-void* arena_push(mem_arena* arena, u64 size) {
-    void* out = arena_push_no_zero(arena, size);
+    if (new_pos > current->commit_pos) {
+        u64 new_commit_pos = new_pos;
+        new_commit_pos += current->commit_size - 1;
+        new_commit_pos -= new_commit_pos % current->commit_size;
+        new_commit_pos = MIN(new_commit_pos, current->reserve_size);
 
-    if (out != NULL) {
+        u64 commit_size = new_commit_pos - current->commit_pos;
+
+        u8* commit_pointer = (u8*)current + current->commit_pos;
+
+        if (!plat_mem_commit(commit_pointer, commit_size)) {
+            out = NULL;
+        } else {
+            current->commit_pos = new_commit_pos;
+        }
+    }
+
+    if (out == NULL) {
+        plat_fatal_error("Fatal error: failed to allocate memory on arena", 1);
+    }
+
+    current->pos = new_pos;
+
+    if (!non_zero) {
         memset(out, 0, size);
     }
 
     return out;
 }
-void arena_pop_to(mem_arena* arena, u64 pos) {
-    if (pos >= arena_get_pos(arena)) {
-        return;
-    }
+
+void arena_pop(mem_arena* arena, u64 size) {
+    size = MIN(size, arena_get_pos(arena));
 
     mem_arena* current = arena->current;
+    while (current != NULL && size > current->pos) {
+        mem_arena* prev = current->prev;
 
-    while (pos < current->base_pos) {
-        mem_arena* old_cur = current;
-        current = current->prev;
-        plat_mem_release(old_cur, old_cur->reserve_size);
+        size -= current->pos;
+        plat_mem_release(current, current->reserve_size);
+
+        current = prev;
     }
 
     arena->current = current;
 
-    u64 local_pos = pos - current->base_pos;
-    local_pos = MAX(sizeof(mem_arena), local_pos);
-    current->pos = local_pos;
+    size = MIN(current->pos - ARENA_HEADER_SIZE, size);
+    current->pos -= size;
+
+    if (arena->flags & ARENA_FLAG_DECOMMIT) {
+        u64 required_commit_pos = current->pos + current->commit_size - 1;
+        required_commit_pos -= required_commit_pos % current->commit_size;
+
+        if (required_commit_pos < arena->commit_pos) {
+            u8* commit_pointer = (u8*)current + required_commit_pos;
+
+            if (!plat_mem_decommit(
+                commit_pointer, arena->commit_pos - required_commit_pos
+            )) {
+                plat_fatal_error(
+                    "Fatal error: failed to decommit arena memory", 1
+                );
+            }
+
+            arena->commit_pos = required_commit_pos;
+        }
+    }
 }
-void arena_pop(mem_arena* arena, u64 amount) {
+
+void arena_pop_to(mem_arena* arena, u64 pos) {
     u64 cur_pos = arena_get_pos(arena);
-    u64 set_pos = amount > cur_pos ? 0 : cur_pos - amount;
-    arena_pop_to(arena, set_pos);
+    
+    pos = MIN(pos, cur_pos);
+
+    arena_pop(arena, cur_pos - pos);
+}
+
+void arena_clear(mem_arena* arena) {
+    arena_pop_to(arena, ARENA_HEADER_SIZE);
 }
 
 mem_arena_temp arena_temp_begin(mem_arena* arena) {
     return (mem_arena_temp) {
         .arena = arena,
-        .pos = arena_get_pos(arena)
+        .start_pos = arena_get_pos(arena)
     };
 }
-void arena_temp_end(mem_arena_temp temp_arena) {
-    arena_pop_to(temp_arena.arena, temp_arena.pos);
+
+void arena_temp_end(mem_arena_temp temp) {
+    arena_pop_to(temp.arena, temp.start_pos);
 }
 
-static THREAD_LOCAL mem_arena* scratch_pool[ARENA_NUM_SCRATCH] = { NULL, NULL };
+static THREAD_LOCAL mem_arena* scratch_arenas[2] = { 0 };
 
 mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts) {
     i32 scratch_index = -1;
-    for (u32 i = 0; i < ARENA_NUM_SCRATCH; i++) {
-        b32 conflict = false;
+
+    for (i32 i = 0; i < 2; i++) {
+        b32 conflict_found = false;
 
         for (u32 j = 0; j < num_conflicts; j++) {
-            if (scratch_pool[i] == conflicts[j]) {
-                conflict = true;
+            if (scratch_arenas[i] == conflicts[j]) {
+                conflict_found = true;
                 break;
             }
         }
 
-        if (!conflict) {
-            scratch_index = (i32)i;
+        if (!conflict_found) {
+            scratch_index = i;
             break;
         }
     }
 
     if (scratch_index == -1) {
-        return (mem_arena_temp){ NULL, 0 };
+        return (mem_arena_temp){ 0 };
     }
 
-    if (scratch_pool[scratch_index] == NULL) {
-        scratch_pool[scratch_index] = arena_create(ARENA_SCRATCH_RESERVE_SIZE, ARENA_SCRATCH_COMMIT_SIZE, true);
+    if (scratch_arenas[scratch_index] == NULL) {
+        scratch_arenas[scratch_index] = arena_create(
+            ARENA_SCRATCH_RESERVE,
+            ARENA_SCRATCH_COMMIT,
+            0
+        );
     }
 
-    return arena_temp_begin(scratch_pool[scratch_index]);
+    return arena_temp_begin(scratch_arenas[scratch_index]);
 }
+
 void arena_scratch_release(mem_arena_temp scratch) {
     arena_temp_end(scratch);
 }

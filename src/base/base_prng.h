@@ -1,5 +1,7 @@
+
 // Permuted congruential generator
 // Based on https://www.pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
 
 typedef struct {
     u64 state;

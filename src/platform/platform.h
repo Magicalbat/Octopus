@@ -19,7 +19,7 @@ void plat_init(void);
 // Do not modify the string 
 string8 plat_get_name(void);
 
-void plat_fatal_error(const char* msg);
+void plat_fatal_error(const char* msg, i32 code);
 
 u64 plat_time_usec(void);
 void plat_sleep_ms(u32 ms);
@@ -34,8 +34,8 @@ void plat_get_entropy(void* data, u64 size);
 // returns NULL on failure
 void* plat_mem_reserve(u64 size);
 b32 plat_mem_commit(void* mem, u64 size);
-void plat_mem_decommit(void* mem, u64 size);
-void plat_mem_release(void* mem, u64 size);
+b32 plat_mem_decommit(void* mem, u64 size);
+b32 plat_mem_release(void* mem, u64 size);
 
-u32 plat_mem_page_size(void);
+u32 plat_page_size(void);
 

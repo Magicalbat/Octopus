@@ -1,16 +1,15 @@
-#ifdef PLATFORM_WIN32
 
 #define _DWORD_MAX (~(DWORD)0)
 
-static u64 ticks_per_sec = 1;
+static u64 _w32_ticks_per_sec = 1;
 
 void plat_init(void) {
     LARGE_INTEGER perf_freq = { 0 };
 
     if (QueryPerformanceFrequency(&perf_freq)) {
-        ticks_per_sec = (u64)perf_freq.QuadPart;
+        _w32_ticks_per_sec = (u64)perf_freq.QuadPart;
     } else {
-        error_emit("Failed to query performance frequency");
+        //error_emit("Failed to query performance frequency");
     }
 }
 
@@ -18,20 +17,20 @@ string8 plat_get_name(void) {
     return STR8_LIT("win32");
 }
 
-void plat_fatal_error(const char* msg) {
+void plat_fatal_error(const char* msg, i32 code) {
     MessageBoxA(NULL, msg, "Error", MB_OK | MB_ICONERROR);
-    ExitProcess(1);
+    ExitProcess((u32)code);
 }
 
 u64 plat_time_usec(void) {
     LARGE_INTEGER ticks = { 0 };
 
     if (!QueryPerformanceCounter(&ticks)) {
-        error_emit("Failed to query performance counter");
+        //error_emit("Failed to query performance counter");
         return 0;
     }
 
-    return (u64)ticks.QuadPart * 1000000 / ticks_per_sec;
+    return (u64)ticks.QuadPart * 1000000 / _w32_ticks_per_sec;
 }
 
 void plat_sleep_ms(u32 ms) {
@@ -48,7 +47,7 @@ u64 plat_file_size(string8 file_name) {
     arena_scratch_release(scratch);
 
     if (ret == false) {
-        error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+        //error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return 0;
     }
 
@@ -67,13 +66,13 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     arena_scratch_release(scratch);
 
     if (file_handle == INVALID_HANDLE_VALUE) {
-        error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+        //error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return (string8){ 0 };
     }
 
     LARGE_INTEGER file_size = { 0 };
     if (!GetFileSizeEx(file_handle, &file_size)) {
-        error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+        //error_emitf("Failed to get size of file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return (string8){ 0 };
     }
 
@@ -81,7 +80,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
     string8 out = { 
         .size = (u64)file_size.QuadPart,
-        .str = ARENA_PUSH_ARRAY(maybe_temp.arena, u8, file_size.QuadPart)
+        .str = PUSH_ARRAY(maybe_temp.arena, u8, (u64)file_size.QuadPart)
     };
 
     u64 total_read = 0;
@@ -91,7 +90,7 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
         DWORD cur_read = 0;
         if (!ReadFile(file_handle, out.str + total_read, to_read_capped, &cur_read, NULL)) {
-            error_emitf("Failed to read from file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+            //error_emitf("Failed to read from file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
 
             arena_temp_end(maybe_temp);
             out = (string8){ 0 };
@@ -122,12 +121,13 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     arena_scratch_release(scratch);
 
     if (file_handle == INVALID_HANDLE_VALUE) {
-        error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+        //error_emitf("Failed to open file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
         return false;
     }
 
     b32 out = true;
 
+    // TODO: actually test concat vs individual WriteFile performance
     {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
@@ -140,7 +140,7 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
 
             DWORD written = 0;
             if (!WriteFile(file_handle, full_file.str + total_written, to_write_capped, &written, NULL)) {
-                error_emitf("Failed to write to file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+                //error_emitf("Failed to write to file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
                 out = false;
 
                 break;
@@ -166,7 +166,7 @@ b32 plat_file_delete(string8 file_name) {
     arena_scratch_release(scratch);
 
     if (!ret) {
-        error_emitf("Failed to delete file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
+        //error_emitf("Failed to delete file \"%.*s\"", (int)file_name.size, (char*)file_name.str);
     }
 
     return ret;
@@ -180,22 +180,23 @@ void plat_get_entropy(void* data, u64 size) {
 void* plat_mem_reserve(u64 size) {
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE);
 }
+
 b32 plat_mem_commit(void* mem, u64 size) {
     void* ret = VirtualAlloc(mem, size, MEM_COMMIT, PAGE_READWRITE);
     return ret != NULL;
 }
-void plat_mem_decommit(void* mem, u64 size) {
-    VirtualFree(mem, size, MEM_DECOMMIT);
-}
-void plat_mem_release(void* mem, u64 size) {
-    VirtualFree(mem, size, MEM_RELEASE);
+
+b32 plat_mem_decommit(void* mem, u64 size) {
+    return VirtualFree(mem, size, MEM_DECOMMIT);
 }
 
-u32 plat_mem_page_size(void) {
+b32 plat_mem_release(void* mem, u64 size) {
+    return VirtualFree(mem, size, MEM_RELEASE);
+}
+
+u32 plat_page_size(void) {
     SYSTEM_INFO si = { 0 };
     GetSystemInfo(&si);
     return si.dwPageSize;
 }
-
-#endif // PLATFORM_WIN32
 

@@ -1,3 +1,4 @@
+
 typedef struct {
     u8* str;
     u64 size;
