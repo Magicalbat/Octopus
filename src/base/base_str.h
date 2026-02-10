@@ -9,68 +9,81 @@ typedef struct {
     u64 size;
 } string16;
 
+typedef struct string8_node {
+    string8 str;
+    struct string8_node* next;
+} string8_node;
+
+typedef struct {
+    string8_node* first;
+    string8_node* last;
+
+    u64 total_size;
+    u64 count;
+} string8_list;
+
+typedef struct {
+    string8 begin;
+    string8 delim;
+    string8 end;
+} string8_concat_desc;
+
 typedef struct {
     u32 codepoint;
     // In characters of the string
     u32 len;
 } string_decode;
 
-#define STR8_LIST_BUCKET_SIZE 16
-
-typedef struct string8_bucket {
-    struct string8_bucket* next;
-
-    string8 strs[STR8_LIST_BUCKET_SIZE];
-    u32 size;
-} string8_bucket;
-
-typedef struct {
-    string8_bucket* first;
-    string8_bucket* last;
-
-    u64 size;
-    u64 total_length;
-} string8_list;
+// Used when a const string8 is being declared outside a function
+// MSVC gets mad when you include the (string8) in front of the 
+// intializer when it is outside a function  
+#define STR8_CONST_LIT(s) { (u8*)(s), sizeof(s) - 1 }
 
 #define STR8_LIT(s) (string8){ (u8*)(s), sizeof(s) - 1 }
 
+// This is used for printing string8s
+// e.g. printf("My String: %.*s\n", STR8_FMT(my_str));
+#define STR8_FMT(s) (int)(s).size, (char*)(s).str
+
 string8 str8_from_cstr(u8* cstr);
 u8* str8_to_cstr(mem_arena* arena, string8 str);
-string8 str8_copy(mem_arena* arena, string8 str);
+string8 str8_copy(mem_arena* arena, string8 src);
 
-// Will parse as many valid characters at the start of the string
-// e.g. str8_to_u64(STR8_LIT("123asdf")) will return 123
-u64 str8_to_u64(string8 str);
-// Returns true if str is equal to "true" (lowercase),
-// false otherwise
-b32 str8_to_b32(string8 str);
+// Copies as much of src to dest.str + offset as possible
+void str8_memcpy(string8* dest, const string8* src, u64 offset);
 
 b32 str8_equals(string8 a, string8 b);
 
-string8 str8_substr(string8 str, u64 start, u64 end);
-string8 str8_substr_size(string8 str, u64 start, u64 size);
+// Compares as many chars as they share (MIN(a.size, b.size))
+b32 str8_start_equals(string8 a, string8 b);
 
-/* Returns str.size if c is not in str
-   Can be used to split a string by a character like so:
+string8 str8_substr(string8 base, u64 start, u64 end);
+string8 str8_substr_size(string8 base, u64 start, u64 size);
 
-   string8 str = STR8_LIT("foo bar baz");
+// Finds the first occurance of some character `c`
+// Returns `str.size` if `c` if not in the string
+u64 str8_find_first(string8 str, u8 c);
 
-   while (str.size) {
-       u64 index = str8_index_char(str, (u8)' ');
-       string8 part = str8_substr(str, 0, index);
-       str = str8_substr(str, index + 1, str.size);
+// Will fill as much of out as it can
+void str8_to_upper_ip(string8 in, string8* out);
+// Will fill as much of out as it can
+void str8_to_lower_ip(string8 in, string8* out);
 
-       printf("%.*s\n", (int)part.size, part.str);
-   }
-*/
-u64 str8_index_char(string8 str, u8 c);
+string8 str8_to_upper(mem_arena* arena, string8 str);
+string8 str8_to_lower(mem_arena* arena, string8 str);
 
-string8 str8_createfv(mem_arena* arena, const char* fmt, va_list args);
-string8 str8_createf(mem_arena* arena, const char* fmt, ...);
+string8 str8_concat_simple(mem_arena* arena, const string8_list* list);
+string8 str8_concat(
+    mem_arena* arena,
+    const string8_list* list,
+    const string8_concat_desc* desc
+);
 
-void str8_list_push(mem_arena* arena, string8_list* list, string8 str);
+string8 str8_pushfv(mem_arena* arena, const char* fmt, va_list args);
+string8 str8_pushf(mem_arena* arena, const char* fmt, ...);
 
-string8 str8_concat(mem_arena* arena, const string8_list* list);
+void str8_list_add_existing(string8_list* list, string8_node* node);
+void str8_list_add(mem_arena* arena, string8_list* list, string8 str);
 
 // Returns the decode output of the first unicode codepoint
 // after offset bytes in the utf-8 string

@@ -1,3 +1,4 @@
+
 #if defined(_WIN32)
 #   define PLATFORM_WIN32
 #elif defined(__EMSCRIPTEN__)
@@ -6,9 +7,19 @@
 #   define PLATFORM_LINUX
 #endif
 
-#if defined(__clang__) || defined(__GNUC__)
-#    define THREAD_LOCAL __thread
+#if defined(__clang__)
+#   define COMPILER_CLANG
+#elif defined(__GNUC__) || defined(__GNUG__)
+#   define COMPILER_GCC
 #elif defined(_MSC_VER)
+#   define COMPILER_MSVC
+#else
+#   define COMPILER_UNKNOWN
+#endif
+
+#if defined(COMPILER_CLANG) || defined(COMPILER_GCC)
+#    define THREAD_LOCAL __thread
+#elif defined(COMPILER_MSVC)
 #    define THREAD_LOCAL __declspec(thread)
 #elif (__STDC_VERSION__ >= 201112L)
 #    define THREAD_LOCAL _Thread_local
@@ -16,11 +27,11 @@
 #    error "Invalid compiler/version for thead variable; Use Clang, GCC, or MSVC, or use C11 or greater"
 #endif
 
-typedef int8_t  i8;
+typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
-typedef uint8_t  u8;
+typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
@@ -64,4 +75,24 @@ static_assert(sizeof(f64) == 8, "Size of double must be 8");
 #define SLL_POP_FRONT(f, l) ((f) == (l) ? \
     ((f) = (l) = NULL) :                  \
     ((f) = (f)->next))                    \
+
+#define SLL_STACK_PUSH(f, n) ((n)->next = (f), (f) = (n))
+
+#define SLL_STACK_POP(f) ((f) == NULL ? NULL : ((f) = (f)->next))
+
+#define DLL_PUSH_BACK(f, l, n) ((f) == 0 ? \
+    ((f) = (l) = (n), (n)->next = (n)->prev = 0) : \
+    ((n)->prev = (l), (l)->next = (n), (l) = (n), (n)->next = 0))
+
+#define DLL_PUSH_FRONT(f, l, n) DLL_PUSH_BACK(l, f, n)
+
+#define DLL_REMOVE(f, l, n) ( \
+    (f) == (n) ? \
+        ((f) == (l) ? \
+            ((f) = (l) = (0)) : \
+            ((f) = (f)->next, (f)->prev = 0)) : \
+        (l) == (n) ? \
+            ((l) = (l)->prev, (l)->next = 0) : \
+            ((n)->next->prev = (n)->prev, \
+            (n)->prev->next = (n)->next))
 

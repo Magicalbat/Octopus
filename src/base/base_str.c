@@ -1,54 +1,33 @@
 
 string8 str8_from_cstr(u8* cstr) {
-    if (cstr == NULL) {
-        return (string8){ 0 };
-    }
+    u8* start = cstr;
 
-    u8* ptr = cstr;
-    u64 size = 0;
-    while (*(ptr++)) {
-        size++;
-    }
+    while (*(cstr++));
 
-    return (string8){ cstr, size };
-}
-
-string8 str8_copy(mem_arena* arena, string8 str) {
-    u8* data = PUSH_ARRAY_NZ(arena, u8, str.size);
-    memcpy(data, str.str, str.size);
-    return (string8){ data, str.size };
+    return (string8) {
+        .str = start,
+        .size = (u64)(cstr - start)
+    };
 }
 
 u8* str8_to_cstr(mem_arena* arena, string8 str) {
-    // out is automatically filled with zeros,
-    // so I do not have to explicitly set the null terminator
-    u8* out = PUSH_ARRAY(arena, u8, str.size + 1);
+    u8* out = PUSH_ARRAY_NZ(arena, u8, str.size);
+
     memcpy(out, str.str, str.size);
-    return out;
-}
-
-u64 str8_to_u64(string8 str) {
-    u64 out = 0;
-    u64 i = 0;
-
-    while (str.str[i] == '0' && i < str.size) {
-        i++;
-    }
-
-    for (; i < str.size; i++) {
-        if (str.str[i] < '0' || str.str[i] > '9') {
-            break;
-        }
-
-        out *= 10;
-        out += str.str[i] - '0';
-    }
+    out[str.size] = '\0';
 
     return out;
 }
 
-b32 str8_to_b32(string8 str) {
-    return str8_equals(str, STR8_LIT("true"));
+string8 str8_copy(mem_arena* arena, string8 src) {
+    string8 out = {
+        .str = PUSH_ARRAY_NZ(arena, u8, src.size),
+        .size = src.size
+    };
+
+    memcpy(out.str, src.str, src.size);
+
+    return out;
 }
 
 b32 str8_equals(string8 a, string8 b) {
@@ -65,113 +44,220 @@ b32 str8_equals(string8 a, string8 b) {
     return true;
 }
 
-string8 str8_substr(string8 str, u64 start, u64 end) {
-    end = MIN(end, str.size);
-    start = MIN(start, end);
+b32 str8_start_equals(string8 a, string8 b) {
+    u64 size = MIN(a.size, b.size);
+
+    for (u64 i = 0; i < size; i++) {
+        if (a.str[i] != b.str[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+string8 str8_substr(string8 base, u64 start, u64 end) {
+    end = MIN(base.size, end);
+    start = MIN(end, start);
 
     return (string8) {
-        .str = str.str + start,
+        .str = base.str + start,
         .size = end - start
     };
 }
 
-string8 str8_substr_size(string8 str, u64 start, u64 size) {
-    return str8_substr(str, start, start + size);
+string8 str8_substr_size(string8 base, u64 start, u64 size) {
+    start = MIN(base.size, start);
+    size = MIN(size, base.size - start);
+
+    return (string8) {
+        .str = base.str + start,
+        .size = size
+    };
 }
 
-u64 str8_index_char(string8 str, u8 c) {
+u64 str8_find_first(string8 str, u8 c) {
     u64 i = 0;
 
     for (; i < str.size; i++) {
-        if (str.str[i] == c) {
-            break;
-        }
+        if (str.str[i] == c) { break; }
     }
 
     return i;
 }
 
-string8 str8_createfv(mem_arena* arena, const char* fmt, va_list in_args) {
-    va_list args1, args2 = { 0 };
-    va_copy(args1, in_args);
-    va_copy(args2, in_args);
+void str8_to_upper_ip(string8 in, string8* out) {
+    u64 size = MIN(in.size, out->size);
+    out->size = size;
 
-    string8 out = { 0 };
+    for (u64 i = 0; i < size; i++) {
+        u8 c = in.str[i];
 
-    i32 size = vsnprintf(NULL, 0, fmt, args1);
-    if (size <= 0) {
-        goto end;
+        if (c >= 'a' && c <= 'z') {
+            c -= 'a' - 'A';
+        }
+
+        out->str[i] = c;
     }
-
-    mem_arena_temp maybe_temp = arena_temp_begin(arena);
-
-    out.size = (u64)size;
-    // +1 is because vsnprintf HAS to add a null terminator
-    // Very dumb, but necessary
-    out.str = PUSH_ARRAY(maybe_temp.arena, u8, size + 1);
-
-    if (size != vsnprintf((char*)out.str, (u64)size + 1, fmt, args2)) {
-        arena_temp_end(maybe_temp);
-        out = (string8){ 0 };
-        goto end;
-    }
-
-end:
-    va_end(args1);
-    va_end(args2);
-    return out;
-}
-string8 str8_createf(mem_arena* arena, const char* fmt, ...) {
-    va_list args = { 0 };
-    va_start(args, fmt);
-
-    string8 out = str8_createfv(arena, fmt, args);
-
-    va_end(args);
-    
-    return out;
 }
 
-void str8_list_push(mem_arena* arena, string8_list* list, string8 str) {
-    if (list == NULL) {
-        return;
+void str8_to_lower_ip(string8 in, string8* out) {
+    u64 size = MIN(in.size, out->size);
+    out->size = size;
+
+    for (u64 i = 0; i < size; i++) {
+        u8 c = in.str[i];
+
+        if (c >= 'A' && c <= 'Z') {
+            c += 'a' - 'A';
+        }
+
+        out->str[i] = c;
     }
-
-    if (list->last == NULL || list->last->size == STR8_LIST_BUCKET_SIZE) {
-        // Need to create a new bucket
-        string8_bucket* bucket = PUSH_STRUCT(arena, string8_bucket);
-
-        SLL_PUSH_BACK(list->first, list->last, bucket);
-    }
-
-    // Push string onto bucket
-    string8_bucket* cur_bucket = list->last;
-
-    cur_bucket->strs[cur_bucket->size++] = str;
-
-    list->size++;
-    list->total_length += str.size;
 }
 
-string8 str8_concat(mem_arena* arena, const string8_list* list) {
-    if (list == NULL) {
-        return (string8){ 0 };
-    }
+string8 str8_to_upper(mem_arena* arena, string8 str) {
+    string8 out = str8_copy(arena, str);
 
-    string8 out = {
-        .str = PUSH_ARRAY(arena, u8, list->total_length),
-        .size = list->total_length,
-    };
-    u64 pos = 0;
-
-    for (string8_bucket* bucket = list->first; bucket != NULL; bucket = bucket->next) {
-        for (u32 i = 0; i < bucket->size; i++) {
-            memcpy(out.str + pos, bucket->strs[i].str, bucket->strs[i].size);
-            pos += bucket->strs[i].size;
+    for (u64 i = 0; i < out.size; i++) {
+        if (out.str[i] >= 'a' && out.str[i] <= 'z') {
+            out.str[i] -= 'a' - 'A';
         }
     }
 
     return out;
+}
+
+string8 str8_to_lower(mem_arena* arena, string8 str) {
+    string8 out = str8_copy(arena, str);
+
+    for (u64 i = 0; i < out.size; i++) {
+        if (out.str[i] >= 'A' && out.str[i] <= 'Z') {
+            out.str[i] += 'a' - 'A';
+        }
+    }
+
+    return out;
+
+}
+
+void str8_memcpy(string8* dest, const string8* src, u64 offset) {
+    if (offset > dest->size) { return; }
+
+    u64 size = MIN(src->size, dest->size - offset);
+    memcpy(dest->str + offset, src->str, size);
+}
+
+string8 str8_concat_simple(mem_arena* arena, const string8_list* list) {
+    if (list->count == 0) {
+        return (string8){ 0 };
+    }
+
+    string8 out = {
+        .str = PUSH_ARRAY_NZ(arena, u8, list->total_size),
+        .size = list->total_size
+    };
+
+    u64 pos = 0;
+    string8_node* node = list->first;
+    for (u32 i = 0; i < list->count && node != NULL; i++, node = node->next) {
+        str8_memcpy(&out, &node->str, pos);
+        pos += node->str.size;
+    }
+
+    return out;
+}
+
+string8 str8_concat(
+    mem_arena* arena,
+    const string8_list* list,
+    const string8_concat_desc* desc
+) {
+    if (list->count == 0) {
+        return (string8) { 0 };
+    }
+
+    u64 total_size = list->total_size +
+        desc->begin.size + desc->delim.size * (list->count - 1) + desc->end.size;
+
+    string8 out = (string8){
+        .str = PUSH_ARRAY_NZ(arena, u8, total_size),
+        .size = total_size
+    };
+
+    u64 pos = 0;
+
+    str8_memcpy(&out, &desc->begin, pos);
+
+    pos += desc->begin.size;
+
+    string8_node* node = list->first;
+    for (u32 i = 0; i < list->count && node != NULL; i++, node = node->next) {
+        str8_memcpy(&out, &node->str, pos);
+        pos += node->str.size;
+
+        if (i < list->count - 1 && node->next != NULL) {
+            str8_memcpy(&out, &desc->delim, pos);
+            pos += desc->delim.size;
+        }
+    }
+
+    str8_memcpy(&out, &desc->end, pos);
+
+    return out;
+}
+
+string8 str8_pushfv(mem_arena* arena, const char* fmt, va_list args) {
+    string8 out = { 0 };
+
+    va_list args2;
+    va_copy(args2, args);
+
+    i32 size = vsnprintf(NULL, 0, fmt, args);
+
+    if (size > 0) {
+        mem_arena_temp maybe_temp = arena_temp_begin(arena);
+
+        out.size = (u64)size;
+        out.str = PUSH_ARRAY_NZ(maybe_temp.arena, u8, out.size + 1);
+
+        size = vsnprintf((char*)out.str, out.size + 1, fmt, args2);
+
+        if (size <= 0) {
+            out = (string8){ 0 };
+            arena_temp_end(maybe_temp);
+        }
+    }
+
+    va_end(args2);
+
+    return out;
+}
+
+string8 str8_pushf(mem_arena* arena, const char* fmt, ...) {
+    va_list args;
+    
+    va_start(args, fmt);
+
+    string8 out = str8_pushfv(arena, fmt, args);
+
+    va_end(args);
+
+    return out;
+}
+
+void str8_list_add_existing(string8_list* list, string8_node* node) {
+    list->count++;
+    list->total_size += node->str.size;
+    
+    SLL_PUSH_BACK(list->first, list->last, node);
+}
+
+void str8_list_add(mem_arena* arena, string8_list* list, string8 str) {
+    string8_node* node = PUSH_STRUCT(arena, string8_node);
+    node->str = str;
+
+    str8_list_add_existing(list, node);
 }
 
 // Based off of the decoders from Chris Wellons and Mr 4th
