@@ -5,4 +5,5 @@
 #include "base_str.h"
 #include "base_log.h"
 #include "base_prng.h"
+#include "base_math.h"
 

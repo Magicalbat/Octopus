@@ -1,3 +1,4 @@
+
 #if defined(PLATFORM_WIN32)
 
 #define WIN32_MEAN_AND_LEAN

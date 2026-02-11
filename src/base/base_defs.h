@@ -27,6 +27,11 @@
 #    error "Invalid compiler/version for thead variable; Use Clang, GCC, or MSVC, or use C11 or greater"
 #endif
 
+#define CONCAT_NX(a, b) a##b
+#define CONCAT(a, b) CONCAT_NX(a, b)
+
+#define STATIC_ASSERT(c, id) static u8 CONCAT(id, __LINE__)[(c) ? 1 : -1]
+
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -42,11 +47,8 @@ typedef i32 b32;
 typedef float f32;
 typedef double f64;
 
-static_assert(sizeof(f32) == 4, "Size of float must be 4");
-static_assert(sizeof(f64) == 8, "Size of double must be 8");
-
-#define STRINGIFY_NX(s) #s
-#define STRINGIFY(s) STRINGIFY_NX(s)
+STATIC_ASSERT(sizeof(f32) == 4, f32_size);
+STATIC_ASSERT(sizeof(f64) == 8, f64_size);
 
 #define KiB(n) ((u64)(n) << 10)
 #define MiB(n) ((u64)(n) << 20)
