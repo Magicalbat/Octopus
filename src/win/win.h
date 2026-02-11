@@ -154,6 +154,18 @@ typedef struct {
     b8 prev_keys[WIN_KEY_COUNT];
 } window;
 
+window* win_create(mem_arena* arena, u32 width, u32 height, string8 title);
+void win_destroy(window* win);
+
+void win_make_current(window* win);
+
+void win_process_events(window* win);
+
+void win_set_clear_color(window* win, vec4f col);
+void win_clear(window* win);
+
+void win_swap_buffers(window* win);
+
 #define WIN_MOUSE_DOWN(win, mb) (win->mouse_buttons[mb])
 #define WIN_MOUSE_UP(win, mb) (!win->mouse_buttons[mb])
 #define WIN_MOUSE_JUST_DOWN(win, mb) (win->mouse_buttons[mb] && !win->prev_mouse_buttons[mb])
