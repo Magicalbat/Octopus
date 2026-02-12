@@ -1,5 +1,4 @@
 
-
 mem_arena* arena_create(u64 reserve_size, u64 commit_size, u32 flags) {
     u32 page_size = plat_page_size();
 
