@@ -1,7 +1,7 @@
 
 #define _DWORD_MAX (~(DWORD)0)
 
-static u64 _w32_ticks_per_sec = 1;
+u64 _w32_ticks_per_sec = 1;
 
 void plat_init(void) {
     LARGE_INTEGER perf_freq = { 0 };

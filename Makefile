@@ -7,6 +7,8 @@ RELEASE_CFLAGS = -DNDEBUG -O2
 CFLAGS += -Wall -Wextra -pedantic -Wconversion
 CFLAGS += -Wno-gnu-binary-literal -Wno-c23-extensions
 
+CFLAGS += -DWIN_GFX_API_OPENGL
+
 config ?= debug
  
 ifeq ($(config), debug)

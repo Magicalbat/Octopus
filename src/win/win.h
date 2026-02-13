@@ -1,4 +1,17 @@
 
+#if defined(PLATFORM_WIN32)
+#   include "win32/win32_common.h"
+#elif defined(PLATFORM_LINUX)
+#endif
+
+#if defined(WIN_GFX_API_OPENGL)
+#   include "opengl/opengl_common.h"
+#   if defined(PLATFORM_WIN32)
+#       include "win32/win32_opengl.h"
+#   elif defined(PLATFORM_LINUX)
+#   endif
+#endif
+
 typedef enum {
     WIN_FLAG_NONE = 0b0,
     WIN_FLAG_SHOULD_CLOSE = 0b1,
