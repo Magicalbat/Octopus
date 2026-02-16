@@ -1,13 +1,11 @@
 
 #define _DWORD_MAX (~(DWORD)0)
 
-u64 _w32_ticks_per_sec = 1;
-
 void plat_init(void) {
     LARGE_INTEGER perf_freq = { 0 };
 
     if (QueryPerformanceFrequency(&perf_freq)) {
-        _w32_ticks_per_sec = (u64)perf_freq.QuadPart;
+        w32_perf_freq = (u64)perf_freq.QuadPart;
     } else {
         error_emit("Failed to query performance frequency");
     }
@@ -30,7 +28,7 @@ u64 plat_time_usec(void) {
         return 0;
     }
 
-    return (u64)ticks.QuadPart * 1000000 / _w32_ticks_per_sec;
+    return (u64)ticks.QuadPart * 1000000 / w32_perf_freq;
 }
 
 void plat_sleep_ms(u32 ms) {

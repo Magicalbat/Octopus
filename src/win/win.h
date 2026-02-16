@@ -180,8 +180,6 @@ typedef struct {
 window* win_create(mem_arena* arena, u32 width, u32 height, string8 title);
 void win_destroy(window* win);
 
-void win_make_current(window* win);
-
 void win_process_events(window* win);
 
 void win_set_clear_color(window* win, vec4f col);

@@ -5,6 +5,8 @@
 #define UNICODE
 #include <Windows.h>
 
+#include "platform_win32.h"
+
 #elif defined(PLATFORM_LINUX)
 
 #include <time.h>

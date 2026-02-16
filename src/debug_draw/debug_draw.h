@@ -1,5 +1,5 @@
 
-void debug_draw_init(const win_window* win);
+void debug_draw_init(const window* win);
 void debug_draw_destroy(void);
 
 void debug_draw_set_view(const viewf* view);

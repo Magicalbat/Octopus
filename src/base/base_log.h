@@ -41,12 +41,15 @@ typedef struct {
 } log_context;
 
 #define info_emit(msg) log_emit(LOG_INFO, STR8_LIT(msg))
+#define info_emit_str(str) log_emit(LOG_INFO, (str))
 #define info_emitf(fmt, ...) log_emitf(LOG_INFO, (fmt), __VA_ARGS__)
 
 #define warn_emit(msg) log_emit(LOG_WARN, STR8_LIT(msg))
+#define warn_emit_str(str) log_emit(LOG_WARN, (str))
 #define warn_emitf(fmt, ...) log_emitf(LOG_WARN, (fmt), __VA_ARGS__)
 
 #define error_emit(msg) log_emit(LOG_ERROR, STR8_LIT(msg))
+#define error_emit_str(str) log_emit(LOG_ERROR, (str))
 #define error_emitf(fmt, ...) log_emitf(LOG_ERROR, (fmt), __VA_ARGS__)
 
 void log_frame_begin(void);
