@@ -48,10 +48,6 @@ int main(int argc, char** argv) {
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         win_process_events(win);
-
-        if (win->mouse_scroll.x || win->mouse_scroll.y) {
-            printf("Scroll: %.2f %.2f\n", win->mouse_scroll.x, win->mouse_scroll.y);
-        }
     }
 
     win_destroy(win);

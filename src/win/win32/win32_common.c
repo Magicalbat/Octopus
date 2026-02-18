@@ -18,8 +18,16 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
             warn_emit("Failed to set DPI awareness context");
         }
 
+        if (!EnableMouseInPointer(true)) {
+            warn_emit("Failed to enable mouse in pointer");
+        }
+
         _w32_init_keymap();
         _w32_win_initialized = _w32_register_win_class();
+    }
+
+    if (!_w32_win_initialized) {
+        return NULL;
     }
 
     mem_arena_temp maybe_temp = arena_temp_begin(arena);
@@ -53,9 +61,9 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
-    /*if (!_win_create_graphics(maybe_temp.arena, win)) {
+    if (!_win_create_graphics(maybe_temp.arena, win)) {
         goto fail;
-    }*/
+    }
 
     SetWindowLongPtrW(win->plat_backend->window, GWLP_USERDATA, (LONG_PTR)win);
 
@@ -75,7 +83,7 @@ fail:
 void win_destroy(window* win) {
     if (win == NULL) { return; }
 
-    //_win_destroy_graphics(win);
+    _win_destroy_graphics(win);
     DestroyWindow(win->plat_backend->window);
 }
 
@@ -98,7 +106,6 @@ static LRESULT CALLBACK _w32_window_proc(
 ) {
     window* win = (window*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
 
-
     switch (uMsg) {
         case WM_MOUSEMOVE: {
             win->mouse_pos.x = (f32)((lParam) & 0xffff);
@@ -108,25 +115,30 @@ static LRESULT CALLBACK _w32_window_proc(
         case WM_LBUTTONDOWN: {
             win->mouse_buttons[WIN_MB_LEFT] = true;
         } break;
+
         case WM_LBUTTONUP: {
             win->mouse_buttons[WIN_MB_LEFT] = false;
         } break;
+
         case WM_MBUTTONDOWN: {
             win->mouse_buttons[WIN_MB_MIDDLE] = true;
         } break;
+
         case WM_MBUTTONUP: {
             win->mouse_buttons[WIN_MB_MIDDLE] = false;
         } break;
+
         case WM_RBUTTONDOWN: {
             win->mouse_buttons[WIN_MB_RIGHT] = true;
         } break;
+
         case WM_RBUTTONUP: {
             win->mouse_buttons[WIN_MB_RIGHT] = false;
         } break;
 
         case WM_MOUSEWHEEL: {
             f32 delta = (f32)GET_WHEEL_DELTA_WPARAM(wParam);
-            win->mouse_scroll.y = delta / (f32)WHEEL_DELTA;
+            win->mouse_scroll.y = delta / (f32)WHEEL_DELTA;;
         } break;
 
         case WM_MOUSEHWHEEL: {
@@ -138,6 +150,7 @@ static LRESULT CALLBACK _w32_window_proc(
             win_key down_key = _w32_keymap[wParam];
             win->keys[down_key] = true;
         } break;
+
         case WM_KEYUP: {
             win_key up_key = _w32_keymap[wParam];
             win->keys[up_key] = false;
@@ -154,10 +167,13 @@ static LRESULT CALLBACK _w32_window_proc(
         case WM_CLOSE: {
             win->flags |= WIN_FLAG_SHOULD_CLOSE;
         } break;
-        default: break;
+
+        default: {
+            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+        } break;
     }
 
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+    return 0;
 }
 
 static b32 _w32_register_win_class(void) {

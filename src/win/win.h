@@ -157,6 +157,7 @@ typedef struct {
     // i.e. +1 indicates the wheel was rotated one increment up
     // Floating point to allow finer control for more dynamic input devices
     vec2f mouse_scroll;
+    f32 touchpad_zoom;
 
     vec2f mouse_pos;
 
@@ -185,5 +186,5 @@ void win_process_events(window* win);
 void win_set_clear_color(window* win, vec4f col);
 
 void win_begin_frame(window* win);
-void win_end_frmae(window* win);
+void win_end_frame(window* win);
 

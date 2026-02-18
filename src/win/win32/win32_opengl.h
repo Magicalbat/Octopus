@@ -6,11 +6,6 @@ typedef struct _win_api_backend {
     HGLRC gl_context;
 } _win_api_backend;
 
-// WGL_ARB_extensions_string
-// https://registry.khronos.org/OpenGL/extensions/ARB/WGL_ARB_extensions_string.txt
-typedef const char* (wglGetExtensionsStringARB_func)(HDC hdc);
-wglGetExtensionsStringARB_func* wglGetExtensionsStringARB = NULL;
-
 // WGL_ARB_pixel_format
 // https://registry.khronos.org/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt
 typedef BOOL (wglChoosePixelFormatARB_func)(
