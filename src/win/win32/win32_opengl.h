@@ -1,10 +1,9 @@
 
 #include <gl/GL.h>
 
-typedef struct _win_api_backend {
+typedef struct _win_gfx_backend {
     HDC device_context;
-    HGLRC gl_context;
-} _win_api_backend;
+} _win_gfx_backend;
 
 // WGL_ARB_pixel_format
 // https://registry.khronos.org/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt
@@ -25,7 +24,9 @@ wglChoosePixelFormatARB_func* wglChoosePixelFormatARB = NULL;
 
 // WGL_ARB_create_context
 // https://registry.khronos.org/OpenGL/extensions/ARB/WGL_ARB_create_context.txt
-typedef HGLRC (wglCreateContextAttribsARB_func)(HDC hDC, HGLRC hShareContext, const int *attribList);
+typedef HGLRC (wglCreateContextAttribsARB_func)(
+    HDC hDC, HGLRC hShareContext, const int *attribList
+);
 wglCreateContextAttribsARB_func* wglCreateContextAttribsARB = NULL;
 
 #define WGL_CONTEXT_MAJOR_VERSION_ARB           0x2091

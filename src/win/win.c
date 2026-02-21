@@ -1,6 +1,6 @@
 
-b32 _win_create_graphics(mem_arena* arena, window* win);
-void _win_destroy_graphics(window* win);
+b32 _win_equip_gfx(window* win);
+b32 _win_unequip_gfx(window* win);
 
 #if defined(PLATFORM_WIN32)
 #   include "win32/win32_common.c"

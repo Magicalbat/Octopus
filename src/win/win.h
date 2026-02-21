@@ -147,7 +147,7 @@ STATIC_ASSERT(
 
 typedef struct {
     struct _win_plat_backend* plat_backend;
-    struct _win_api_backend* api_backend;
+    struct _win_gfx_backend* gfx_backend;
 
     u32 width, height;
 
@@ -178,8 +178,12 @@ typedef struct {
 #define WIN_KEY_JUST_DOWN(win, key) (win->keys[key] && !win->prev_keys[key])
 #define WIN_KEY_JUST_UP(win, key) (!win->keys[key] && win->prev_keys[key])
 
+b32 win_gfx_backend_init(void);
+
 window* win_create(mem_arena* arena, u32 width, u32 height, string8 title);
 void win_destroy(window* win);
+
+void win_make_current(window* win);
 
 void win_process_events(window* win);
 

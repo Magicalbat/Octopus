@@ -1,7 +1,6 @@
 
 static b32 _w32_win_initialized = false;
 static win_key _w32_keymap[256] = { 0 };
-static const u16* _w32_win_class_name = L"OctopusWindow";
 
 static LRESULT CALLBACK _w32_window_proc(
     HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
@@ -47,7 +46,7 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
 
     string16 title16 = str16_from_str8(scratch.arena, title, true);
     win->plat_backend->window = CreateWindowW(
-        _w32_win_class_name,
+        W32_WIN_CLASS_NAME,
         title16.str,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
@@ -61,9 +60,9 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
-    if (!_win_create_graphics(maybe_temp.arena, win)) {
+    /*if (!_win_create_graphics(maybe_temp.arena, win)) {
         goto fail;
-    }
+    }*/
 
     SetWindowLongPtrW(win->plat_backend->window, GWLP_USERDATA, (LONG_PTR)win);
 
@@ -83,7 +82,7 @@ fail:
 void win_destroy(window* win) {
     if (win == NULL) { return; }
 
-    _win_destroy_graphics(win);
+    //_win_destroy_graphics(win);
     DestroyWindow(win->plat_backend->window);
 }
 
@@ -189,7 +188,7 @@ static b32 _w32_register_win_class(void) {
         .lpfnWndProc = _w32_window_proc,
         .hInstance = module_handle,
         .hCursor = LoadCursorW(NULL, IDC_ARROW),
-        .lpszClassName = _w32_win_class_name
+        .lpszClassName = W32_WIN_CLASS_NAME 
     };
 
     ATOM atom = RegisterClassExW(&win_class);
