@@ -30,9 +30,7 @@ b32 _w32gl_init_backend(void) {
     };
 
     if (!RegisterClassW(&dummy_wnd_class)) {
-        error_emit("Failed to register dummy window class for wgl");
-
-        goto end_before_class;
+        plat_fatal_error("Failed to register dummy window class for wgl", 1);
     }
 
     HWND dummy_win = CreateWindowW(
@@ -42,14 +40,12 @@ b32 _w32gl_init_backend(void) {
     );
 
     if (dummy_win == NULL) {
-        error_emit("Failed to create dummy window for wgl");
-        goto end_before_win;
+        plat_fatal_error("Failed to create dummy window for wgl", 1);
     }
 
     HDC device_context = GetDC(dummy_win);
     if (device_context == NULL) {
-        error_emit("Failed to get device context for dummy window for wgl");
-        goto end_before_dc;
+        plat_fatal_error("Failed to get device context for dummy window for wgl", 1);
     }
 
     PIXELFORMATDESCRIPTOR pixel_desc = {
@@ -63,34 +59,27 @@ b32 _w32gl_init_backend(void) {
     i32 format = ChoosePixelFormat(device_context, &pixel_desc);
 
     if (format == 0) {
-        error_emit("Failed to choose pixel format for dummy window for wgl"); 
-        goto end_before_dummy_context;
+        plat_fatal_error("Failed to choose pixel format for dummy window for wgl", 1); 
     }
 
     if (!DescribePixelFormat(
         device_context, format, sizeof(PIXELFORMATDESCRIPTOR), &pixel_desc
     )) {
-        error_emit("Failed to describe pixel format for dummy window for wgl"); 
-        goto end_before_dummy_context;
+        plat_fatal_error("Failed to describe pixel format for dummy window for wgl", 1);
     }
 
     if (!SetPixelFormat(device_context, format, &pixel_desc)) {
-        error_emit("Failed to set pixel format for dummy window for wgl"); 
-        goto end_before_dummy_context;
+        plat_fatal_error("Failed to set pixel format for dummy window for wgl", 1); 
     }
 
     HGLRC dummy_context = wglCreateContext(device_context);
 
     if (dummy_context == NULL) {
-        error_emit("Failed to create OpenGL context for dummy window for wgl"); 
-        goto end_before_dummy_context;
+        plat_fatal_error("Failed to create OpenGL context for dummy window for wgl", 1); 
     }
 
     if (!wglMakeCurrent(device_context, dummy_context)) {
-        error_emit(
-            "Failed to make OpenGL context current for dummy window for wgl"
-        ); 
-        goto end_before_dummy_make_current;
+        plat_fatal_error("Failed to make OpenGL context current for dummy window for wgl", 1); 
     }
 
     wglChoosePixelFormatARB = (wglChoosePixelFormatARB_func*)_w32gl_get_proc("wglChoosePixelFormatARB");
@@ -100,8 +89,7 @@ b32 _w32gl_init_backend(void) {
         wglChoosePixelFormatARB == NULL ||
         wglCreateContextAttribsARB == NULL
     ) {
-        error_emit("Failed to load wgl extensions");
-        goto end;
+        plat_fatal_error("Failed to load wgl extensions", 1);
     }
 
     i32 context_attribs[] = {
@@ -121,21 +109,15 @@ b32 _w32gl_init_backend(void) {
     );
 
     if (_w32gl_context == NULL) {
-        error_emit("Failed to create modern gl context");
+        plat_fatal_error("Failed to create modern gl context", 1);
         return false;
     }
 
-end:
     wglMakeCurrent(NULL, NULL);
-end_before_dummy_make_current:
     wglDeleteContext(dummy_context);
-end_before_dummy_context:
     ReleaseDC(dummy_win, device_context);
-end_before_dc:
     DestroyWindow(dummy_win);
-end_before_win:
     UnregisterClassW(dummy_class_name, module_handle);
-end_before_class:
 
     return ret;
 }

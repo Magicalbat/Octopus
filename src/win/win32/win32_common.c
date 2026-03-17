@@ -60,10 +60,6 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
-    /*if (!_win_create_graphics(maybe_temp.arena, win)) {
-        goto fail;
-    }*/
-
     SetWindowLongPtrW(win->plat_backend->window, GWLP_USERDATA, (LONG_PTR)win);
 
     ShowWindow(win->plat_backend->window, SW_SHOW);
@@ -111,29 +107,12 @@ static LRESULT CALLBACK _w32_window_proc(
             win->mouse_pos.y = (f32)((lParam >> 16) & 0xffff);
         } break;
 
-        case WM_LBUTTONDOWN: {
-            win->mouse_buttons[WIN_MB_LEFT] = true;
-        } break;
-
-        case WM_LBUTTONUP: {
-            win->mouse_buttons[WIN_MB_LEFT] = false;
-        } break;
-
-        case WM_MBUTTONDOWN: {
-            win->mouse_buttons[WIN_MB_MIDDLE] = true;
-        } break;
-
-        case WM_MBUTTONUP: {
-            win->mouse_buttons[WIN_MB_MIDDLE] = false;
-        } break;
-
-        case WM_RBUTTONDOWN: {
-            win->mouse_buttons[WIN_MB_RIGHT] = true;
-        } break;
-
-        case WM_RBUTTONUP: {
-            win->mouse_buttons[WIN_MB_RIGHT] = false;
-        } break;
+        case WM_LBUTTONDOWN: { win->mouse_buttons[WIN_MB_LEFT] = true; } break;
+        case WM_LBUTTONUP: { win->mouse_buttons[WIN_MB_LEFT] = false; } break;
+        case WM_MBUTTONDOWN: { win->mouse_buttons[WIN_MB_MIDDLE] = true; } break;
+        case WM_MBUTTONUP: { win->mouse_buttons[WIN_MB_MIDDLE] = false; } break;
+        case WM_RBUTTONDOWN: { win->mouse_buttons[WIN_MB_RIGHT] = true; } break;
+        case WM_RBUTTONUP: { win->mouse_buttons[WIN_MB_RIGHT] = false; } break;
 
         case WM_MOUSEWHEEL: {
             f32 delta = (f32)GET_WHEEL_DELTA_WPARAM(wParam);
@@ -146,12 +125,14 @@ static LRESULT CALLBACK _w32_window_proc(
         } break;
 
         case WM_KEYDOWN: {
-            win_key down_key = _w32_keymap[wParam];
+            win_key down_key = wParam <= sizeof(_w32_keymap) /
+                sizeof(_w32_keymap[0]) ? _w32_keymap[wParam] : WIN_KEY_NONE;
             win->keys[down_key] = true;
         } break;
 
         case WM_KEYUP: {
-            win_key up_key = _w32_keymap[wParam];
+            win_key up_key = wParam <= sizeof(_w32_keymap) /
+                sizeof(_w32_keymap[0]) ? _w32_keymap[wParam] : WIN_KEY_NONE;
             win->keys[up_key] = false;
         } break;
 
@@ -283,12 +264,15 @@ static void _w32_init_keymap(void) {
     _w32_keymap[VK_F12] = WIN_KEY_F12;
     _w32_keymap[VK_NUMLOCK] = WIN_KEY_NUM_LOCK;
     _w32_keymap[VK_SCROLL] = WIN_KEY_SCROLL_LOCK;
-    _w32_keymap[VK_LSHIFT] = WIN_KEY_LSHIFT;
-    _w32_keymap[VK_RSHIFT] = WIN_KEY_RSHIFT;
-    _w32_keymap[VK_LCONTROL] = WIN_KEY_LCONTROL;
-    _w32_keymap[VK_RCONTROL] = WIN_KEY_RCONTROL;
-    _w32_keymap[VK_LMENU] = WIN_KEY_LALT;
-    _w32_keymap[VK_RMENU] = WIN_KEY_RALT;
+    _w32_keymap[VK_SHIFT] = WIN_KEY_SHIFT;
+    _w32_keymap[VK_CONTROL] = WIN_KEY_CONTROL;
+    _w32_keymap[VK_MENU] = WIN_KEY_ALT;
+    _w32_keymap[VK_LSHIFT] = WIN_KEY_SHIFT;
+    _w32_keymap[VK_RSHIFT] = WIN_KEY_SHIFT;
+    _w32_keymap[VK_LCONTROL] = WIN_KEY_CONTROL;
+    _w32_keymap[VK_RCONTROL] = WIN_KEY_CONTROL;
+    _w32_keymap[VK_LMENU] = WIN_KEY_ALT;
+    _w32_keymap[VK_RMENU] = WIN_KEY_ALT;
     _w32_keymap[VK_OEM_1] = WIN_KEY_SEMICOLON;
     _w32_keymap[VK_OEM_PLUS] = WIN_KEY_EQUAL;
     _w32_keymap[VK_OEM_COMMA] = WIN_KEY_COMMA;
