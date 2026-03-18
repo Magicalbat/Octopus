@@ -7,6 +7,19 @@
 #include "platform/platform.c"
 #include "win/win.c"
 
+const char* vert_shader_source = "#version 330 core\n"
+    "layout (location = 0) in vec2 a_pos;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = vec4(a_pos.x, a_pos.y, 0.0, 1.0);\n"
+    "}\0";
+const char* frag_shader_source = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "}\n\0";
+
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,
     GLsizei length, const GLchar* message, const void* user_param
@@ -34,6 +47,67 @@ int main(int argc, char** argv) {
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(gl_on_error, NULL);
 #endif
+
+    u32 shader_program = 0;
+    {
+        i32 success = 0;
+        char info_log[512];
+
+        u32 vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vertex_shader, 1, &vert_shader_source, NULL);
+        glCompileShader(vertex_shader);
+        glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
+            printf("Vertex shader failed to compile: %s\n", info_log);
+        }
+        // fragment shader
+        unsigned int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragment_shader, 1, &frag_shader_source, NULL);
+        glCompileShader(fragment_shader);
+        // check for shader compile errors
+        glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
+            printf("Fragment shader failed to compile: %s\n", info_log);
+        }
+        // link shaders
+        shader_program = glCreateProgram();
+        glAttachShader(shader_program, vertex_shader);
+        glAttachShader(shader_program, fragment_shader);
+        glLinkProgram(shader_program);
+        // check for linking errors
+        glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(shader_program, 512, NULL, info_log);
+            printf("Shader program failed to link: %s\n", info_log);
+        }
+        glDeleteShader(vertex_shader);
+        glDeleteShader(fragment_shader);
+    }
+
+    u32 VBO = 0, VAO = 0;
+    
+    {
+        f32 vertices[] = {
+            -0.5f, -0.5f,
+             0.0f,  0.5f,
+             0.5f, -0.5f,
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0); 
+    }
 
     // End of setup error frame
     {
@@ -67,6 +141,10 @@ int main(int argc, char** argv) {
 
         win_begin_frame(win);
 
+        glUseProgram(shader_program);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
         win_end_frame(win);
 
         {
@@ -83,6 +161,10 @@ int main(int argc, char** argv) {
     }
 
     win_destroy(win);
+
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shader_program);
 
     arena_destroy(perm_arena);
 
