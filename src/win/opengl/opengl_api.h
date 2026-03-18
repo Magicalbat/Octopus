@@ -50,7 +50,9 @@ typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,
 #   define OPENGL_CALLSTYLE
 #endif
 
-#define X(ret, name, args) typedef ret (OPENGL_CALLSTYLE* gl_##name##_func)args; static gl_##name##_func name;
+#define X(ret, name, args) \
+    typedef ret (OPENGL_CALLSTYLE gl_##name##_func)args; \
+    static gl_##name##_func* name = NULL;
 #   include "opengl_funcs_xlist.h"
 #undef X
 

@@ -1,9 +1,9 @@
 
 #include <gl/GL.h>
 
-typedef struct _win_gfx_backend {
-    HDC device_context;
-} _win_gfx_backend;
+typedef struct _win_gfx_info {
+    HDC hdc;
+} _win_gfx_info;
 
 // WGL_ARB_pixel_format
 // https://registry.khronos.org/OpenGL/extensions/ARB/WGL_ARB_pixel_format.txt
@@ -40,4 +40,9 @@ wglCreateContextAttribsARB_func* wglCreateContextAttribsARB = NULL;
 
 #define WGL_CONTEXT_CORE_PROFILE_BIT_ARB        0x00000001
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
+
+// WGL_EXT_swap_control
+// https://registry.khronos.org/OpenGL/extensions/EXT/WGL_EXT_swap_control.txt
+typedef BOOL (wglSwapIntervalEXT_func)(int interval);
+wglSwapIntervalEXT_func* wglSwapIntervalEXT = NULL;
 

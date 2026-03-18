@@ -34,7 +34,7 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
 
     win->width = width;
     win->height = height;
-    win->plat_backend = PUSH_STRUCT(maybe_temp.arena, _win_plat_backend);
+    win->plat_info = PUSH_STRUCT(maybe_temp.arena, _win_plat_info);
 
     RECT win_rect = { 0, 0, (i32)width, (i32)height };
     if (!AdjustWindowRect(&win_rect, WS_OVERLAPPEDWINDOW, FALSE)) {
@@ -45,7 +45,7 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     string16 title16 = str16_from_str8(scratch.arena, title, true);
-    win->plat_backend->window = CreateWindowW(
+    win->plat_info->window = CreateWindowW(
         W32_WIN_CLASS_NAME,
         title16.str,
         WS_OVERLAPPEDWINDOW,
@@ -55,20 +55,24 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     );
     arena_scratch_release(scratch);
 
-    if (win->plat_backend->window == NULL) {
+    if (win->plat_info->window == NULL) {
         error_emit("Failed to create window");
         goto fail;
     }
 
-    SetWindowLongPtrW(win->plat_backend->window, GWLP_USERDATA, (LONG_PTR)win);
+    SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)win);
 
-    ShowWindow(win->plat_backend->window, SW_SHOW);
+    if (!_win_equip_gfx(arena, win)) {
+        goto fail;
+    }
+
+    ShowWindow(win->plat_info->window, SW_SHOW);
 
     return win;
 
 fail:
-    if (win->plat_backend->window != NULL) {
-        DestroyWindow(win->plat_backend->window);
+    if (win->plat_info->window != NULL) {
+        DestroyWindow(win->plat_info->window);
     }
 
     arena_temp_end(maybe_temp);
@@ -78,8 +82,8 @@ fail:
 void win_destroy(window* win) {
     if (win == NULL) { return; }
 
-    //_win_destroy_graphics(win);
-    DestroyWindow(win->plat_backend->window);
+    _win_unequip_gfx(win);
+    DestroyWindow(win->plat_info->window);
 }
 
 void win_process_events(window* win) {

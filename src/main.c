@@ -7,6 +7,11 @@
 #include "platform/platform.c"
 #include "win/win.c"
 
+void gl_on_error(
+    GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* user_param
+);
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -21,7 +26,14 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
 
+    win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
+    window* win1 = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus 2 test"));
+
+#ifndef NDEBUG
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(gl_on_error, NULL);
+#endif
 
     // End of setup error frame
     {
@@ -46,14 +58,58 @@ int main(int argc, char** argv) {
         }
     }
 
+    win->clear_color = (vec4f){ 0.0f, 0.2f, 0.4f, 1.0f };
+    win1->clear_color = (vec4f){ 0.0f, 0.4f, 0.2f, 1.0f };
+
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
+        log_frame_begin();
+
         win_process_events(win);
+        win_process_events(win1);
+
+        win_make_current(win);
+        win_begin_frame(win);
+        win_end_frame(win);
+
+        win_make_current(win1);
+        win_begin_frame(win1);
+        win_end_frame(win1);
+
+        {
+            mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+            string8 errors = log_frame_end(scratch.arena, LOG_ERROR, LOG_RES_CONCAT, true);
+
+            if (errors.size) {
+                printf("%.*s\n", STR8_FMT(errors));
+            }
+
+            arena_scratch_release(scratch);
+        }
     }
 
     win_destroy(win);
+    win_destroy(win1);
 
     arena_destroy(perm_arena);
 
     return 0;
+}
+
+void gl_on_error(
+    GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* user_param
+) {
+    UNUSED(source);
+    UNUSED(type);
+    UNUSED(id);
+    UNUSED(length);
+    UNUSED(user_param);
+
+    if (severity == GL_DEBUG_SEVERITY_HIGH) {
+        error_emitf("OpenGL Error: %s", message);
+    } else {
+        info_emitf("OpenGL Message: %s", message);
+    }
 }
 

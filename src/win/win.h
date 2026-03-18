@@ -143,8 +143,10 @@ STATIC_ASSERT(
 );
 
 typedef struct {
-    struct _win_plat_backend* plat_backend;
-    struct _win_gfx_backend* gfx_backend;
+    struct _win_plat_info* plat_info;
+    struct _win_gfx_info* gfx_info;
+
+    vec4f clear_color;
 
     u32 width, height;
 
@@ -175,7 +177,7 @@ typedef struct {
 #define WIN_KEY_JUST_DOWN(win, key) (win->keys[key] && !win->prev_keys[key])
 #define WIN_KEY_JUST_UP(win, key) (!win->keys[key] && win->prev_keys[key])
 
-b32 win_gfx_backend_init(void);
+void win_gfx_backend_init(void);
 
 window* win_create(mem_arena* arena, u32 width, u32 height, string8 title);
 void win_destroy(window* win);
@@ -183,8 +185,6 @@ void win_destroy(window* win);
 void win_make_current(window* win);
 
 void win_process_events(window* win);
-
-void win_set_clear_color(window* win, vec4f col);
 
 void win_begin_frame(window* win);
 void win_end_frame(window* win);
