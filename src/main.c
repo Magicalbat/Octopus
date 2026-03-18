@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 
     win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
-    window* win1 = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus 2 test"));
+    win_make_current(win);
 
 #ifndef NDEBUG
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -58,22 +58,16 @@ int main(int argc, char** argv) {
         }
     }
 
-    win->clear_color = (vec4f){ 0.0f, 0.2f, 0.4f, 1.0f };
-    win1->clear_color = (vec4f){ 0.0f, 0.4f, 0.2f, 1.0f };
+    win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
 
         win_process_events(win);
-        win_process_events(win1);
 
-        win_make_current(win);
         win_begin_frame(win);
-        win_end_frame(win);
 
-        win_make_current(win1);
-        win_begin_frame(win1);
-        win_end_frame(win1);
+        win_end_frame(win);
 
         {
             mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -89,7 +83,6 @@ int main(int argc, char** argv) {
     }
 
     win_destroy(win);
-    win_destroy(win1);
 
     arena_destroy(perm_arena);
 

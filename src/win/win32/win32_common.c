@@ -6,6 +6,7 @@ static LRESULT CALLBACK _w32_window_proc(
     HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 );
 
+static void _w32_update_win_dpi(window* win);
 static b32 _w32_register_win_class(void);
 static void _w32_init_keymap(void);
 
@@ -66,6 +67,8 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
+    _w32_update_win_dpi(win);
+
     ShowWindow(win->plat_info->window, SW_SHOW);
 
     return win;
@@ -90,7 +93,7 @@ void win_process_events(window* win) {
     memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
     memcpy(win->prev_keys, win->keys, WIN_KEY_COUNT);
 
-    win->mouse_scroll = (vec2f){ 0, 0 };
+    win->mouse_scroll = (v2_f32){ 0, 0 };
 
     // Processing events
     MSG msg = { 0 };
@@ -140,6 +143,19 @@ static LRESULT CALLBACK _w32_window_proc(
             win->keys[up_key] = false;
         } break;
 
+        case WM_DPICHANGED: {
+            _w32_update_win_dpi(win);
+
+            const RECT* new_win_rect = (RECT*)lParam;
+            SetWindowPos(
+                win->plat_info->window, NULL,
+                new_win_rect->left, new_win_rect->top,
+                new_win_rect->right - new_win_rect->left,
+                new_win_rect->bottom - new_win_rect->top,
+                SWP_NOZORDER | SWP_NOACTIVATE
+            );
+        } break;
+
         case WM_SIZE: {
             u32 width = (u32)LOWORD(lParam);
             u32 height = (u32)HIWORD(lParam);
@@ -158,6 +174,21 @@ static LRESULT CALLBACK _w32_window_proc(
     }
 
     return 0;
+}
+
+static void _w32_update_win_dpi(window* win) {
+    HMONITOR monitor = MonitorFromWindow(
+        win->plat_info->window,
+        MONITOR_DEFAULTTONEAREST
+    );
+
+    u32 raw_dpi = 96;
+    GetDpiForMonitor(monitor, MDT_RAW_DPI, &raw_dpi, &raw_dpi);
+    u32 effective_dpi = 96;
+    GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &effective_dpi, &effective_dpi);
+
+    win->dpi = effective_dpi;
+    win->raw_dpi = raw_dpi;
 }
 
 static b32 _w32_register_win_class(void) {

@@ -146,19 +146,24 @@ typedef struct {
     struct _win_plat_info* plat_info;
     struct _win_gfx_info* gfx_info;
 
-    vec4f clear_color;
+    v4_f32 clear_color;
 
     u32 width, height;
 
     u32 flags;
 
+    // Physical DPI of the monitor
+    u32 raw_dpi;
+    // DPI given by the OS for scaling UI
+    u32 dpi;
+
     // Increments of scroll deltas
     // i.e. +1 indicates the wheel was rotated one increment up
     // Floating point to allow finer control for more dynamic input devices
-    vec2f mouse_scroll;
+    v2_f32 mouse_scroll;
     f32 touchpad_zoom;
 
-    vec2f mouse_pos;
+    v2_f32 mouse_pos;
 
     b8 mouse_buttons[WIN_MB_COUNT];
     b8 prev_mouse_buttons[WIN_MB_COUNT];

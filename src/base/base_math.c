@@ -1,188 +1,188 @@
 
 #define _F32_EPSILON 1e-6f
 
-vec2f vec2f_add(vec2f a, vec2f b) {
-    return (vec2f){ a.x + b.x, a.y + b.y };
+v2_f32 v2_f32_add(v2_f32 a, v2_f32 b) {
+    return (v2_f32){ a.x + b.x, a.y + b.y };
 }
 
-vec2f vec2f_sub(vec2f a, vec2f b) {
-    return (vec2f){ a.x - b.x, a.y - b.y };
+v2_f32 v2_f32_sub(v2_f32 a, v2_f32 b) {
+    return (v2_f32){ a.x - b.x, a.y - b.y };
 }
 
-vec2f vec2f_comp_mul(vec2f a, vec2f b) {
-    return (vec2f){ a.x * b.x, a.y * b.y };
+v2_f32 v2_f32_comp_mul(v2_f32 a, v2_f32 b) {
+    return (v2_f32){ a.x * b.x, a.y * b.y };
 }
 
-vec2f vec2f_comp_div(vec2f a, vec2f b) {
-    return (vec2f){ a.x / b.x, a.y / b.y };
+v2_f32 v2_f32_comp_div(v2_f32 a, v2_f32 b) {
+    return (v2_f32){ a.x / b.x, a.y / b.y };
 }
 
-vec2f vec2f_scale(vec2f v, f32 s) {
-    return (vec2f){ v.x * s, v.y * s };
+v2_f32 v2_f32_scale(v2_f32 v, f32 s) {
+    return (v2_f32){ v.x * s, v.y * s };
 }
 
-vec2f vec2f_perp(vec2f v) {
-    return (vec2f){ -v.y, v.x };
+v2_f32 v2_f32_perp(v2_f32 v) {
+    return (v2_f32){ -v.y, v.x };
 }
 
-f32 vec2f_cross(vec2f a, vec2f b) {
+f32 v2_f32_cross(v2_f32 a, v2_f32 b) {
     return a.x * b.y - a.y * b.x;
 }
 
-f32 vec2f_dot(vec2f a, vec2f b) {
+f32 v2_f32_dot(v2_f32 a, v2_f32 b) {
     return a.x * b.x + a.y * b.y;
 }
 
-f32 vec2f_sqr_dist(vec2f a, vec2f b) {
+f32 v2_f32_sqr_dist(v2_f32 a, v2_f32 b) {
     return (a.x - b.x) * (a.x - b.x) +
         (a.y - b.y) * (a.y - b.y);
 }
 
-f32 vec2f_dist(vec2f a, vec2f b) {
+f32 v2_f32_dist(v2_f32 a, v2_f32 b) {
     return sqrtf((a.x - b.x) * (a.x - b.x) +
         (a.y - b.y) * (a.y - b.y));
 }
 
-b32 vec2f_eq(vec2f a, vec2f b) {
+b32 v2_f32_eq(v2_f32 a, v2_f32 b) {
     return a.x == b.x && a.y == b.y;
 }
 
-f32 vec2f_sqr_len(vec2f v) {
+f32 v2_f32_sqr_len(v2_f32 v) {
     return v.x * v.x + v.y * v.y;
 }
 
-f32 vec2f_len(vec2f v) {
+f32 v2_f32_len(v2_f32 v) {
     return sqrtf(v.x * v.x + v.y * v.y);
 }
 
-vec2f vec2f_norm(vec2f v) {
+v2_f32 v2_f32_norm(v2_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y);
     if (ABS(len) > _F32_EPSILON)
-        return (vec2f){ v.x / len, v.y / len };
-    return (vec2f){ 1, 0 };
+        return (v2_f32){ v.x / len, v.y / len };
+    return (v2_f32){ 1, 0 };
 }
 
-vec3f vec3f_add(vec3f a, vec3f b) {
-    return (vec3f){ a.x + b.x, a.y + b.y, a.z + b.z };
+v3_f32 v3_f32_add(v3_f32 a, v3_f32 b) {
+    return (v3_f32){ a.x + b.x, a.y + b.y, a.z + b.z };
 }
 
-vec3f vec3f_sub(vec3f a, vec3f b) {
-    return (vec3f){ a.x - b.x, a.y - b.y, a.z - b.z };
+v3_f32 v3_f32_sub(v3_f32 a, v3_f32 b) {
+    return (v3_f32){ a.x - b.x, a.y - b.y, a.z - b.z };
 }
 
-vec3f vec3f_comp_mul(vec3f a, vec3f b) {
-    return (vec3f){ a.x * b.x, a.y * b.y, a.z * b.z };
+v3_f32 v3_f32_comp_mul(v3_f32 a, v3_f32 b) {
+    return (v3_f32){ a.x * b.x, a.y * b.y, a.z * b.z };
 }
 
-vec3f vec3f_comp_div(vec3f a, vec3f b) {
-    return (vec3f){ a.x / b.x, a.y / b.y, a.z / b.z };
+v3_f32 v3_f32_comp_div(v3_f32 a, v3_f32 b) {
+    return (v3_f32){ a.x / b.x, a.y / b.y, a.z / b.z };
 }
 
-vec3f vec3f_scale(vec3f v, f32 s) {
-    return (vec3f){ v.x * s, v.y * s, v.z * s };
+v3_f32 v3_f32_scale(v3_f32 v, f32 s) {
+    return (v3_f32){ v.x * s, v.y * s, v.z * s };
 }
 
-vec3f vec3f_cross(vec3f a, vec3f b) {
-    return (vec3f) {
+v3_f32 v3_f32_cross(v3_f32 a, v3_f32 b) {
+    return (v3_f32) {
         a.y * b.z - a.z * b.y,
         a.z * b.x - a.x * b.z,
         a.x * b.y - a.y * b.x
     };
 }
 
-f32 vec3f_dot(vec3f a, vec3f b) {
+f32 v3_f32_dot(v3_f32 a, v3_f32 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-f32 vec3f_sqr_dist(vec3f a, vec3f b) {
+f32 v3_f32_sqr_dist(v3_f32 a, v3_f32 b) {
     return (a.x - b.x) * (a.x - b.x) + 
         (a.y - b.y) * (a.y - b.y) + 
         (a.z - b.z) * (a.z - b.z);
 }
 
-f32 vec3f_dist(vec3f a, vec3f b) {
+f32 v3_f32_dist(v3_f32 a, v3_f32 b) {
     return sqrtf((a.x - b.x) * (a.x - b.x) + 
         (a.y - b.y) * (a.y - b.y) + 
         (a.z - b.z) * (a.z - b.z));
 }
 
-b32 vec3f_eq(vec3f a, vec3f b) {
+b32 v3_f32_eq(v3_f32 a, v3_f32 b) {
     return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 
-f32 vec3f_sqr_len(vec3f v) {
+f32 v3_f32_sqr_len(v3_f32 v) {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
-f32 vec3f_len(vec3f v) {
+f32 v3_f32_len(v3_f32 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-vec3f vec3f_norm(vec3f v) {
+v3_f32 v3_f32_norm(v3_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     if (ABS(len) > _F32_EPSILON) {
         f32 r = 1.0f / len;
-        return (vec3f){ v.x * r, v.y * r, v.z * r };
+        return (v3_f32){ v.x * r, v.y * r, v.z * r };
     }
-    return (vec3f){ 1, 0, 0 };
+    return (v3_f32){ 1, 0, 0 };
 }
 
-vec4f vec4f_add(vec4f a, vec4f b) {
-    return (vec4f){ a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w };
+v4_f32 v4_f32_add(v4_f32 a, v4_f32 b) {
+    return (v4_f32){ a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w };
 }
 
-vec4f vec4f_sub(vec4f a, vec4f b) {
-    return (vec4f){ a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w };
+v4_f32 v4_f32_sub(v4_f32 a, v4_f32 b) {
+    return (v4_f32){ a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w };
 }
 
-vec4f vec4f_comp_mul(vec4f a, vec4f b) {
-    return (vec4f){ a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w };
+v4_f32 v4_f32_comp_mul(v4_f32 a, v4_f32 b) {
+    return (v4_f32){ a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w };
 }
 
-vec4f vec4f_comp_div(vec4f a, vec4f b) {
-    return (vec4f){ a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w };
+v4_f32 v4_f32_comp_div(v4_f32 a, v4_f32 b) {
+    return (v4_f32){ a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w };
 }
 
-vec4f vec4f_scale(vec4f v, f32 s) {
-    return (vec4f){ v.x * s, v.y * s, v.z * s, v.w * s };
+v4_f32 v4_f32_scale(v4_f32 v, f32 s) {
+    return (v4_f32){ v.x * s, v.y * s, v.z * s, v.w * s };
 }
 
-f32 vec4f_dot(vec4f a, vec4f b) {
+f32 v4_f32_dot(v4_f32 a, v4_f32 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
-f32 vec4f_sqr_dist(vec4f a, vec4f b) {
+f32 v4_f32_sqr_dist(v4_f32 a, v4_f32 b) {
     return (a.x - b.x) * (a.x - b.x) + 
         (a.y - b.y) * (a.y - b.y) + 
         (a.z - b.z) * (a.z - b.z) +
         (a.w - b.w) * (a.w - b.w);
 }
 
-f32 vec4f_dist(vec4f a, vec4f b) {
+f32 v4_f32_dist(v4_f32 a, v4_f32 b) {
     return sqrtf((a.x - b.x) * (a.x - b.x) + 
         (a.y - b.y) * (a.y - b.y) + 
         (a.z - b.z) * (a.z - b.z) + 
         (a.w - b.w) * (a.w - b.w));
 }
 
-b32 vec4f_eq(vec4f a, vec4f b) {
+b32 v4_f32_eq(v4_f32 a, v4_f32 b) {
     return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
 }
 
-f32 vec4f_sqr_len(vec4f v) {
+f32 v4_f32_sqr_len(v4_f32 v) {
     return v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
 }
 
-f32 vec4f_len(vec4f v) {
+f32 v4_f32_len(v4_f32 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
 }
 
-vec4f vec4f_norm(vec4f v) {
+v4_f32 v4_f32_norm(v4_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
     if (ABS(len) > _F32_EPSILON) {
         f32 r = 1.0f / len;
-        return (vec4f){ v.x * r, v.y * r, v.z * r, v.w * r };
+        return (v4_f32){ v.x * r, v.y * r, v.z * r, v.w * r };
     }
-    return (vec4f){ 1, 0, 0, 0 };
+    return (v4_f32){ 1, 0, 0, 0 };
 }
 

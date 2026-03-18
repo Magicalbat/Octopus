@@ -34,7 +34,7 @@ static const char* _dd_line_vert_source;
 static const char* _dd_line_frag_source;
 
 static struct {
-    const win_window* win;
+    const window* win;
 
     _dd_circles circles;
     _dd_lines lines;
@@ -49,7 +49,7 @@ f32 _dd_calc_geom_scale(f32 radius) {
     return geom_scale;
 }
 
-void debug_draw_init(const win_window* win) {
+void debug_draw_init(const window* win) {
     _dd_state.win = win;
 
     // Circles init 

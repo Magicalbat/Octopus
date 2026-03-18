@@ -24,7 +24,7 @@ RM_BIN =
 BIN_EXT = 
 
 ifeq ($(OS), Windows_NT)
-	LFLAGS += -lgdi32 -lkernel32 -luser32 -lBcrypt -lopengl32
+	LFLAGS += -lgdi32 -lkernel32 -luser32 -lBcrypt -lopengl32 -lshcore
 	MKDIR_BIN = if not exist bin\$(config) mkdir bin\$(config)
 	RM_BIN = rd /s /q bin
 	BIN_EXT = .exe
