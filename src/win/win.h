@@ -6,6 +6,7 @@
 
 #if defined(WIN_GFX_API_OPENGL)
 #   include "opengl/opengl_api.h"
+#   include "opengl/opengl_helpers.h"
 #   if defined(PLATFORM_WIN32)
 #       include "win32/win32_opengl.h"
 #   elif defined(PLATFORM_LINUX)

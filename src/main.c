@@ -2,23 +2,12 @@
 #include "base/base.h"
 #include "platform/platform.h"
 #include "win/win.h"
+#include "debug_draw/debug_draw.h"
 
 #include "base/base.c"
 #include "platform/platform.c"
 #include "win/win.c"
-
-const char* vert_shader_source = "#version 330 core\n"
-    "layout (location = 0) in vec2 a_pos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(a_pos.x, a_pos.y, 0.0, 1.0);\n"
-    "}\0";
-const char* frag_shader_source = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\n\0";
+#include "debug_draw/debug_draw.c"
 
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,
@@ -48,66 +37,15 @@ int main(int argc, char** argv) {
     glDebugMessageCallback(gl_on_error, NULL);
 #endif
 
-    u32 shader_program = 0;
-    {
-        i32 success = 0;
-        char info_log[512];
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        u32 vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertex_shader, 1, &vert_shader_source, NULL);
-        glCompileShader(vertex_shader);
-        glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-        if (!success) {
-            glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
-            printf("Vertex shader failed to compile: %s\n", info_log);
-        }
-        // fragment shader
-        unsigned int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragment_shader, 1, &frag_shader_source, NULL);
-        glCompileShader(fragment_shader);
-        // check for shader compile errors
-        glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-        if (!success) {
-            glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
-            printf("Fragment shader failed to compile: %s\n", info_log);
-        }
-        // link shaders
-        shader_program = glCreateProgram();
-        glAttachShader(shader_program, vertex_shader);
-        glAttachShader(shader_program, fragment_shader);
-        glLinkProgram(shader_program);
-        // check for linking errors
-        glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-        if (!success) {
-            glGetShaderInfoLog(shader_program, 512, NULL, info_log);
-            printf("Shader program failed to link: %s\n", info_log);
-        }
-        glDeleteShader(vertex_shader);
-        glDeleteShader(fragment_shader);
-    }
+    debug_draw_init(win);
 
-    u32 VBO = 0, VAO = 0;
-    
-    {
-        f32 vertices[] = {
-            -0.5f, -0.5f,
-             0.0f,  0.5f,
-             0.5f, -0.5f,
-        };
-
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-        glBindVertexArray(VAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-
-        glBindVertexArray(0); 
-    }
+    view2_f32 view = {
+        .width = (f32)win->width,
+        .aspect_ratio = (f32)win->width / (f32)win->height
+    };
 
     // End of setup error frame
     {
@@ -139,11 +77,28 @@ int main(int argc, char** argv) {
 
         win_process_events(win);
 
+        view.aspect_ratio = (f32)win->width / (f32)win->height;
+        debug_draw_set_view(view);
+
         win_begin_frame(win);
 
-        glUseProgram(shader_program);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        v2_f32 points[] = { 
+            { 0.0f, 0.0f },
+            { 100.0f, -100.0f },
+            { 200.0f, 100.0f },
+            { 300.0f, 0.0f }
+        };
+
+        debug_draw_lines(
+            points, sizeof(points)/sizeof(points[0]),
+            5.0f, (v4_f32){ 1, 0, 1, 1 }
+        );
+
+
+        debug_draw_circles(
+            points, sizeof(points)/sizeof(points[0]),
+            10.0f, (v4_f32){ 0, 1, 1, 1 }
+        );
 
         win_end_frame(win);
 
@@ -160,11 +115,9 @@ int main(int argc, char** argv) {
         }
     }
 
-    win_destroy(win);
+    debug_draw_destroy();
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shader_program);
+    win_destroy(win);
 
     arena_destroy(perm_arena);
 

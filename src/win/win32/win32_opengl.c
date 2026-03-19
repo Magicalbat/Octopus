@@ -32,7 +32,7 @@ void win_gfx_backend_init(void) {
     }
 
     HWND dummy_win = CreateWindowW(
-        dummy_class_name, L"", WS_OVERLAPPED,
+        dummy_class_name, L"", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         NULL, NULL, NULL, NULL
     );
@@ -158,8 +158,6 @@ b32 _win_equip_gfx(mem_arena* arena, window* win) {
         i32 context_attribs[] = {
             WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
             WGL_CONTEXT_MINOR_VERSION_ARB, 5,
-            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-            WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
 
 #ifndef NDEBUG
             WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,

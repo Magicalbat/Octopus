@@ -3,6 +3,16 @@ typedef struct { f32 x, y;       } v2_f32;
 typedef struct { f32 x, y, z;    } v3_f32;
 typedef struct { f32 x, y, z, w; } v4_f32;
 
+typedef struct {
+    f32 m[9];
+} m3_f32;
+
+typedef struct {
+    v2_f32 center;
+    f32 width;
+    f32 aspect_ratio;
+} view2_f32;
+
 v2_f32 v2_f32_add(v2_f32 a, v2_f32 b);
 v2_f32 v2_f32_sub(v2_f32 a, v2_f32 b);
 v2_f32 v2_f32_comp_mul(v2_f32 a, v2_f32 b);
@@ -44,4 +54,7 @@ b32 v4_f32_eq(v4_f32 a, v4_f32 b);
 f32 v4_f32_sqr_len(v4_f32 v);
 f32 v4_f32_len(v4_f32 v);
 v4_f32 v4_f32_norm(v4_f32 v);
+
+void m3_f32_transform(m3_f32* mat, v2_f32 scale, v2_f32 offset, f32 rotation);
+void m3_f32_from_view2(m3_f32* mat, view2_f32 view);
 

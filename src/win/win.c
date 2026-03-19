@@ -10,6 +10,7 @@ void _win_gfx_swap(window* win);
 
 #if defined(WIN_GFX_API_OPENGL)
 #   include "opengl/opengl_common.c"
+#   include "opengl/opengl_helpers.c"
 #   if defined(PLATFORM_WIN32)
 #       include "win32/win32_opengl.c"
 #   elif defined(PLATFORM_LINUX)

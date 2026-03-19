@@ -39,12 +39,12 @@ static struct {
     _dd_circles circles;
     _dd_lines lines;
 
-    const viewf* view_ref;
-    mat3f view_mat;
+    view2_f32 view_copy;
+    m3_f32 view_mat;
 } _dd_state = { 0 };
 
 f32 _dd_calc_geom_scale(f32 radius) {
-    f32 screen_radius = radius * (f32)_dd_state.win->width / _dd_state.view_ref->width;
+    f32 screen_radius = radius * (f32)_dd_state.win->width / _dd_state.view_copy.width;
     f32 geom_scale = 1.0f + 1.0f / screen_radius;
     return geom_scale;
 }
@@ -72,7 +72,7 @@ void debug_draw_init(const window* win) {
         );
 
         circles->instance_buffer = glh_create_buffer(
-            GL_ARRAY_BUFFER, sizeof(vec2f) * _DD_CIRCLE_BATCH_SIZE, NULL, GL_DYNAMIC_DRAW
+            GL_ARRAY_BUFFER, sizeof(v2_f32) * _DD_CIRCLE_BATCH_SIZE, NULL, GL_DYNAMIC_DRAW
         );
 
         circles->shader_prog = glh_create_shader(
@@ -94,7 +94,7 @@ void debug_draw_init(const window* win) {
         glBindVertexArray(lines->vert_array);
 
         lines->pos_buffer = glh_create_buffer(
-            GL_ARRAY_BUFFER, sizeof(vec2f) * _DD_LINE_BATCH_SIZE, NULL, GL_DYNAMIC_DRAW
+            GL_ARRAY_BUFFER, sizeof(v2_f32) * _DD_LINE_BATCH_SIZE, NULL, GL_DYNAMIC_DRAW
         );
 
         lines->shader_prog = glh_create_shader(
@@ -131,17 +131,20 @@ void debug_draw_destroy(void) {
     }
 }
 
-void debug_draw_set_view(const viewf* view) {
-    _dd_state.view_ref = view;
-    mat3f_from_view(&_dd_state.view_mat, *view);
+void debug_draw_set_view(view2_f32 view) {
+    _dd_state.view_copy = view;
+    m3_f32_from_view2(&_dd_state.view_mat, view);
 }
 
-void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) {
+void debug_draw_circles(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) {
     if (num_points == 0 || points == NULL || radius == 0.0f) {
         return;
     }
 
     _dd_circles* circles = &_dd_state.circles;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUseProgram(circles->shader_prog);
     glUniformMatrix3fv(circles->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);
@@ -157,16 +160,16 @@ void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) 
     glVertexAttribDivisor(1, 1);
 
     glBindBuffer(GL_ARRAY_BUFFER, circles->pos_pattern_buffer);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(v2_f32), (void*)0);
 
     glBindBuffer(GL_ARRAY_BUFFER, circles->instance_buffer);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(v2_f32), (void*)0);
 
     u32 num_drawn = 0;
     while (num_drawn < num_points) {
         u32 cur_drawing = MIN(num_points - num_drawn, _DD_CIRCLE_BATCH_SIZE);
 
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * cur_drawing, points + num_drawn);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v2_f32) * cur_drawing, points + num_drawn);
 
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 6, (GLsizei)cur_drawing);
 
@@ -179,12 +182,15 @@ void debug_draw_circles(vec2f* points, u32 num_points, f32 radius, vec4f color) 
     glDisableVertexAttribArray(1);
 }
 
-void debug_draw_lines(vec2f* points, u32 num_points, f32 radius, vec4f color) {
+void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) {
     if (num_points <= 1 || points == NULL || radius == 0.0f) {
         return;
     }
 
     _dd_lines* lines = &_dd_state.lines;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUseProgram(lines->shader_prog);
     glUniformMatrix3fv(lines->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);
@@ -201,8 +207,8 @@ void debug_draw_lines(vec2f* points, u32 num_points, f32 radius, vec4f color) {
     glVertexAttribDivisor(1, 1);
 
     glBindBuffer(GL_ARRAY_BUFFER, lines->pos_buffer);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)(0));
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), (void*)(sizeof(vec2f)));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(v2_f32), (void*)(0));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(v2_f32), (void*)(sizeof(v2_f32)));
 
     u32 num_drawn = 0;
     while (num_drawn < num_points) {
@@ -218,7 +224,7 @@ void debug_draw_lines(vec2f* points, u32 num_points, f32 radius, vec4f color) {
             }
         }
 
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2f) * cur_drawing, points + num_drawn);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v2_f32) * cur_drawing, points + num_drawn);
 
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 6, (GLsizei)(cur_drawing - 1));
 

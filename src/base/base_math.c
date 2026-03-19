@@ -186,3 +186,26 @@ v4_f32 v4_f32_norm(v4_f32 v) {
     return (v4_f32){ 1, 0, 0, 0 };
 }
 
+void m3_f32_transform(m3_f32* mat, v2_f32 scale, v2_f32 offset, f32 rotation) {
+    f32 r_sin = sinf(rotation);
+    f32 r_cos = cosf(rotation);
+
+    *mat = (m3_f32){ .m = {
+         r_cos * scale.x, r_sin * scale.x, offset.x,
+        -r_sin * scale.y, r_cos * scale.y, offset.y,
+         0.0f, 0.0f, 1.0f
+    } };
+}
+
+void m3_f32_from_view2(m3_f32* mat, view2_f32 view) {
+    v2_f32 size = { view.width, view.width / view.aspect_ratio };
+    v2_f32 scale = { 2.0f / size.x, -2.0f / size.y };
+
+    v2_f32 offset = {
+        -(view.center.x * scale.x),
+        -(view.center.y * scale.y)
+    };
+
+    m3_f32_transform(mat, scale, offset, 0);
+}
+
