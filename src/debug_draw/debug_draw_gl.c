@@ -269,7 +269,8 @@ static const char* _dd_circle_frag_source = GLSL_SOURCE(
 
     void main() {
         float dist = length(sdf_pos) - 1.0;
-        float blending = fwidth(dist);
+        // See https://eternalstudent.dev/sdf for explanation of this multiplier
+        float blending = length(vec2(dFdx(dist), dFdy(dist))) * 0.573896787348;
         float alpha = smoothstep(blending, -blending, dist);
         out_col = vec4(u_col.rgb, u_col.a * alpha);
     }
@@ -322,8 +323,8 @@ static const char* _dd_line_frag_source = GLSL_SOURCE(
         float t_unclamped = dot(sdf_pos, p1_translated) / dot(p1_translated, p1_translated); 
         float t = clamp(t_unclamped, 0.0, 1.0);
         float dist = distance(sdf_pos, t * p1_translated) - u_radius;
-
-        float blending = fwidth(dist);
+        // See https://eternalstudent.dev/sdf for explanation of this multiplier
+        float blending = length(vec2(dFdx(dist), dFdy(dist))) * 0.573896787348;
         float alpha = smoothstep(blending, -blending, dist);
         out_col = vec4(u_col.rgb, u_col.a * alpha);
     }

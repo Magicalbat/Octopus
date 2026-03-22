@@ -84,20 +84,19 @@ int main(int argc, char** argv) {
 
         v2_f32 points[] = { 
             { 0.0f, 0.0f },
-            { 100.0f, -100.0f },
+            /*{ 100.0f, -100.0f },
             { 200.0f, 100.0f },
-            { 300.0f, 0.0f }
+            { 300.0f, 0.0f }*/
         };
 
-        debug_draw_lines(
+        /*debug_draw_lines(
             points, sizeof(points)/sizeof(points[0]),
             5.0f, (v4_f32){ 1, 0, 1, 1 }
-        );
-
+        );*/
 
         debug_draw_circles(
             points, sizeof(points)/sizeof(points[0]),
-            10.0f, (v4_f32){ 0, 1, 1, 1 }
+            (f32)win->raw_dpi * 0.5f, (v4_f32){ 0, 1, 1, 1 }
         );
 
         win_end_frame(win);
