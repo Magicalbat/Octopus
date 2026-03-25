@@ -6,7 +6,6 @@ typedef struct {
 
 typedef struct {
     b8 initialized;
-    b8 valid;
 
     i16 loca_format;
 
@@ -16,7 +15,6 @@ typedef struct {
     u32 cmap_offset;
 
     tt_font_table head, glyf, hmtx, loca;
-
 } tt_font_info;
 
 void tt_font_init(string8 file, tt_font_info* info);

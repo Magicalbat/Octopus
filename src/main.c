@@ -42,10 +42,17 @@ int main(int argc, char** argv) {
     };
 
     for (u32 i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
+        log_frame_begin();
+
         printf("Parsing %.*s\n", STR8_FMT(fonts[i]));
         string8 font_file = plat_file_read(perm_arena, fonts[i]);
         tt_font_info font_info = { 0 };
         tt_font_init(font_file, &font_info);
+
+        string8 err_str = log_frame_end(perm_arena, LOG_ERROR, LOG_RES_CONCAT, true);
+        if (err_str.size) {
+            printf("\x1b[31m%.*s\x1b[0m\n", STR8_FMT(err_str));
+        }
     }
 
     {
@@ -60,10 +67,7 @@ int main(int argc, char** argv) {
 
         arena_scratch_release(scratch);
 
-        string8 err_str = log_frame_end(
-            perm_arena, LOG_ERROR, LOG_RES_CONCAT, true
-        );
-
+        string8 err_str = log_frame_end( perm_arena, LOG_ERROR, LOG_RES_CONCAT, true);
         if (err_str.size) {
             printf("\x1b[31m%.*s\x1b[0m\n", STR8_FMT(err_str));
             return 1;
@@ -155,6 +159,7 @@ int main(int argc, char** argv) {
 
         win_process_events(win);
 
+        view.width = (f32)win->width;
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         debug_draw_set_view(view);
 
@@ -174,7 +179,7 @@ int main(int argc, char** argv) {
 
         debug_draw_circles(
             points, sizeof(points)/sizeof(points[0]),
-            (f32)win->raw_dpi * 0.5f, (v4_f32){ 0, 1, 1, 1 }
+            (f32)win->raw_dpi * 1.0f, (v4_f32){ 0, 1, 1, 1 }
         );
 
         win_end_frame(win);
