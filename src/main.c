@@ -2,14 +2,14 @@
 #include "base/base.h"
 #include "platform/platform.h"
 #include "win/win.h"
-#include "truetype/truetype.h"
 #include "debug_draw/debug_draw.h"
+#include "truetype/truetype.h"
 
 #include "base/base.c"
 #include "platform/platform.c"
 #include "win/win.c"
-#include "truetype/truetype.c"
 #include "debug_draw/debug_draw.c"
+#include "truetype/truetype.c"
 
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,
@@ -31,83 +31,25 @@ int main(int argc, char** argv) {
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
 
     string8 fonts[] = {
-        STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/comic.ttf"),
-        STR8_LIT("res/corbeli.ttf"),
         STR8_LIT("res/Envy Code R.ttf"),
-        STR8_LIT("res/Hack.ttf"),
-        STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/Symbola.ttf"),
-        STR8_LIT("res/times.ttf"),
+        //STR8_LIT("res/arial.ttf"),
+        //STR8_LIT("res/comic.ttf"),
+        //STR8_LIT("res/corbeli.ttf"),
+        //STR8_LIT("res/Hack.ttf"),
+        //STR8_LIT("res/NotoSans-Regular.ttf"),
+        //STR8_LIT("res/Symbola.ttf"),
+        //STR8_LIT("res/times.ttf"),
     };
 
-    for (u32 i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
-        log_frame_begin();
+#define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
 
-        printf("Parsing %.*s\n", STR8_FMT(fonts[i]));
-        string8 font_file = plat_file_read(perm_arena, fonts[i]);
-        tt_font_info font_info = { 0 };
-        tt_font_init(font_file, &font_info);
-
-        string8 err_str = log_frame_end(perm_arena, LOG_ERROR, LOG_RES_CONCAT, true);
-        if (err_str.size) {
-            printf("\x1b[31m%.*s\x1b[0m\n", STR8_FMT(err_str));
-        }
-    }
-
-    {
-        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-        string8 other_logs = log_frame_peek(
-            scratch.arena, LOG_INFO | LOG_WARN, LOG_RES_CONCAT, true
-        );
-
-        if (other_logs.size) {
-            printf("%.*s\n", STR8_FMT(other_logs));
-        }
-
-        arena_scratch_release(scratch);
-
-        string8 err_str = log_frame_end( perm_arena, LOG_ERROR, LOG_RES_CONCAT, true);
-        if (err_str.size) {
-            printf("\x1b[31m%.*s\x1b[0m\n", STR8_FMT(err_str));
-            return 1;
-        }
-    }
-
-    arena_destroy(perm_arena);
-}
-
-#if 0
-int main(int argc, char** argv) {
-    UNUSED(argc);
-    UNUSED(argv);
-
-    log_frame_begin();
-
-    plat_init();
-
-    u64 seeds[2] = { 0 };
-    plat_get_entropy(seeds, sizeof(seeds));
-    prng_seed(seeds[0], seeds[1]);
-
-    mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
-
-    string8 fonts[] = {
-        STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/comic.ttf"),
-        STR8_LIT("res/corbeli.ttf"),
-        STR8_LIT("res/Envy Code R.ttf"),
-        STR8_LIT("res/Hack.ttf"),
-        STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/Symbola.ttf"),
-        STR8_LIT("res/times.ttf"),
-    };
+    string8 font_files[NUM_FONTS] = { 0 };
+    tt_font_info font_infos[NUM_FONTS] = { 0 };
 
     for (u32 i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
         printf("Parsing %.*s\n", STR8_FMT(fonts[i]));
-        string8 font_file = plat_file_read(perm_arena, fonts[i]);
-        tt_font_info font_info = { 0 };
-        tt_font_init(font_file, &font_info);
+        font_files[i] = plat_file_read(perm_arena, fonts[i]);
+        tt_font_init(font_files[i], &font_infos[i]);
     }
 
     win_gfx_backend_init();
@@ -159,33 +101,35 @@ int main(int argc, char** argv) {
 
         win_process_events(win);
 
-        view.width = (f32)win->width;
+        view.center.x += win->mouse_scroll.x * view.width * 0.02f;
+        view.center.y -= win->mouse_scroll.y * view.width * 0.02f;
+        view.width *= win->touchpad_zoom;
+
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         debug_draw_set_view(view);
 
         win_begin_frame(win);
 
-        v2_f32 points[] = { 
-            { 0.0f, 0.0f },
-            /*{ 100.0f, -100.0f },
-            { 200.0f, 100.0f },
-            { 300.0f, 0.0f }*/
-        };
-
-        /*debug_draw_lines(
-            points, sizeof(points)/sizeof(points[0]),
-            5.0f, (v4_f32){ 1, 0, 1, 1 }
-        );*/
-
-        debug_draw_circles(
-            points, sizeof(points)/sizeof(points[0]),
-            (f32)win->raw_dpi * 1.0f, (v4_f32){ 0, 1, 1, 1 }
-        );
+        for (u32 i = 0; i < NUM_FONTS; i++) {
+            tt_test_draw_glyph(
+                font_files[i], &font_infos[i], 'A',
+                (v2_f32){ 0, 0 },
+                (v2_f32){ 100, -100 }
+            );
+        }
 
         win_end_frame(win);
 
         {
             mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+            string8 other_logs = log_frame_peek(
+                scratch.arena, LOG_INFO | LOG_WARN, LOG_RES_CONCAT, true
+            );
+
+            if (other_logs.size) {
+                printf("%.*s\n", STR8_FMT(other_logs));
+            }
 
             string8 errors = log_frame_end(scratch.arena, LOG_ERROR, LOG_RES_CONCAT, true);
 
@@ -205,7 +149,6 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-#endif
 
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,

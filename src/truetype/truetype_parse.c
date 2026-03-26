@@ -11,6 +11,21 @@
 
 #define _TT_TAG(s) _TT_READ_BE32((s))
 
+typedef union {
+    struct {
+        u8 on_curve: 1;
+        u8 x_1_byte: 1;
+        u8 y_1_byte: 1;
+        u8 repeat: 1;
+        u8 x_same_or_pos: 1;
+        u8 y_same_or_pos: 1;
+        u8 overlap_simple: 1;
+        u8 _reserved: 1;
+    };
+
+    u8 bits;
+} _tt_simple_glyf_flag;
+
 u32 _tt_calc_checksum(string8 file, u32 offset, u32 len);
 // Does not bounds check table records
 b32 _tt_get_validate_table(string8 file, u32 table_tag, tt_font_table* table);
@@ -81,6 +96,96 @@ void tt_font_init(string8 file, tt_font_info* info) {
 
 invalid:
     info->initialized = false;
+}
+
+void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale) {
+    f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
+    scale = v2_f32_scale(scale, 1.0f / units_per_em);
+
+    u32 glyph_index = _tt_glyph_index(file, info, codepoint);
+    u32 offset = info->loca_format == 0 ?
+        (u32)_TT_READ_BE16(file.str + info->loca.offset + glyph_index * 2) * 2 :
+        _TT_READ_BE32(file.str + info->loca.offset + glyph_index * 4);
+
+    u8* glyf = file.str + info->glyf.offset + offset;
+
+    i16 num_contours = (i16)_TT_READ_BE16(glyf);
+    //i16 x_min = (i16)_TT_READ_BE16(glyf + 2);
+    //i16 y_min = (i16)_TT_READ_BE16(glyf + 4);
+    //i16 x_max = (i16)_TT_READ_BE16(glyf + 6);
+    //i16 y_max = (i16)_TT_READ_BE16(glyf + 8);
+
+    if (num_contours < 0) {
+        warn_emitf("Cannot render compound glyf codepoint %u", codepoint);
+        return;
+    }
+
+    u32 num_points = _TT_READ_BE16(glyf + 10 + (num_contours - 1) * 2);
+
+    u16 instruction_length = _TT_READ_BE16(glyf + 10 + num_contours * 2);
+    u8* point_data = glyf + 10 + num_contours * 2 + 2 + instruction_length;
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u32 num_flags = 0;
+    _tt_simple_glyf_flag* flags = PUSH_ARRAY(scratch.arena, _tt_simple_glyf_flag, num_points);
+    v2_f32* points = PUSH_ARRAY(scratch.arena, v2_f32, num_points);
+
+    while (num_flags < num_points) {
+        _tt_simple_glyf_flag flag = { .bits = *(point_data++) };
+        flags[num_flags++] = flag;
+
+        if (flag.repeat) {
+            u8 count = *(point_data++);
+
+            while (count--) {
+                flags[num_flags++] = flag;
+            }
+        }
+    }
+
+    i16 x = 0;
+    for (u32 i = 0; i < num_points; i++) {
+        if (flags[i].x_1_byte) {
+            u8 x_diff = *(point_data++);
+            x += flags[i].x_same_or_pos ? x_diff : -(i16)x_diff;
+        } else if (!flags[i].x_same_or_pos) {
+            i16 x_diff = (i16)_TT_READ_BE16(point_data);
+            point_data += 2;
+
+            x += x_diff;
+        }
+
+        points[i].x = x;
+    }
+
+    i16 y = 0;
+    for (u32 i = 0; i < num_points; i++) {
+        if (flags[i].y_1_byte) {
+            u8 y_diff = *(point_data++);
+            y += flags[i].y_same_or_pos ? y_diff : -(i16)y_diff;
+        } else if (!flags[i].y_same_or_pos) {
+            i16 y_diff = (i16)_TT_READ_BE16(point_data);
+            point_data += 2;
+
+
+            y += y_diff;
+        }
+
+        points[i].y = y;
+    }
+
+    for (u32 i = 0; i < num_points; i++) {
+        //printf("%6d %6d\n", (i16)points[i].x, (i16)points[i].y);
+        points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
+    }
+
+    debug_draw_circles(
+        points, num_points,
+        2.0f, (v4_f32){ 1.0f, 1.0f, 1.0f, 1.0f }
+    );
+
+    arena_scratch_release(scratch);
 }
 
 u32 _tt_calc_checksum(string8 file, u32 offset, u32 len) {

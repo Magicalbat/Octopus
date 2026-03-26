@@ -19,3 +19,5 @@ typedef struct {
 
 void tt_font_init(string8 file, tt_font_info* info);
 
+void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale);
+
