@@ -64,6 +64,7 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
 
     bt_init(arena, &win->plat_info->bt, &(bt_context_desc){
         .hwnd = win->plat_info->window,
+        .zoom_deadzone_mm = 8,
         .flags.disable_raw_msgs = 1,
         .flags.disable_contact_msgs = 1,
     });

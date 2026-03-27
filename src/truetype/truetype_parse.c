@@ -11,21 +11,6 @@
 
 #define _TT_TAG(s) _TT_READ_BE32((s))
 
-typedef union {
-    struct {
-        u8 on_curve: 1;
-        u8 x_1_byte: 1;
-        u8 y_1_byte: 1;
-        u8 repeat: 1;
-        u8 x_same_or_pos: 1;
-        u8 y_same_or_pos: 1;
-        u8 overlap_simple: 1;
-        u8 _reserved: 1;
-    };
-
-    u8 bits;
-} _tt_simple_glyf_flag;
-
 u32 _tt_calc_checksum(string8 file, u32 offset, u32 len);
 // Does not bounds check table records
 b32 _tt_get_validate_table(string8 file, u32 table_tag, tt_font_table* table);
@@ -120,7 +105,7 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
         return;
     }
 
-    u32 num_points = _TT_READ_BE16(glyf + 10 + (num_contours - 1) * 2);
+    u32 num_points = _TT_READ_BE16(glyf + 10 + (num_contours - 1) * 2) + 1;
 
     u16 instruction_length = _TT_READ_BE16(glyf + 10 + num_contours * 2);
     u8* point_data = glyf + 10 + num_contours * 2 + 2 + instruction_length;
@@ -128,14 +113,15 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     u32 num_flags = 0;
-    _tt_simple_glyf_flag* flags = PUSH_ARRAY(scratch.arena, _tt_simple_glyf_flag, num_points);
+    u8* flags = PUSH_ARRAY(scratch.arena, u8, num_points);
     v2_f32* points = PUSH_ARRAY(scratch.arena, v2_f32, num_points);
 
     while (num_flags < num_points) {
-        _tt_simple_glyf_flag flag = { .bits = *(point_data++) };
+        u8 flag = *(point_data++);
         flags[num_flags++] = flag;
 
-        if (flag.repeat) {
+        // REPEAT_FLAG
+        if (flag & 0x08) {
             u8 count = *(point_data++);
 
             while (count--) {
@@ -146,10 +132,12 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
 
     i16 x = 0;
     for (u32 i = 0; i < num_points; i++) {
-        if (flags[i].x_1_byte) {
+        // X_SHORT_VECTOR
+        if (flags[i] & 0x02) {
             u8 x_diff = *(point_data++);
-            x += flags[i].x_same_or_pos ? x_diff : -(i16)x_diff;
-        } else if (!flags[i].x_same_or_pos) {
+            // X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR 
+            x += (flags[i] & 0x10) ? x_diff : -(i16)x_diff;
+        } else if ((flags[i] & 0x10) != 0x10) {
             i16 x_diff = (i16)_TT_READ_BE16(point_data);
             point_data += 2;
 
@@ -161,13 +149,14 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
 
     i16 y = 0;
     for (u32 i = 0; i < num_points; i++) {
-        if (flags[i].y_1_byte) {
+        // Y_SHORT_VECTOR
+        if (flags[i] & 0x04) {
             u8 y_diff = *(point_data++);
-            y += flags[i].y_same_or_pos ? y_diff : -(i16)y_diff;
-        } else if (!flags[i].y_same_or_pos) {
+            // Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR
+            y += (flags[i] & 0x20) ? y_diff : -(i16)y_diff;
+        } else if ((flags[i] & 0x20) != 0x20) {
             i16 y_diff = (i16)_TT_READ_BE16(point_data);
             point_data += 2;
-
 
             y += y_diff;
         }

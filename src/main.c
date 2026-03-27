@@ -16,6 +16,8 @@ void gl_on_error(
     GLsizei length, const GLchar* message, const void* user_param
 );
 
+v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -32,13 +34,13 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Envy Code R.ttf"),
-        //STR8_LIT("res/arial.ttf"),
-        //STR8_LIT("res/comic.ttf"),
-        //STR8_LIT("res/corbeli.ttf"),
-        //STR8_LIT("res/Hack.ttf"),
-        //STR8_LIT("res/NotoSans-Regular.ttf"),
-        //STR8_LIT("res/Symbola.ttf"),
-        //STR8_LIT("res/times.ttf"),
+        STR8_LIT("res/arial.ttf"),
+        STR8_LIT("res/comic.ttf"),
+        STR8_LIT("res/corbeli.ttf"),
+        STR8_LIT("res/Hack.ttf"),
+        STR8_LIT("res/NotoSans-Regular.ttf"),
+        STR8_LIT("res/Symbola.ttf"),
+        STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -101,9 +103,17 @@ int main(int argc, char** argv) {
 
         win_process_events(win);
 
-        view.center.x += win->mouse_scroll.x * view.width * 0.02f;
-        view.center.y -= win->mouse_scroll.y * view.width * 0.02f;
-        view.width *= win->touchpad_zoom;
+        view.center.x += win->mouse_scroll.x * view.width * 0.04f;
+        view.center.y -= win->mouse_scroll.y * view.width * 0.04f;
+
+        if (win->touchpad_zoom != 1.0f) {
+            v2_f32 init_mousepos = screen_to_world(win, &view, win->mouse_pos);
+            view.width *= win->touchpad_zoom;
+            v2_f32 final_mousepos = screen_to_world(win, &view, win->mouse_pos);
+
+            v2_f32 diff = v2_f32_sub(final_mousepos, init_mousepos);
+            view.center = v2_f32_sub(view.center, diff);
+        }
 
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         debug_draw_set_view(view);
@@ -112,9 +122,9 @@ int main(int argc, char** argv) {
 
         for (u32 i = 0; i < NUM_FONTS; i++) {
             tt_test_draw_glyph(
-                font_files[i], &font_infos[i], 'A',
-                (v2_f32){ 0, 0 },
-                (v2_f32){ 100, -100 }
+                font_files[i], &font_infos[i], 0x3c0,
+                (v2_f32){ -1000 + 250 * (f32)i, 0 },
+                (v2_f32){ 200, -200 }
             );
         }
 
@@ -165,5 +175,16 @@ void gl_on_error(
     } else {
         info_emitf("OpenGL Message: %s", message);
     }
+}
+
+v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p) {
+    p = v2_f32_add(p, (v2_f32){
+        -(f32)win->width / 2.0f,
+        -(f32)win->height / 2.0f 
+    });
+    p = v2_f32_scale(p, view->width / (f32)win->width);
+    p = v2_f32_add(p, view->center);
+
+    return p;
 }
 
