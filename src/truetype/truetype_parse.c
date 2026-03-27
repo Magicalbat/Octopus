@@ -101,7 +101,6 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
     //i16 y_max = (i16)_TT_READ_BE16(glyf + 8);
 
     if (num_contours < 0) {
-        warn_emitf("Cannot render compound glyf codepoint %u", codepoint);
         return;
     }
 
@@ -165,14 +164,31 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
     }
 
     for (u32 i = 0; i < num_points; i++) {
-        //printf("%6d %6d\n", (i16)points[i].x, (i16)points[i].y);
         points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
     }
 
-    debug_draw_circles(
+    v2_f32 draw_points[11] = { 0 };
+    for (u32 c = 0; c < (u32)num_contours; c++) {
+        u32 start_point = c == 0 ? 0 : _TT_READ_BE16(glyf + 10 + (c-1) * 2) + 1;
+        u32 end_point = _TT_READ_BE16(glyf + 10 + c * 2);
+
+        u32 num_points = end_point - start_point + 1;
+
+        for (u32 i = 0; i < num_points; i++) {
+            u32 p0 = ((i + 0) % num_points) + start_point;
+            u32 p1 = ((i + 1) % num_points) + start_point;
+
+            draw_points[0] = points[p0];
+            draw_points[1] = points[p1];
+
+            debug_draw_lines(draw_points, 2, 1.0f, (v4_f32){ 1, 1, 1, 1 });
+        }
+    }
+
+    /*debug_draw_circles(
         points, num_points,
         2.0f, (v4_f32){ 1.0f, 1.0f, 1.0f, 1.0f }
-    );
+    );*/
 
     arena_scratch_release(scratch);
 }

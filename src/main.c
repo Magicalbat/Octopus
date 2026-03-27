@@ -34,13 +34,13 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Envy Code R.ttf"),
-        STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/comic.ttf"),
-        STR8_LIT("res/corbeli.ttf"),
-        STR8_LIT("res/Hack.ttf"),
-        STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/Symbola.ttf"),
-        STR8_LIT("res/times.ttf"),
+        //STR8_LIT("res/arial.ttf"),
+        //STR8_LIT("res/comic.ttf"),
+        //STR8_LIT("res/corbeli.ttf"),
+        //STR8_LIT("res/Hack.ttf"),
+        //STR8_LIT("res/NotoSans-Regular.ttf"),
+        //STR8_LIT("res/Symbola.ttf"),
+        //STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -107,6 +107,7 @@ int main(int argc, char** argv) {
         view.center.y -= win->mouse_scroll.y * view.width * 0.04f;
 
         if (win->touchpad_zoom != 1.0f) {
+            // Zooming such that the mouse stays in the same position
             v2_f32 init_mousepos = screen_to_world(win, &view, win->mouse_pos);
             view.width *= win->touchpad_zoom;
             v2_f32 final_mousepos = screen_to_world(win, &view, win->mouse_pos);
@@ -120,12 +121,33 @@ int main(int argc, char** argv) {
 
         win_begin_frame(win);
 
+        u32 rows = 6;
+        u32 cols = 16;
         for (u32 i = 0; i < NUM_FONTS; i++) {
-            tt_test_draw_glyph(
-                font_files[i], &font_infos[i], 0x3c0,
-                (v2_f32){ -1000 + 250 * (f32)i, 0 },
-                (v2_f32){ 200, -200 }
-            );
+            f32 font_offset = 160 * (f32)(rows + 1) * (f32)i;
+
+            for (u32 j = 0; j < fonts[i].size; j++) {
+                tt_test_draw_glyph(
+                    font_files[i], &font_infos[i], fonts[i].str[j],
+                    (v2_f32){ 75 * (f32)j, font_offset },
+                    (v2_f32){ 100, -100 }
+                );
+            }
+
+            for (u32 y = 0; y < rows; y++) {
+                for (u32 x = 0; x < cols; x++) {
+                    u32 codepoint = 33 + (y * cols + x);
+                    v2_f32 pos = {
+                        150 * (f32)x,
+                        font_offset + 150 * (f32)(y + 1)
+                    };
+
+                    tt_test_draw_glyph(
+                        font_files[i], &font_infos[i], codepoint,
+                        pos, (v2_f32){ 100, -100 }
+                    );
+                }
+            }
         }
 
         win_end_frame(win);

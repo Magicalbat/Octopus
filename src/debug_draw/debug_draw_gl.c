@@ -134,6 +134,14 @@ void debug_draw_destroy(void) {
 void debug_draw_set_view(view2_f32 view) {
     _dd_state.view_copy = view;
     m3_f32_from_view2(&_dd_state.view_mat, view);
+
+    _dd_circles* circles = &_dd_state.circles;
+    glUseProgram(circles->shader_prog);
+    glUniformMatrix3fv(circles->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);
+
+    _dd_lines* lines = &_dd_state.lines;
+    glUseProgram(lines->shader_prog);
+    glUniformMatrix3fv(lines->mat_loc, 1, GL_TRUE, _dd_state.view_mat.m);
 }
 
 void debug_draw_circles(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) {
