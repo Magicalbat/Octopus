@@ -34,13 +34,13 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Envy Code R.ttf"),
-        //STR8_LIT("res/arial.ttf"),
-        //STR8_LIT("res/comic.ttf"),
-        //STR8_LIT("res/corbeli.ttf"),
-        //STR8_LIT("res/Hack.ttf"),
-        //STR8_LIT("res/NotoSans-Regular.ttf"),
-        //STR8_LIT("res/Symbola.ttf"),
-        //STR8_LIT("res/times.ttf"),
+        STR8_LIT("res/arial.ttf"),
+        STR8_LIT("res/comic.ttf"),
+        STR8_LIT("res/corbeli.ttf"),
+        STR8_LIT("res/Hack.ttf"),
+        STR8_LIT("res/NotoSans-Regular.ttf"),
+        STR8_LIT("res/Symbola.ttf"),
+        STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -98,6 +98,8 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
+    u32 codepoint_offset = 32;//913;
+
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
 
@@ -119,6 +121,14 @@ int main(int argc, char** argv) {
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         debug_draw_set_view(view);
 
+        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_RIGHT)) {
+            codepoint_offset++;
+        }
+        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_LEFT)) {
+            if (codepoint_offset) codepoint_offset--;
+        }
+
+
         win_begin_frame(win);
 
         u32 rows = 6;
@@ -136,7 +146,7 @@ int main(int argc, char** argv) {
 
             for (u32 y = 0; y < rows; y++) {
                 for (u32 x = 0; x < cols; x++) {
-                    u32 codepoint = 33 + (y * cols + x);
+                    u32 codepoint = (y * cols + x) + codepoint_offset;
                     v2_f32 pos = {
                         150 * (f32)x,
                         font_offset + 150 * (f32)(y + 1)

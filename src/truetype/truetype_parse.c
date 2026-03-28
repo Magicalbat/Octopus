@@ -113,7 +113,7 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
 
     u32 num_flags = 0;
     u8* flags = PUSH_ARRAY(scratch.arena, u8, num_points);
-    v2_f32* points = PUSH_ARRAY(scratch.arena, v2_f32, num_points);
+    v2_f32* points = PUSH_ARRAY(scratch.arena, v2_f32, num_points + 1);
 
     while (num_flags < num_points) {
         u8 flag = *(point_data++);
@@ -167,28 +167,22 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
         points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
     }
 
-    v2_f32 draw_points[11] = { 0 };
     for (u32 c = 0; c < (u32)num_contours; c++) {
         u32 start_point = c == 0 ? 0 : _TT_READ_BE16(glyf + 10 + (c-1) * 2) + 1;
         u32 end_point = _TT_READ_BE16(glyf + 10 + c * 2);
 
         u32 num_points = end_point - start_point + 1;
 
-        for (u32 i = 0; i < num_points; i++) {
-            u32 p0 = ((i + 0) % num_points) + start_point;
-            u32 p1 = ((i + 1) % num_points) + start_point;
+        v2_f32 tmp = points[end_point + 1];
+        points[end_point + 1] = points[start_point];
 
-            draw_points[0] = points[p0];
-            draw_points[1] = points[p1];
+        debug_draw_lines(
+            points + start_point, num_points + 1,
+            2.0f, (v4_f32){ 1, 1, 1, 1 }
+        );
 
-            debug_draw_lines(draw_points, 2, 1.0f, (v4_f32){ 1, 1, 1, 1 });
-        }
+        points[end_point + 1] = tmp;
     }
-
-    /*debug_draw_circles(
-        points, num_points,
-        2.0f, (v4_f32){ 1.0f, 1.0f, 1.0f, 1.0f }
-    );*/
 
     arena_scratch_release(scratch);
 }
@@ -417,8 +411,9 @@ u32 _tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
             // TODO: make this a binary search
             for (u32 i = 0; i < seg_count; i++) {
                 u16 end_code = _TT_READ_BE16(subtable + 14 + i * 2);
+                u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + i * 2);
 
-                if (end_code >= codepoint) {
+                if (start_code <= codepoint && codepoint <= end_code) {
                     seg = (i32)i;
                     break;
                 }
