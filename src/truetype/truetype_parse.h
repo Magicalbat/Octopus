@@ -7,6 +7,8 @@ typedef struct {
 typedef struct {
     b8 initialized;
 
+    b8 cmap_sorted;
+
     i16 loca_format;
 
     u16 cmap_format;

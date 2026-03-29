@@ -317,6 +317,8 @@ b32 _tt_find_cmap_subtable(string8 file, tt_font_info* info, tt_font_table cmap)
     
     u16 format = _TT_READ_BE16(file.str + cmap_offset);
 
+    info->cmap_sorted = true;
+
     // Validating format, length, and indices within subtable
     // Not parsing any glyph indices here
     switch (format) {
@@ -346,6 +348,19 @@ b32 _tt_find_cmap_subtable(string8 file, tt_font_info* info, tt_font_table cmap)
             if (length < min_length || cmap.length < length) {
                 return false;
             }
+
+            u16 prev_end = 0;
+            for (u32 i = 0; i < seg_count; i++) {
+                u16 end_code = _TT_READ_BE16(file.str + cmap_offset + 14 + i * 2);
+                u16 start_code = _TT_READ_BE16(
+                    file.str + cmap_offset + 16 + seg_count * 2 + i * 2
+                );
+
+                if (end_code < start_code) { return false; }
+                if (end_code < prev_end) { info->cmap_sorted = false; }
+
+                prev_end = end_code;
+            }
         } break;
 
         case 6: {
@@ -374,6 +389,18 @@ b32 _tt_find_cmap_subtable(string8 file, tt_font_info* info, tt_font_table cmap)
 
             if (length < implied_length || cmap.length < local_offset + length) {
                 return false;
+            }
+
+            u32 prev_end = 0;
+            for (u32 i = 0; i < num_groups; i++) {
+                u32 group_offset = 16 + 12 * i;
+                u32 start_code = _TT_READ_BE32(file.str + cmap_offset + group_offset);
+                u32 end_code = _TT_READ_BE32(file.str + cmap_offset + group_offset + 4);
+
+                if (end_code < start_code) { return false; }
+                if (end_code < prev_end) { info->cmap_sorted = false; }
+
+                prev_end = end_code;
             }
         } break;
 
@@ -408,14 +435,37 @@ u32 _tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
 
             i32 seg = -1;
 
-            // TODO: make this a binary search
-            for (u32 i = 0; i < seg_count; i++) {
-                u16 end_code = _TT_READ_BE16(subtable + 14 + i * 2);
-                u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + i * 2);
+            if (info->cmap_sorted) {
+                // Sorted cmap
 
-                if (start_code <= codepoint && codepoint <= end_code) {
-                    seg = (i32)i;
-                    break;
+                i32 low = 0;
+                i32 high = (i32)seg_count - 1;
+
+                while (low <= high) {
+                    i32 mid = low + (high - low + 1) / 2;
+
+                    u16 end_code = _TT_READ_BE16(subtable + 14 + mid * 2);
+                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + mid * 2);
+
+                    if (codepoint > end_code) {
+                        low = mid + 1;
+                    } else if (codepoint < start_code) {
+                        high = mid - 1;
+                    } else {
+                        seg = mid;
+                        break;
+                    }
+                }
+            } else {
+                // Unsorted cmap
+                for (u32 i = 0; i < seg_count; i++) {
+                    u16 end_code = _TT_READ_BE16(subtable + 14 + i * 2);
+                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + i * 2);
+
+                    if (start_code <= codepoint && codepoint <= end_code) {
+                        seg = (i32)i;
+                        break;
+                    }
                 }
             }
 
@@ -467,22 +517,52 @@ u32 _tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
         case 12:
         case 13: {
             u32 num_groups = _TT_READ_BE32(subtable + 12);
+            i64 group = -1;
 
-            // TODO: turn this into binary search
-            for (u32 i = 0; i < num_groups; i++) {
-                u32 group_offset = 16 + 12 * i;
-                u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
-                u32 start_code = _TT_READ_BE32(subtable + group_offset);
+            u32 group_offset = 0, start_code = 0;
 
-                if (start_code <= codepoint && codepoint <= end_code) {
-                    u32 start_index = _TT_READ_BE32(subtable + group_offset + 8);
+            if (info->cmap_sorted) {
+                // Sorted cmap
+                i64 low = 0;
+                i64 high = num_groups - 1;
 
-                    if (info->cmap_format == 12) {
-                        return start_index + codepoint - start_code;
+                while (low <= high) {
+                    i64 mid = low + (high - low + 1) / 2;
+
+                    group_offset = 16 + 12 * (u32)mid;
+                    start_code = _TT_READ_BE32(subtable + group_offset);
+                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
+
+                    if (codepoint > end_code) {
+                        low = mid + 1;
+                    } else if (codepoint < start_code) {
+                        high = mid - 1;
                     } else {
-                        return start_index;
+                        group = mid;
+                        break;
                     }
                 }
+            } else {
+                // Unsorted cmap
+                for (u32 i = 0; i < num_groups; i++) {
+                    group_offset = 16 + 12 * i;
+                    start_code = _TT_READ_BE32(subtable + group_offset);
+                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
+
+                    if (start_code <= codepoint && codepoint <= end_code) {
+                        group = i;
+                        break;
+                    }
+                }
+            }
+
+            if (group == -1) { return 0; }
+
+            u32 start_index = _TT_READ_BE32(subtable + group_offset + 8);
+            if (info->cmap_format == 12) {
+                return start_index + codepoint - start_code;
+            } else {
+                return start_index;
             }
         } break;
 

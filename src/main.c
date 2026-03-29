@@ -49,9 +49,10 @@ int main(int argc, char** argv) {
     tt_font_info font_infos[NUM_FONTS] = { 0 };
 
     for (u32 i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
-        printf("Parsing %.*s\n", STR8_FMT(fonts[i]));
+        printf("Parsing %.*s - ", STR8_FMT(fonts[i]));
         font_files[i] = plat_file_read(perm_arena, fonts[i]);
         tt_font_init(font_files[i], &font_infos[i]);
+        printf("format = %u\n", font_infos[i].cmap_format);
     }
 
     win_gfx_backend_init();
