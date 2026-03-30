@@ -173,15 +173,98 @@ void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 
 
         u32 num_points = end_point - start_point + 1;
 
-        v2_f32 tmp = points[end_point + 1];
-        points[end_point + 1] = points[start_point];
+        mem_arena_temp temp_arena = arena_temp_begin(scratch.arena);
+
+        u32 num_draw_points = 0;
+        v2_f32* draw_points = PUSH_ARRAY(temp_arena.arena, v2_f32, num_points * 5);
+
+        u32 point_offset = 0;
+        while (point_offset < num_points && !(flags[start_point + point_offset] & 0x1)) {
+            point_offset++;
+        }
+
+        if (point_offset == num_points) {
+            point_offset = 0;
+        } else {
+            draw_points[num_draw_points++] = points[start_point + point_offset];
+        }
+
+        for (u32 i = 0; i < num_points; i++) {
+            u32 p0 = ((i + point_offset + 0) % num_points) + start_point;
+            u32 p1 = ((i + point_offset + 1) % num_points) + start_point;
+            u32 p2 = ((i + point_offset + 2) % num_points) + start_point;
+
+            u32 on_curve = (u32)(
+                ((flags[p0] & 0x1) << 2) |
+                ((flags[p1] & 0x1) << 1) |
+                ((flags[p2] & 0x1) << 0));
+
+            v2_f32 a = points[p0];
+            v2_f32 b = points[p1];
+            v2_f32 c = points[p2];
+
+            b32 bez = true;
+
+            switch (on_curve) {
+                case 0b110:
+                case 0b111: {
+                    // Line Segment
+                    draw_points[num_draw_points++] = points[p1];
+                    bez = false;
+                } break;
+
+                case 0b101: {
+                    // Bezier
+                    // a, b, and c are already correct
+                    // i needs to be incremented
+                    i++;
+                } break;
+
+                case 0b100: {
+                    // Bezier
+                    // End control point is implied
+                    c = v2_f32_scale(v2_f32_add(b, c), 0.5f);
+                } break;
+
+                case 0b001: {
+                    // Bezier
+                    // Start control point is implied
+                    a = v2_f32_scale(v2_f32_add(a, b), 0.5f);
+                    // i needs to be incremented
+                    i++;
+                } break;
+
+                case 0b000: {
+                    // Bezier
+                    // Both start and end are implied
+                    a = v2_f32_scale(v2_f32_add(a, b), 0.5f);
+                    c = v2_f32_scale(v2_f32_add(b, c), 0.5f);
+                } break;
+
+                case 0b010:
+                case 0b011: {
+                    // This should be impossible
+                    // TODO: remove this, just for testing
+                    printf("oops %u\n", codepoint);
+                } break;
+            }
+
+            if (!bez) { continue; }
+
+            for (f32 t = 0.2f; t <= 1.0f; t += 0.2f) {
+                v2_f32 m0 = v2_f32_add(a, v2_f32_scale(v2_f32_sub(b, a), t));
+                v2_f32 m1 = v2_f32_add(b, v2_f32_scale(v2_f32_sub(c, b), t));
+                v2_f32 p = v2_f32_add(m0, v2_f32_scale(v2_f32_sub(m1, m0), t));
+                draw_points[num_draw_points++] = p;
+            }
+        }
 
         debug_draw_lines(
-            points + start_point, num_points + 1,
+            draw_points, num_draw_points,
             2.0f, (v4_f32){ 1, 1, 1, 1 }
         );
 
-        points[end_point + 1] = tmp;
+        arena_temp_end(temp_arena);
     }
 
     arena_scratch_release(scratch);

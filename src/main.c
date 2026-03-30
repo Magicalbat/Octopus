@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 32;//913;
+    u32 codepoint_offset = 32;
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
@@ -160,6 +160,9 @@ int main(int argc, char** argv) {
                 }
             }
         }
+
+        v2_f32 mousepos = screen_to_world(win, &view, win->mouse_pos);
+        debug_draw_circles(&mousepos, 1, 2.0f, (v4_f32){ 1, 0, 0, 1 });
 
         win_end_frame(win);
 

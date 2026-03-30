@@ -79,6 +79,8 @@ void debug_draw_init(const window* win) {
             _dd_circle_vert_source, _dd_circle_frag_source
         );
 
+        glBindVertexArray(0);
+
         glUseProgram(circles->shader_prog);
         circles->mat_loc = glGetUniformLocation(circles->shader_prog, "u_view_mat");
         circles->geom_scale_loc = glGetUniformLocation(circles->shader_prog, "u_geom_scale");
@@ -96,6 +98,8 @@ void debug_draw_init(const window* win) {
         lines->pos_buffer = glh_create_buffer(
             GL_ARRAY_BUFFER, sizeof(v2_f32) * _DD_LINE_BATCH_SIZE, NULL, GL_DYNAMIC_DRAW
         );
+
+        glBindVertexArray(0);
 
         lines->shader_prog = glh_create_shader(
             _dd_line_vert_source, _dd_line_frag_source
@@ -188,6 +192,8 @@ void debug_draw_circles(v2_f32* points, u32 num_points, f32 radius, v4_f32 color
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+
+    glBindVertexArray(0);
 }
 
 void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) {
@@ -238,12 +244,15 @@ void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) 
 
         num_drawn += cur_drawing;
     }
+    
 
     glVertexAttribDivisor(0, 0);
     glVertexAttribDivisor(1, 0);
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+
+    glBindVertexArray(0);
 }
 
 static const char* _dd_circle_vert_source = GLSL_SOURCE(
