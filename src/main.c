@@ -49,10 +49,9 @@ int main(int argc, char** argv) {
     tt_font_info font_infos[NUM_FONTS] = { 0 };
 
     for (u32 i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
-        printf("Parsing %.*s - ", STR8_FMT(fonts[i]));
+        printf("Parsing %.*s...\n", STR8_FMT(fonts[i]));
         font_files[i] = plat_file_read(perm_arena, fonts[i]);
         tt_font_init(font_files[i], &font_infos[i]);
-        printf("format = %u\n", font_infos[i].cmap_format);
     }
 
     win_gfx_backend_init();
@@ -99,7 +98,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 32;
+    u32 codepoint_offset = 'a';//32;
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
@@ -128,7 +127,6 @@ int main(int argc, char** argv) {
         if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_LEFT)) {
             if (codepoint_offset) codepoint_offset--;
         }
-
 
         win_begin_frame(win);
 
@@ -160,9 +158,6 @@ int main(int argc, char** argv) {
                 }
             }
         }
-
-        v2_f32 mousepos = screen_to_world(win, &view, win->mouse_pos);
-        debug_draw_circles(&mousepos, 1, 2.0f, (v4_f32){ 1, 0, 0, 1 });
 
         win_end_frame(win);
 

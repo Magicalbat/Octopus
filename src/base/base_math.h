@@ -1,7 +1,19 @@
 
-typedef struct { f32 x, y;       } v2_f32;
-typedef struct { f32 x, y, z;    } v3_f32;
-typedef struct { f32 x, y, z, w; } v4_f32;
+typedef struct {
+    i16 x, y;
+} v2_i16;
+
+typedef struct {
+    f32 x, y;       
+} v2_f32;
+
+typedef struct {
+    f32 x, y, z;    
+} v3_f32;
+
+typedef struct {
+    f32 x, y, z, w; 
+} v4_f32;
 
 typedef struct {
     f32 m[9];

@@ -10,16 +10,58 @@ typedef struct {
     b8 cmap_sorted;
 
     i16 loca_format;
-
+    u16 num_glyphs;
     u16 cmap_format;
     // Offset of selected cmap subtable, not cmap table itself
     // Offset is from beginning of file
     u32 cmap_offset;
 
+    u32 max_glyph_points;
+    u32 max_glyph_contours;
+
     tt_font_table head, glyf, hmtx, loca;
 } tt_font_info;
 
+typedef enum {
+    TT_POINT_FLAG_NONE        = 0b000000,
+    TT_POINT_FLAG_LINE        = 0b000001,
+    TT_POINT_FLAG_CONTOUR_END = 0b000010,
+    TT_POINT_FLAG_GENERATED   = 0b000100,
+    // Only used for MSDF rendering
+    TT_POINT_FLAG_RED         = 0b001000,
+    TT_POINT_FLAG_GREEN       = 0b010000,
+    TT_POINT_FLAG_BLUE        = 0b100000,
+} tt_point_flag_enum;
+
+typedef u8 tt_point_flag;
+
+typedef struct {
+    u32 codepoint;
+
+    i16 x_min;
+    i16 y_min;
+    i16 x_max;
+    i16 y_max;
+
+    u32 num_segments;
+    u32 num_points;
+
+    tt_point_flag* flags;
+    v2_i16* points;
+} tt_glyph_data;
+
 void tt_font_init(string8 file, tt_font_info* info);
+
+void tt_glyph_data_from_index(
+    mem_arena* arena, string8 file, tt_font_info* info,
+    tt_glyph_data* data, u32 glyph_index
+);
+void tt_glyph_data_from_codepoint(
+    mem_arena* arena, string8 file, tt_font_info* info,
+    tt_glyph_data* data, u32 codepoint
+);
+
+u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint);
 
 void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale);
 

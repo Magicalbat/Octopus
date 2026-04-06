@@ -11,6 +11,12 @@
 
 #define _TT_TAG(s) _TT_READ_BE32((s))
 
+typedef struct {
+    // From the start of the glyf table
+    u32 offset;
+    u32 length;
+} _tt_glyf_entry;
+
 u32 _tt_calc_checksum(string8 file, u32 offset, u32 len);
 // Does not bounds check table records
 b32 _tt_get_validate_table(string8 file, u32 table_tag, tt_font_table* table);
@@ -18,8 +24,7 @@ b32 _tt_get_validate_table(string8 file, u32 table_tag, tt_font_table* table);
 b32 _tt_validate_loca(string8 file, const tt_font_info* info);
 // Assumes cmap is already validated
 b32 _tt_find_cmap_subtable(string8 file, tt_font_info* info, tt_font_table cmap);
-
-u32 _tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint);
+_tt_glyf_entry _tt_find_glyf_entry(string8 file, tt_font_info* info, u32 glyph_index);
 
 void tt_font_init(string8 file, tt_font_info* info) {
     if (file.size <= 12) {
@@ -46,6 +51,7 @@ void tt_font_init(string8 file, tt_font_info* info) {
     }
 
     tt_font_table cmap = { 0 };
+    tt_font_table maxp = { 0 };
 
     if (
         !_tt_get_validate_table(file, _TT_TAG("head"), &info->head) ||
@@ -53,7 +59,8 @@ void tt_font_init(string8 file, tt_font_info* info) {
         !_tt_get_validate_table(file, _TT_TAG("hmtx"), &info->hmtx) ||
         !_tt_get_validate_table(file, _TT_TAG("loca"), &info->loca) ||
         !_tt_get_validate_table(file, _TT_TAG("cmap"), &cmap) ||
-        info->head.length != 54
+        !_tt_get_validate_table(file, _TT_TAG("maxp"), &maxp) ||
+        info->head.length != 54 || maxp.length < 6
     ) {
         error_emit("Cannot parse TTF (invalid tables)");
         goto invalid;
@@ -70,6 +77,35 @@ void tt_font_init(string8 file, tt_font_info* info) {
         goto invalid;
     }
 
+    // maxp parsing
+    {
+        if (_TT_READ_BE32(file.str + maxp.offset) != 0x00010000 || maxp.length != 32) {
+            error_emit("Cannot parse TTF (CFF glyphs not supported yet)");
+            goto invalid;
+        }
+
+        info->num_glyphs = _TT_READ_BE16(file.str + maxp.offset + 4);
+        u32 loca_size = info->loca.length / (info->loca_format == 0 ? 2 : 4);
+        if (loca_size < info->num_glyphs + 1) {
+            error_emit("Cannot parse TTF (invalid loca size)");
+            goto invalid;
+        }
+
+        u16 max_points = _TT_READ_BE16(file.str + maxp.offset + 6);
+        u16 max_composite_points = _TT_READ_BE16(file.str + maxp.offset + 10);
+        u16 max_contours = _TT_READ_BE16(file.str + maxp.offset + 8);
+        u16 max_composite_contours = _TT_READ_BE16(file.str + maxp.offset + 8);
+
+        info->max_glyph_contours = (u32)MAX(max_contours, max_composite_contours);
+
+        // The processing of glyphs involves generating implied control points
+        // and duplicating the first point to close the contour
+        // These calculations account for that
+        info->max_glyph_points =
+            (u32)MAX(max_points, max_composite_points) * 2 +
+            info->max_glyph_contours;
+    }
+
     if (!_tt_find_cmap_subtable(file, info, cmap)) {
         error_emit("Cannot parse TTF (unable to find supported cmap)");
         goto invalid;
@@ -83,11 +119,192 @@ invalid:
     info->initialized = false;
 }
 
+void tt_glyph_data_from_index(
+    mem_arena* arena, string8 file, tt_font_info* info,
+    tt_glyph_data* data, u32 glyph_index
+) {
+    memset(data, 0, sizeof(tt_glyph_data));
+
+    if (info == NULL || !info->initialized) { return; }
+}
+
+void tt_glyph_data_from_codepoint(
+    mem_arena* arena, string8 file, tt_font_info* info,
+    tt_glyph_data* data, u32 codepoint
+) {
+    u32 index = tt_glyph_index(file, info, codepoint);
+    tt_glyph_data_from_index(arena, file, info, data, index);
+}
+
+u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
+    if (info == NULL || !info->initialized) { return 0; }
+
+    u8* subtable = file.str + info->cmap_offset;
+
+    u32 out = 0;
+
+    switch (info->cmap_format) {
+        case 0: {
+            if (codepoint > 0xff) { return 0; }
+
+            out = subtable[6 + codepoint];
+        } break;
+
+        case 4: {
+            if (codepoint > 0xffff) { return 0; }
+            
+            u16 length = _TT_READ_BE16(subtable + 2);
+            u16 seg_count = _TT_READ_BE16(subtable + 6) / 2;
+
+            i32 seg = -1;
+
+            if (info->cmap_sorted) {
+                // Sorted cmap
+                i32 low = 0;
+                i32 high = (i32)seg_count - 1;
+
+                while (low <= high) {
+                    i32 mid = low + (high - low + 1) / 2;
+
+                    u16 end_code = _TT_READ_BE16(subtable + 14 + mid * 2);
+                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + mid * 2);
+
+                    if (codepoint > end_code) {
+                        low = mid + 1;
+                    } else if (codepoint < start_code) {
+                        high = mid - 1;
+                    } else {
+                        seg = mid;
+                        break;
+                    }
+                }
+            } else {
+                // Unsorted cmap
+                for (u32 i = 0; i < seg_count; i++) {
+                    u16 end_code = _TT_READ_BE16(subtable + 14 + i * 2);
+                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + i * 2);
+
+                    if (start_code <= codepoint && codepoint <= end_code) {
+                        seg = (i32)i;
+                        break;
+                    }
+                }
+            }
+
+            if (seg == -1) { return 0; }
+
+            i16 id_delta = (i16)_TT_READ_BE16(subtable + 16 + 4 * seg_count + seg * 2);
+            u16 id_range_offset = _TT_READ_BE16(subtable + 16 + 6 * seg_count + seg * 2);
+
+            if (id_range_offset == 0) {
+                out = (u16)((u16)codepoint + id_delta);
+            } else {
+                u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + seg * 2);
+                u32 num_glyph_ids = (length - (16 + 8 * seg_count)) / 2;
+
+                u32 glyph_id_index = (
+                    (id_range_offset / 2) -
+                    (u32)(seg_count - seg) +
+                    (codepoint - start_code)
+                );
+
+                if (glyph_id_index >= num_glyph_ids) {
+                    return 0; 
+                }
+
+                u16 index = _TT_READ_BE16(subtable + 16 + 8 * seg_count + glyph_id_index * 2);
+
+                if (index == 0) {
+                    out = index;
+                } else {
+                    out = (u16)(index + id_delta);
+                }
+            }
+        } break;
+
+        case 6: {
+            if (codepoint > 0xffff) { return 0; }
+
+            u16 first_code = _TT_READ_BE16(subtable + 6);
+            u16 entry_count = _TT_READ_BE16(subtable + 8);
+            u32 index = codepoint - first_code;
+
+            if (index >= entry_count) {
+                return 0;
+            }
+
+            out = _TT_READ_BE16(subtable + 10 + index * 2);
+        } break;
+
+        case 12:
+        case 13: {
+            u32 num_groups = _TT_READ_BE32(subtable + 12);
+            i64 group = -1;
+
+            u32 group_offset = 0, start_code = 0;
+
+            if (info->cmap_sorted) {
+                // Sorted cmap
+                i64 low = 0;
+                i64 high = num_groups - 1;
+
+                while (low <= high) {
+                    i64 mid = low + (high - low + 1) / 2;
+
+                    group_offset = 16 + 12 * (u32)mid;
+                    start_code = _TT_READ_BE32(subtable + group_offset);
+                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
+
+                    if (codepoint > end_code) {
+                        low = mid + 1;
+                    } else if (codepoint < start_code) {
+                        high = mid - 1;
+                    } else {
+                        group = mid;
+                        break;
+                    }
+                }
+            } else {
+                // Unsorted cmap
+                for (u32 i = 0; i < num_groups; i++) {
+                    group_offset = 16 + 12 * i;
+                    start_code = _TT_READ_BE32(subtable + group_offset);
+                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
+
+                    if (start_code <= codepoint && codepoint <= end_code) {
+                        group = i;
+                        break;
+                    }
+                }
+            }
+
+            if (group == -1) { return 0; }
+
+            u32 start_index = _TT_READ_BE32(subtable + group_offset + 8);
+            if (info->cmap_format == 12) {
+                out = start_index + codepoint - start_code;
+            } else {
+                out = start_index;
+            }
+        } break;
+
+        default: {
+            return 0;
+        } break;
+    }
+
+    if (out < info->num_glyphs) {
+        return out;
+    }
+
+    return 0;
+}
+
 void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale) {
     f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
     scale = v2_f32_scale(scale, 1.0f / units_per_em);
 
-    u32 glyph_index = _tt_glyph_index(file, info, codepoint);
+    u32 glyph_index = tt_glyph_index(file, info, codepoint);
     u32 offset = info->loca_format == 0 ?
         (u32)_TT_READ_BE16(file.str + info->loca.offset + glyph_index * 2) * 2 :
         _TT_READ_BE32(file.str + info->loca.offset + glyph_index * 4);
@@ -321,19 +538,34 @@ b32 _tt_get_validate_table(string8 file, u32 table_tag, tt_font_table* table) {
 b32 _tt_validate_loca(string8 file, const tt_font_info* info) {
     tt_font_table loca = info->loca;
 
-    if (info->loca_format == 0) { // 16-bit offsets
+    if (info->loca_format == 0) {
+        // 16-bit offsets
         u32 num_offsets = loca.length / sizeof(u16);
 
+        u32 prev_offset = 0;
         for (u32 i = 0; i < num_offsets; i++) {
             u32 offset = 2 * (u32)_TT_READ_BE16(file.str + loca.offset + i * 2);
-            if (offset > info->glyf.length) { return false; }
+
+            if (offset > info->glyf.length || offset < prev_offset) {
+                return false; 
+            }
+
+            prev_offset = offset;
         }
-    } else { // 32-bit offsets
+    } else {
+        // 32-bit offsets
         u32 num_offsets = loca.length / sizeof(u32);
 
+        u32 prev_offset = 0;
         for (u32 i = 0; i < num_offsets; i++) {
             u32 offset = _TT_READ_BE32(file.str + loca.offset + i * 4);
-            if (offset > info->glyf.length) { return false; }
+
+            if (offset > info->glyf.length || offset < prev_offset) {
+                return false; 
+            }
+
+            prev_offset = offset;
+
         }
     }
 
@@ -498,162 +730,27 @@ b32 _tt_find_cmap_subtable(string8 file, tt_font_info* info, tt_font_table cmap)
     return true;
 }
 
-u32 _tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
-    if (info == NULL || !info->initialized) { return 0; }
-
-    u8* subtable = file.str + info->cmap_offset;
-
-    switch (info->cmap_format) {
-        case 0: {
-            if (codepoint > 0xff) { return 0; }
-
-            return subtable[6 + codepoint];
-        } break;
-
-        case 4: {
-            if (codepoint > 0xffff) { return 0; }
-            
-            u16 length = _TT_READ_BE16(subtable + 2);
-            u16 seg_count = _TT_READ_BE16(subtable + 6) / 2;
-
-            i32 seg = -1;
-
-            if (info->cmap_sorted) {
-                // Sorted cmap
-
-                i32 low = 0;
-                i32 high = (i32)seg_count - 1;
-
-                while (low <= high) {
-                    i32 mid = low + (high - low + 1) / 2;
-
-                    u16 end_code = _TT_READ_BE16(subtable + 14 + mid * 2);
-                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + mid * 2);
-
-                    if (codepoint > end_code) {
-                        low = mid + 1;
-                    } else if (codepoint < start_code) {
-                        high = mid - 1;
-                    } else {
-                        seg = mid;
-                        break;
-                    }
-                }
-            } else {
-                // Unsorted cmap
-                for (u32 i = 0; i < seg_count; i++) {
-                    u16 end_code = _TT_READ_BE16(subtable + 14 + i * 2);
-                    u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + i * 2);
-
-                    if (start_code <= codepoint && codepoint <= end_code) {
-                        seg = (i32)i;
-                        break;
-                    }
-                }
-            }
-
-            if (seg == -1) { return 0; }
-
-            i16 id_delta = (i16)_TT_READ_BE16(subtable + 16 + 4 * seg_count + seg * 2);
-            u16 id_range_offset = _TT_READ_BE16(subtable + 16 + 6 * seg_count + seg * 2);
-
-            if (id_range_offset == 0) {
-                return (u16)((u16)codepoint + id_delta);
-            } else {
-                u16 start_code = _TT_READ_BE16(subtable + 16 + 2 * seg_count + seg * 2);
-                u32 num_glyph_ids = (length - (16 + 8 * seg_count)) / 2;
-
-                u32 glyph_id_index = (
-                    (id_range_offset / 2) -
-                    (u32)(seg_count - seg) +
-                    (codepoint - start_code)
-                );
-
-                if (glyph_id_index >= num_glyph_ids) {
-                    return 0; 
-                }
-
-                u16 index = _TT_READ_BE16(subtable + 16 + 8 * seg_count + glyph_id_index * 2);
-
-                if (index == 0) {
-                    return index;
-                }
-
-                return (u16)(index + id_delta);
-            }
-        } break;
-
-        case 6: {
-            if (codepoint > 0xffff) { return 0; }
-
-            u16 first_code = _TT_READ_BE16(subtable + 6);
-            u16 entry_count = _TT_READ_BE16(subtable + 8);
-            u32 index = codepoint - first_code;
-
-            if (index >= entry_count) {
-                return 0;
-            }
-
-            return _TT_READ_BE16(subtable + 10 + index * 2);
-        } break;
-
-        case 12:
-        case 13: {
-            u32 num_groups = _TT_READ_BE32(subtable + 12);
-            i64 group = -1;
-
-            u32 group_offset = 0, start_code = 0;
-
-            if (info->cmap_sorted) {
-                // Sorted cmap
-                i64 low = 0;
-                i64 high = num_groups - 1;
-
-                while (low <= high) {
-                    i64 mid = low + (high - low + 1) / 2;
-
-                    group_offset = 16 + 12 * (u32)mid;
-                    start_code = _TT_READ_BE32(subtable + group_offset);
-                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
-
-                    if (codepoint > end_code) {
-                        low = mid + 1;
-                    } else if (codepoint < start_code) {
-                        high = mid - 1;
-                    } else {
-                        group = mid;
-                        break;
-                    }
-                }
-            } else {
-                // Unsorted cmap
-                for (u32 i = 0; i < num_groups; i++) {
-                    group_offset = 16 + 12 * i;
-                    start_code = _TT_READ_BE32(subtable + group_offset);
-                    u32 end_code = _TT_READ_BE32(subtable + group_offset + 4);
-
-                    if (start_code <= codepoint && codepoint <= end_code) {
-                        group = i;
-                        break;
-                    }
-                }
-            }
-
-            if (group == -1) { return 0; }
-
-            u32 start_index = _TT_READ_BE32(subtable + group_offset + 8);
-            if (info->cmap_format == 12) {
-                return start_index + codepoint - start_code;
-            } else {
-                return start_index;
-            }
-        } break;
-
-        default: {
-            return 0;
-        } break;
+_tt_glyf_entry _tt_find_glyf_entry(string8 file, tt_font_info* info, u32 glyph_index) {
+    if (glyph_index >= info->num_glyphs) {
+        return (_tt_glyf_entry) { 0 };
     }
 
-    return 0;
+    u8* loca = file.str + info->loca.offset;
+
+    u32 offset = 0;
+    u32 next_offset = 0;
+
+    if (info->loca_format == 0) {
+        offset = (u32)_TT_READ_BE16(loca + glyph_index * 2) * 2;
+        next_offset = (u32)_TT_READ_BE16(loca + (glyph_index + 1) * 2) * 2;
+    } else if (info->loca_format == 1) {
+        offset = _TT_READ_BE16(loca + glyph_index * 4);
+        next_offset = _TT_READ_BE16(loca + (glyph_index + 1) * 4);
+    }
+
+    return (_tt_glyf_entry) {
+        .offset = offset,
+        .length = next_offset - offset
+    };
 }
 
