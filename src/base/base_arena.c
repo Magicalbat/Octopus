@@ -207,7 +207,7 @@ mem_arena_temp arena_scratch_get(mem_arena** conflicts, u32 num_conflicts) {
         scratch_arenas[scratch_index] = arena_create(
             ARENA_SCRATCH_RESERVE,
             ARENA_SCRATCH_COMMIT,
-            0
+            ARENA_FLAG_GROWABLE
         );
     }
 

@@ -119,21 +119,291 @@ invalid:
     info->initialized = false;
 }
 
-void tt_glyph_data_from_index(
-    mem_arena* arena, string8 file, tt_font_info* info,
-    tt_glyph_data* data, u32 glyph_index
-) {
-    memset(data, 0, sizeof(tt_glyph_data));
+// Used for loading in glyphs before the number of total points is known
+typedef struct {
+    u32 num_segments;
+    u32 num_points;
 
-    if (info == NULL || !info->initialized) { return; }
+    u32 max_points;
+
+    tt_point_flag* flags;
+    v2_i16* points;
+} _tt_temp_glyph;
+
+// Recursively adds points to the `_tt_temp_glyph` structure
+b32 _tt_glyph_add_points(
+    string8 file, tt_font_info* info,
+    _tt_temp_glyph* glyph, u32 glyph_index
+) {
+    _tt_glyf_entry entry = _tt_find_glyf_entry(file, info, glyph_index);
+    if (entry.length < 10) { return false; }
+
+    u8* glyf_data = file.str + info->glyf.offset + entry.offset;
+
+    i16 num_contours = (i16)_TT_READ_BE16(glyf_data);
+
+    if (num_contours >= 0) {
+        // Simple glyph description
+        if (entry.length < 12 + (u32)num_contours * 2) {
+            return false; 
+        }
+
+        u16 instruction_length = _TT_READ_BE16(glyf_data + 10 + num_contours * 2);
+        if (entry.length < 12 + (u32)num_contours * 2 + instruction_length) {
+            return false;
+        }
+
+        u32 num_raw_points = (u32)_TT_READ_BE16(glyf_data + 10 + (num_contours - 1) * 2) + 1;
+
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+        u8* flags_raw = PUSH_ARRAY(scratch.arena, u8, num_raw_points);
+        v2_i16* points_raw = PUSH_ARRAY(scratch.arena, v2_i16, num_raw_points);
+
+        u32 data_offset = 12 + (u32)num_contours * 2 + instruction_length;
+        u32 num_flags = 0;
+
+        while (num_flags < num_raw_points && data_offset < entry.length) {
+            u8 flag = *(glyf_data + data_offset);
+            data_offset++;
+
+            flags_raw[num_flags++] = flag;
+
+            // Checking REPEAT flag
+            if ((flag & 0x08) && data_offset < entry.length) {
+                u8 count = *(glyf_data + data_offset);
+                data_offset++;
+
+                while (count-- && num_flags < num_raw_points) {
+                    flags_raw[num_flags++] = flag;
+                }
+            }
+        }
+
+        i16 x = 0;
+        for (u32 i = 0; i < num_raw_points; i++) {
+            if ((flags_raw[i] & 0x02) && data_offset < entry.length) {
+                // 1 byte x
+                u8 diff = *(glyf_data + data_offset);
+                data_offset++;
+
+                // Checking if diff is positive
+                x += (flags_raw[i] & 0x10) ? (i16)diff : -(i16)diff;
+            } else if ((flags_raw[i] & 0x10) != 0x10 && data_offset + 1 < entry.length) {
+                // If x is not the same (0x10), then get the new diff
+                i16 diff = (i16)_TT_READ_BE16(glyf_data + data_offset);
+                data_offset += 2;
+
+                x += diff;
+            }
+
+            points_raw[i].x = x;
+        }
+
+        i16 y = 0;
+        for (u32 i = 0; i < num_raw_points; i++) {
+            if ((flags_raw[i] & 0x04) && data_offset < entry.length) {
+                // 1 byte y
+                u8 diff = *(glyf_data + data_offset);
+                data_offset++;
+
+                // Checking if diff is positive
+                y += (flags_raw[i] & 0x20) ? (i16)diff : -(i16)diff;
+            } else if ((flags_raw[i] & 0x20) != 0x20 && data_offset + 1 < entry.length) {
+                // If y is not the same (0x10), then get the new diff
+                i16 diff = (i16)_TT_READ_BE16(glyf_data + data_offset);
+                data_offset += 2;
+
+                y += diff;
+            }
+
+            points_raw[i].y = y;
+        }
+
+        for (i32 c = 0; c < num_contours; c++) {
+            u32 start_point = c <= 0 ? 0 : (_TT_READ_BE16(glyf_data + 10 + (c-1) * 2) + 1);
+            u32 end_point = _TT_READ_BE16(glyf_data + 10 + c * 2);
+
+            u32 num_points = end_point - start_point + 1;
+            i32 point_offset = 0;
+            for (i32 i = 0; i < (i32)num_points; i++) {
+                u32 p0_i = (((u32)(i + point_offset + 0) % num_points) + start_point);
+                u32 p1_i = (((u32)(i + point_offset + 1) % num_points) + start_point);
+                u32 p2_i = (((u32)(i + point_offset + 2) % num_points) + start_point);
+
+                v2_i16 p0 = points_raw[p0_i];
+                v2_i16 p1 = points_raw[p1_i];
+                v2_i16 p2 = points_raw[p2_i];
+
+                tt_point_flag p0_flag = 0;
+                tt_point_flag p1_flag = 0;
+                tt_point_flag p2_flag = 0;
+
+                b8 bez = true, skip = false;
+
+                u32 on_curve_bits = (u32)(
+                    (flags_raw[p0_i] & 0x1) << 2 |
+                    (flags_raw[p1_i] & 0x1) << 1 |
+                    (flags_raw[p2_i] & 0x1) << 0
+                );
+
+                switch (on_curve_bits) {
+                    case 0b110:
+                    case 0b111: {
+                        // Line Segment
+                        bez = false;
+
+                        p2 = p1;
+
+                        p0_flag |= TT_POINT_FLAG_LINE;
+                    } break;
+
+                    case 0b101: {
+                        // Beizer (all points explicit)
+
+                        // Skip off curve point
+                        i++;
+                    } break;
+
+                    case 0b100: {
+                        // Bezier (end point implicit)
+                        p2 = (v2_i16) {
+                            (p1.x + p2.x) / 2,
+                            (p1.y + p2.y) / 2
+                        };
+
+                        p2_flag |= TT_POINT_FLAG_GENERATED;
+                    } break;
+
+                    case 0b001: {
+                        // Bezier (start point implicit)
+                        p0 = (v2_i16) {
+                            (p0.x + p1.x) / 2,
+                            (p0.y + p1.y) / 2,
+                        };
+
+                        p0_flag |= TT_POINT_FLAG_GENERATED;
+
+                        // Skip off curve point
+                        i++;
+                    } break;
+
+                    case 0b000: {
+                        // Bezier (start and end implicit)
+                        p0 = (v2_i16) {
+                            (p0.x + p1.x) / 2,
+                            (p0.y + p1.y) / 2,
+                        };
+                        p2 = (v2_i16) {
+                            (p1.x + p2.x) / 2,
+                            (p1.y + p2.y) / 2
+                        };
+
+                        p0_flag |= TT_POINT_FLAG_GENERATED;
+                        p2_flag |= TT_POINT_FLAG_GENERATED;
+                    } break;
+
+                    case 0b010:
+                    case 0b011: {
+                        // Undefined case, adjust offset until it makes sense
+                        point_offset++;
+                        i--;
+
+                        skip = true;
+                    } break;
+                }
+
+                if (skip) { continue; }
+
+                glyph->num_segments++;
+
+                glyph->num_points++;
+                glyph->flags[glyph->num_points-1] = p0_flag;
+                glyph->points[glyph->num_points-1] = p0;
+
+                if (bez) {
+                    glyph->num_points++;
+                    glyph->flags[glyph->num_points-1] = p1_flag;
+                    glyph->points[glyph->num_points-1] = p1;
+                }
+
+                if (i == (i32)num_points - 1) {
+                    p2_flag |= TT_POINT_FLAG_CONTOUR_END;
+
+                    glyph->num_points++;
+                    glyph->flags[glyph->num_points-1] = p2_flag;
+                    glyph->points[glyph->num_points-1] = p2;
+                }
+            }
+        }
+
+        arena_scratch_release(scratch);
+    } else {
+        // Compound glyph description
+    }
+
+    return true;
 }
 
-void tt_glyph_data_from_codepoint(
-    mem_arena* arena, string8 file, tt_font_info* info,
-    tt_glyph_data* data, u32 codepoint
+tt_glyph_data tt_glyph_data_from_index(
+    mem_arena* arena, string8 file,
+    tt_font_info* info, u32 glyph_index
+) {
+    if (info == NULL || !info->initialized) { goto fail; }
+
+    _tt_glyf_entry entry = _tt_find_glyf_entry(file, info, glyph_index);
+    if (entry.length < 10) { goto fail; }
+
+    u32 offset = info->glyf.offset + entry.offset;
+
+    tt_glyph_data glyph = { 
+        .x_min = (i16)_TT_READ_BE16(file.str + offset + 2),
+        .y_min = (i16)_TT_READ_BE16(file.str + offset + 4),
+        .x_max = (i16)_TT_READ_BE16(file.str + offset + 6),
+        .y_max = (i16)_TT_READ_BE16(file.str + offset + 8),
+    };
+
+    mem_arena_temp scratch = arena_scratch_get(&arena, 1);
+
+    // Here, I add in all the implied bezier points and duplicate the contour
+    // start/end point. As such, this should be a sufficient upper bound
+    u32 max_points = info->max_glyph_points * 2 + info->max_glyph_contours;
+    _tt_temp_glyph temp_glyph = {
+        .max_points = max_points,
+        .flags = PUSH_ARRAY(scratch.arena, tt_point_flag, max_points),
+        .points = PUSH_ARRAY(scratch.arena, v2_i16, max_points),
+    };
+
+    if (!_tt_glyph_add_points(file, info, &temp_glyph, glyph_index)) {
+        error_emit("Failed to parse TTF glyph");
+        arena_scratch_release(scratch);
+
+        goto fail;
+    }
+
+    glyph.num_segments = temp_glyph.num_segments;
+    glyph.num_points = temp_glyph.num_points;
+
+    glyph.flags = PUSH_ARRAY_NZ(arena, tt_point_flag, glyph.num_points);
+    glyph.points = PUSH_ARRAY_NZ(arena, v2_i16, glyph.num_points);
+
+    memcpy(glyph.flags, temp_glyph.flags, sizeof(tt_point_flag) * glyph.num_points);
+    memcpy(glyph.points, temp_glyph.points, sizeof(v2_i16) * glyph.num_points);
+
+    arena_scratch_release(scratch);
+
+    return glyph;
+
+fail:
+    return (tt_glyph_data){ 0 };
+}
+
+tt_glyph_data tt_glyph_data_from_codepoint(
+    mem_arena* arena, string8 file,
+    tt_font_info* info, u32 codepoint
 ) {
     u32 index = tt_glyph_index(file, info, codepoint);
-    tt_glyph_data_from_index(arena, file, info, data, index);
+    return tt_glyph_data_from_index(arena, file, info, index);
 }
 
 u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
@@ -300,188 +570,68 @@ u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
     return 0;
 }
 
-void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale) {
+#define _TT_BEZ_SUB 5
+void tt_test_draw_glyph(
+    string8 file, tt_font_info* info,
+    u32 codepoint, v2_f32 translate, v2_f32 scale
+) {
     f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
     scale = v2_f32_scale(scale, 1.0f / units_per_em);
 
-    u32 glyph_index = tt_glyph_index(file, info, codepoint);
-    u32 offset = info->loca_format == 0 ?
-        (u32)_TT_READ_BE16(file.str + info->loca.offset + glyph_index * 2) * 2 :
-        _TT_READ_BE32(file.str + info->loca.offset + glyph_index * 4);
-
-    u8* glyf = file.str + info->glyf.offset + offset;
-
-    i16 num_contours = (i16)_TT_READ_BE16(glyf);
-    //i16 x_min = (i16)_TT_READ_BE16(glyf + 2);
-    //i16 y_min = (i16)_TT_READ_BE16(glyf + 4);
-    //i16 x_max = (i16)_TT_READ_BE16(glyf + 6);
-    //i16 y_max = (i16)_TT_READ_BE16(glyf + 8);
-
-    if (num_contours < 0) {
-        return;
-    }
-
-    u32 num_points = _TT_READ_BE16(glyf + 10 + (num_contours - 1) * 2) + 1;
-
-    u16 instruction_length = _TT_READ_BE16(glyf + 10 + num_contours * 2);
-    u8* point_data = glyf + 10 + num_contours * 2 + 2 + instruction_length;
-
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-    u32 num_flags = 0;
-    u8* flags = PUSH_ARRAY(scratch.arena, u8, num_points);
-    v2_f32* points = PUSH_ARRAY(scratch.arena, v2_f32, num_points + 1);
+    tt_glyph_data glyph = tt_glyph_data_from_codepoint(scratch.arena, file, info, codepoint);
 
-    while (num_flags < num_points) {
-        u8 flag = *(point_data++);
-        flags[num_flags++] = flag;
+    v2_f32* points = PUSH_ARRAY_NZ(scratch.arena, v2_f32, glyph.num_points);
+    for (u32 i = 0; i < glyph.num_points; i++) {
+        points[i] = (v2_f32){ 
+            glyph.points[i].x,
+            glyph.points[i].y
+        };
 
-        // REPEAT_FLAG
-        if (flag & 0x08) {
-            u8 count = *(point_data++);
-
-            while (count--) {
-                flags[num_flags++] = flag;
-            }
-        }
-    }
-
-    i16 x = 0;
-    for (u32 i = 0; i < num_points; i++) {
-        // X_SHORT_VECTOR
-        if (flags[i] & 0x02) {
-            u8 x_diff = *(point_data++);
-            // X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR 
-            x += (flags[i] & 0x10) ? x_diff : -(i16)x_diff;
-        } else if ((flags[i] & 0x10) != 0x10) {
-            i16 x_diff = (i16)_TT_READ_BE16(point_data);
-            point_data += 2;
-
-            x += x_diff;
-        }
-
-        points[i].x = x;
-    }
-
-    i16 y = 0;
-    for (u32 i = 0; i < num_points; i++) {
-        // Y_SHORT_VECTOR
-        if (flags[i] & 0x04) {
-            u8 y_diff = *(point_data++);
-            // Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR
-            y += (flags[i] & 0x20) ? y_diff : -(i16)y_diff;
-        } else if ((flags[i] & 0x20) != 0x20) {
-            i16 y_diff = (i16)_TT_READ_BE16(point_data);
-            point_data += 2;
-
-            y += y_diff;
-        }
-
-        points[i].y = y;
-    }
-
-    for (u32 i = 0; i < num_points; i++) {
         points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
     }
 
-    for (u32 c = 0; c < (u32)num_contours; c++) {
-        u32 start_point = c == 0 ? 0 : _TT_READ_BE16(glyf + 10 + (c-1) * 2) + 1;
-        u32 end_point = _TT_READ_BE16(glyf + 10 + c * 2);
+    u32 num_draw_points = 0;
+    v2_f32* draw_points = PUSH_ARRAY(scratch.arena, v2_f32, glyph.num_points * _TT_BEZ_SUB);
 
-        u32 num_points = end_point - start_point + 1;
+    draw_points[num_draw_points++] = points[0];
 
-        mem_arena_temp temp_arena = arena_temp_begin(scratch.arena);
+    u32 index = 0;
+    for (u32 seg = 0; seg < glyph.num_segments; seg++) {
+        if (glyph.flags[index] & TT_POINT_FLAG_LINE) {
+            // Skip over p0 (already in draw list)
+            index++;
+            v2_f32 p1 = points[index];
 
-        u32 num_draw_points = 0;
-        v2_f32* draw_points = PUSH_ARRAY(temp_arena.arena, v2_f32, num_points * 5);
-
-        u32 point_offset = 0;
-        while (point_offset < num_points && !(flags[start_point + point_offset] & 0x1)) {
-            point_offset++;
-        }
-
-        if (point_offset == num_points) {
-            point_offset = 0;
+            draw_points[num_draw_points++] = p1;
         } else {
-            draw_points[num_draw_points++] = points[start_point + point_offset];
-        }
+            v2_f32 p0 = points[index++];
+            v2_f32 p1 = points[index++];
+            v2_f32 p2 = points[index];
 
-        for (u32 i = 0; i < num_points; i++) {
-            u32 p0 = ((i + point_offset + 0) % num_points) + start_point;
-            u32 p1 = ((i + point_offset + 1) % num_points) + start_point;
-            u32 p2 = ((i + point_offset + 2) % num_points) + start_point;
+            for (u32 i = 0; i < _TT_BEZ_SUB; i++) {
+                f32 t = (f32)(i + 1) / _TT_BEZ_SUB;
 
-            u32 on_curve = (u32)(
-                ((flags[p0] & 0x1) << 2) |
-                ((flags[p1] & 0x1) << 1) |
-                ((flags[p2] & 0x1) << 0));
+                v2_f32 m0 = v2_f32_add(p0, v2_f32_scale(v2_f32_sub(p1, p0), t));
+                v2_f32 m1 = v2_f32_add(p1, v2_f32_scale(v2_f32_sub(p2, p1), t));
 
-            v2_f32 a = points[p0];
-            v2_f32 b = points[p1];
-            v2_f32 c = points[p2];
+                v2_f32 b = v2_f32_add(m0, v2_f32_scale(v2_f32_sub(m1, m0), t));
 
-            b32 bez = true;
-
-            switch (on_curve) {
-                case 0b110:
-                case 0b111: {
-                    // Line Segment
-                    draw_points[num_draw_points++] = points[p1];
-                    bez = false;
-                } break;
-
-                case 0b101: {
-                    // Bezier
-                    // a, b, and c are already correct
-                    // i needs to be incremented
-                    i++;
-                } break;
-
-                case 0b100: {
-                    // Bezier
-                    // End control point is implied
-                    c = v2_f32_scale(v2_f32_add(b, c), 0.5f);
-                } break;
-
-                case 0b001: {
-                    // Bezier
-                    // Start control point is implied
-                    a = v2_f32_scale(v2_f32_add(a, b), 0.5f);
-                    // i needs to be incremented
-                    i++;
-                } break;
-
-                case 0b000: {
-                    // Bezier
-                    // Both start and end are implied
-                    a = v2_f32_scale(v2_f32_add(a, b), 0.5f);
-                    c = v2_f32_scale(v2_f32_add(b, c), 0.5f);
-                } break;
-
-                case 0b010:
-                case 0b011: {
-                    // This should be impossible
-                    // TODO: remove this, just for testing
-                    printf("oops %u\n", codepoint);
-                } break;
-            }
-
-            if (!bez) { continue; }
-
-            for (f32 t = 0.2f; t <= 1.0f; t += 0.2f) {
-                v2_f32 m0 = v2_f32_add(a, v2_f32_scale(v2_f32_sub(b, a), t));
-                v2_f32 m1 = v2_f32_add(b, v2_f32_scale(v2_f32_sub(c, b), t));
-                v2_f32 p = v2_f32_add(m0, v2_f32_scale(v2_f32_sub(m1, m0), t));
-                draw_points[num_draw_points++] = p;
+                draw_points[num_draw_points++] = b;
             }
         }
 
-        debug_draw_lines(
-            draw_points, num_draw_points,
-            2.0f, (v4_f32){ 1, 1, 1, 1 }
-        );
+        if (glyph.flags[index] & TT_POINT_FLAG_CONTOUR_END) {
+            debug_draw_lines(draw_points, num_draw_points, 1.0f, (v4_f32){ 1, 1, 1, 1 });
 
-        arena_temp_end(temp_arena);
+            num_draw_points = 0;
+            index++;
+
+            if (index < glyph.num_points) {
+                draw_points[num_draw_points++] = points[index];
+            }
+        }
     }
 
     arena_scratch_release(scratch);
@@ -744,8 +894,12 @@ _tt_glyf_entry _tt_find_glyf_entry(string8 file, tt_font_info* info, u32 glyph_i
         offset = (u32)_TT_READ_BE16(loca + glyph_index * 2) * 2;
         next_offset = (u32)_TT_READ_BE16(loca + (glyph_index + 1) * 2) * 2;
     } else if (info->loca_format == 1) {
-        offset = _TT_READ_BE16(loca + glyph_index * 4);
-        next_offset = _TT_READ_BE16(loca + (glyph_index + 1) * 4);
+        offset = _TT_READ_BE32(loca + glyph_index * 4);
+        next_offset = _TT_READ_BE32(loca + (glyph_index + 1) * 4);
+    }
+
+    if (next_offset > info->glyf.length) {
+        return (_tt_glyf_entry) { 0 };
     }
 
     return (_tt_glyf_entry) {

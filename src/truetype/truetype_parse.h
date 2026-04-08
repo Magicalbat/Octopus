@@ -24,9 +24,13 @@ typedef struct {
 
 typedef enum {
     TT_POINT_FLAG_NONE        = 0b000000,
+
+    // If set, the point is the start of a line segment
+    // If unset, the point is the start of a quadratic bezier
     TT_POINT_FLAG_LINE        = 0b000001,
     TT_POINT_FLAG_CONTOUR_END = 0b000010,
     TT_POINT_FLAG_GENERATED   = 0b000100,
+
     // Only used for MSDF rendering
     TT_POINT_FLAG_RED         = 0b001000,
     TT_POINT_FLAG_GREEN       = 0b010000,
@@ -36,8 +40,6 @@ typedef enum {
 typedef u8 tt_point_flag;
 
 typedef struct {
-    u32 codepoint;
-
     i16 x_min;
     i16 y_min;
     i16 x_max;
@@ -52,13 +54,14 @@ typedef struct {
 
 void tt_font_init(string8 file, tt_font_info* info);
 
-void tt_glyph_data_from_index(
-    mem_arena* arena, string8 file, tt_font_info* info,
-    tt_glyph_data* data, u32 glyph_index
+tt_glyph_data tt_glyph_data_from_index(
+    mem_arena* arena, string8 file,
+    tt_font_info* info, u32 glyph_index
 );
-void tt_glyph_data_from_codepoint(
-    mem_arena* arena, string8 file, tt_font_info* info,
-    tt_glyph_data* data, u32 codepoint
+
+tt_glyph_data tt_glyph_data_from_codepoint(
+    mem_arena* arena, string8 file,
+    tt_font_info* info, u32 codepoint
 );
 
 u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint);

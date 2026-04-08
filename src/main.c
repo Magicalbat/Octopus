@@ -34,12 +34,12 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Envy Code R.ttf"),
+        STR8_LIT("res/Symbola.ttf"),
         STR8_LIT("res/arial.ttf"),
         STR8_LIT("res/comic.ttf"),
         STR8_LIT("res/corbeli.ttf"),
         STR8_LIT("res/Hack.ttf"),
         STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/Symbola.ttf"),
         STR8_LIT("res/times.ttf"),
     };
 
@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 'a';//32;
+    u32 codepoint_offset = 32;
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
