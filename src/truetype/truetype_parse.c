@@ -142,7 +142,7 @@ b32 _tt_glyph_add_points(
 
     i16 num_contours = (i16)_TT_READ_BE16(glyf_data);
 
-    if (num_contours >= 0) {
+    if (num_contours > 0) {
         // Simple glyph description
         if (entry.length < 12 + (u32)num_contours * 2) {
             return false; 
@@ -226,6 +226,7 @@ b32 _tt_glyph_add_points(
 
             u32 num_points = end_point - start_point + 1;
             i32 point_offset = 0;
+            b8 just_offset = false;
             for (i32 i = 0; i < (i32)num_points; i++) {
                 u32 p0_i = (((u32)(i + point_offset + 0) % num_points) + start_point);
                 u32 p1_i = (((u32)(i + point_offset + 1) % num_points) + start_point);
@@ -235,9 +236,11 @@ b32 _tt_glyph_add_points(
                 v2_i16 p1 = points_raw[p1_i];
                 v2_i16 p2 = points_raw[p2_i];
 
-                tt_point_flag p0_flag = 0;
+                tt_point_flag p0_flag = just_offset ? TT_POINT_CONTOUR_OFFSET : 0;
                 tt_point_flag p1_flag = 0;
                 tt_point_flag p2_flag = 0;
+
+                just_offset = false;
 
                 b8 bez = true, skip = false;
 
@@ -309,6 +312,8 @@ b32 _tt_glyph_add_points(
                         point_offset++;
                         i--;
 
+                        just_offset = true;
+
                         skip = true;
                     } break;
                 }
@@ -338,8 +343,130 @@ b32 _tt_glyph_add_points(
         }
 
         arena_scratch_release(scratch);
-    } else {
+    } else if (num_contours < 0) {
         // Compound glyph description
+
+        u32 data_offset = 10;
+        b8 more = true;
+        while (more && data_offset < entry.length) {
+            if (data_offset + 4 > entry.length) { return false; }
+
+            u16 flags = _TT_READ_BE16(glyf_data + data_offset + 0);
+            u16 child_glyph_index = _TT_READ_BE16(glyf_data + data_offset + 2);
+            data_offset += 4;
+
+            i16 raw_x_offset = 0, raw_y_offset = 0;
+            i32 parent_point = -1, child_point = -1;
+
+            b8 scale_offset = false;
+
+            if (flags & 0x0002) {
+                // ARGS_ARE_XY_VALUES
+                if (flags & 0x0001 && data_offset + 4 <= entry.length) {
+                    // 16 bit offsets
+                    raw_x_offset = (i16)_TT_READ_BE16(glyf_data + data_offset + 0);
+                    raw_y_offset = (i16)_TT_READ_BE16(glyf_data + data_offset + 2);
+
+                    data_offset += 4;
+                } else if (data_offset + 2 <= entry.length) {
+                    // 8 bit offsets
+                    raw_x_offset = (i8)(*(glyf_data + data_offset + 0));
+                    raw_y_offset = (i8)(*(glyf_data + data_offset + 1));
+
+                    data_offset += 2;
+                }
+
+                if (flags & 0x0800) {
+                    // SCALED_COMPONENT_OFFSET
+                    scale_offset = true;
+                }
+
+                // This is defined as the default behavior,
+                // hence the if instead of else if
+                if (flags & 0x1000) {
+                    // UNSCALED_COMPONENT_OFFSET
+                    scale_offset = false;
+                }
+            } else {
+                // Not ARGS_ARE_XY_VALUES
+                // (args are point numbers)
+                if (flags & 0x0001 && data_offset + 4 <= entry.length) {
+                    // 16 bit point indices
+                    parent_point = _TT_READ_BE16(glyf_data + data_offset + 0);
+                    child_point = _TT_READ_BE16(glyf_data + data_offset + 2);
+
+                    data_offset += 4;
+                } else if (data_offset + 2 <= entry.length) {
+                    // 8 bit point indices
+                    parent_point = *(glyf_data + data_offset + 0);
+                    child_point = *(glyf_data + data_offset + 1);
+
+                    data_offset += 2;
+                }
+            }
+
+            // Row major
+            f32 mat[4] = {
+                1.0f, 0.0f,
+                0.0f, 1.0f
+            };
+
+            if ((flags & 0x0008) && data_offset + 2 <= entry.length) {
+                // WE_HAVE_A_SCALE
+                i16 scale_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset);
+                data_offset += 2;
+
+                f32 scale = (f32)scale_2_14 / (f32)(1 << 14);
+                mat[0] = scale;
+                mat[3] = scale;
+            } else if ((flags & 0x0040) && data_offset + 4 <= entry.length) {
+                // WE_HAVE_AN_X_AND_Y_SCALE
+                i16 xscale_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 0);
+                i16 yscale_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 2);
+                data_offset += 4;
+
+                mat[0] = (f32)xscale_2_14 / (f32)(1 << 14);
+                mat[3] = (f32)yscale_2_14 / (f32)(1 << 14);
+            } else if ((flags & 0x0080) && data_offset + 8 <= entry.length) {
+                // WE_HAVE_A_TWO_BY_TWO
+                i16 m00_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 0);
+                i16 m10_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 2);
+                i16 m01_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 4);
+                i16 m11_2_14 = (i16)_TT_READ_BE16(glyf_data + data_offset + 6);
+                data_offset += 8;
+
+                mat[0] = (f32)m00_2_14 / (f32)(1 << 14);
+                mat[1] = (f32)m01_2_14 / (f32)(1 << 14);
+                mat[2] = (f32)m10_2_14 / (f32)(1 << 14);
+                mat[3] = (f32)m11_2_14 / (f32)(1 << 14);
+            }
+
+            u32 child_start_index = glyph->num_points;
+            if (!_tt_glyph_add_points(file, info, glyph, child_glyph_index)) {
+                return false;
+            }
+
+            if (parent_point >= 0 && child_point >= 0) {
+                warn_emit("TTF compound point aligning unsupported");
+            }
+
+            f32 x_offset = (f32)raw_x_offset;
+            f32 y_offset = (f32)raw_y_offset;
+            if (scale_offset) {
+                x_offset = mat[0] * (f32)raw_x_offset + mat[1] * (f32)raw_y_offset;
+                y_offset = mat[2] * (f32)raw_x_offset + mat[3] * (f32)raw_y_offset;
+            }
+
+            for (u32 i = child_start_index; i < glyph->num_points; i++) {
+                f32 x = (f32)glyph->points[i].x;
+                f32 y = (f32)glyph->points[i].y;
+
+                glyph->points[i].x = (i16)(mat[0] * x + mat[1] * y + x_offset);
+                glyph->points[i].y = (i16)(mat[2] * x + mat[3] * y + y_offset);
+            }
+
+            more = (flags & 0x0020) == 0x0020;
+        }
     }
 
     return true;
@@ -575,6 +702,8 @@ void tt_test_draw_glyph(
     string8 file, tt_font_info* info,
     u32 codepoint, v2_f32 translate, v2_f32 scale
 ) {
+    if (info == NULL || !info->initialized) { return; }
+
     f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
     scale = v2_f32_scale(scale, 1.0f / units_per_em);
 

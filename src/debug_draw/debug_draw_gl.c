@@ -201,6 +201,32 @@ void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) 
         return;
     }
 
+    b32 on_screen = false;
+
+    {
+        v2_f32 center = _dd_state.view_copy.center;
+        v2_f32 size = {
+            _dd_state.view_copy.width,
+            _dd_state.view_copy.width * _dd_state.view_copy.aspect_ratio
+        };
+
+        f32 view_left = center.x - size.x * 0.5f;
+        f32 view_right = center.x + size.x * 0.5f;
+        f32 view_top = center.y - size.y * 0.5f;
+        f32 view_bottom = center.y + size.y * 0.5f;
+        for (u32 i = 0; i < num_points; i++) {
+            if (
+                points[i].x >= view_left && points[i].x <= view_right &&
+                points[i].y >= view_top && points[i].y <= view_bottom
+            ) {
+                on_screen = true;
+                break;
+            }
+        }
+    }
+
+    if (!on_screen) { return; }
+
     _dd_lines* lines = &_dd_state.lines;
 
     glEnable(GL_BLEND);

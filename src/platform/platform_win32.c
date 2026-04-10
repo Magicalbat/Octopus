@@ -58,7 +58,8 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
     string16 file_name16 = str16_from_str8(scratch.arena, file_name, true);
 
     HANDLE file_handle = CreateFileW(
-        (LPCWSTR)file_name16.str, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+        (LPCWSTR)file_name16.str, GENERIC_READ,
+        0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
     );
 
     arena_scratch_release(scratch);
