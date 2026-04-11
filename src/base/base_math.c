@@ -38,7 +38,7 @@ u32 solve_cubic_normed(f32 solutions[3], f32 a2, f32 a1, f32 a0) {
     f32 a2_2 = a2 * a2;
 
     f32 Q = (1.0f/9.0f) * (3.0f * a1 - a2_2);
-    f32 R = (1.0f/54.0f) * (9.0f * a2 * a1 - 27 * a0 - 2 * a2_2 * a2);
+    f32 R = (1.0f/54.0f) * (9.0f * a2 * a1 - 27.0f * a0 - 2.0f * a2_2 * a2);
 
     f32 R2 = R * R;
     f32 Q3 = Q * Q * Q;
@@ -59,13 +59,13 @@ u32 solve_cubic_normed(f32 solutions[3], f32 a2, f32 a1, f32 a0) {
         return 3;
     }
 
-    f32 u = SIGN(R) * powf(ABS(R) + sqrtf(R2 + Q3), 1.0f / 3.0f);
-    f32 v = u == 0.0f ? 0.0f : -Q / u;
+    f32 S = cbrtf(R + sqrtf(R2 + Q3));
+    f32 T = cbrtf(R - sqrtf(R2 + Q3));
 
-    solutions[0] = (u + v) - a2;
+    solutions[0] = (S + T) - a2;
 
-    if (u == v || ABS(u - v) < 1e-6f * ABS(u + v)) {
-        solutions[1] = -0.5f * (u + v) - a2;
+    if (ABS(S - T) < _F32_EPSILON) {
+        solutions[1] = -0.5f * (S + T) - a2;
 
         return 2;
     }
@@ -80,7 +80,7 @@ u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d) {
 
     if (ABS(a) >= _F32_EPSILON) {
         f32 b_a = b / a;
-        if (ABS(b_a) < _F32_EPSILON) {
+        if (ABS(b_a) < 1e6f) {
             return solve_cubic_normed(solutions, b_a, c/a, d/a);
         }
     }

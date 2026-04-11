@@ -78,7 +78,7 @@ void tt_raster_glyph_sdf(
                         v2_f32 bez_point = v2_f32_add(
                             v2_f32_add(
                                 v2_f32_scale(c2, t * t),
-                                v2_f32_scale(c1, t)
+                                v2_f32_scale(c1, 2.0f * t)
                             ), p0
                         );
 

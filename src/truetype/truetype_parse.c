@@ -243,7 +243,7 @@ b32 _tt_glyph_add_points(
                 v2_i16 p1 = points_raw[p1_i];
                 v2_i16 p2 = points_raw[p2_i];
 
-                tt_point_flag p0_flag = just_offset ? TT_POINT_CONTOUR_OFFSET : 0;
+                tt_point_flag p0_flag = just_offset ? TT_POINT_FLAG_CONTOUR_OFFSET : 0;
                 tt_point_flag p1_flag = 0;
                 tt_point_flag p2_flag = 0;
 

@@ -59,20 +59,6 @@ int main(int argc, char** argv) {
         tt_font_init(font_files[i], &font_infos[i]);
     }
 
-    {
-        tt_glyph_data test_glyph = tt_glyph_data_from_codepoint(
-            perm_arena, font_files[0], &font_infos[0], 'a'
-        );
-        bitmap_r8 bmp = { .width = 64, .height = 64, };
-        bmp.data = PUSH_ARRAY(perm_arena, u8, bmp.width * bmp.height);
-
-        tt_raster_glyph_sdf(
-            &bmp, (v2_i32){ 0, 0 }, &test_glyph, 
-            tt_scale_for_em(font_files[0], &font_infos[0], 64),
-            1, 4.0f
-        );
-    }
-
     win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     win_make_current(win);
@@ -91,6 +77,19 @@ int main(int argc, char** argv) {
         .width = (f32)win->width,
         .aspect_ratio = (f32)win->width / (f32)win->height
     };
+
+    tt_glyph_data glyph = tt_glyph_data_from_codepoint(
+        perm_arena, font_files[0], &font_infos[0], 'a'
+    );
+
+    bitmap_r8 bmp = { .width = 64, .height = 64 };
+    bmp.data = PUSH_ARRAY(perm_arena, u8, bmp.width * bmp.height);
+
+    tt_raster_glyph_sdf(
+        &bmp, (v2_i32){ 0, 0 }, &glyph,
+        tt_scale_for_em(font_files[0], &font_infos[0], 128),
+        1, 8
+    );
 
     // End of setup error frame
     {
@@ -149,7 +148,116 @@ int main(int argc, char** argv) {
 
         win_begin_frame(win);
 
-        u32 rows = 6;
+        v2_f32 p = screen_to_world(win, &view, win->mouse_pos);
+        f32 min_dist = INFINITY;
+
+        u32 index = 0;
+        v2_f32 draw_points[101] = { 0 };
+        for (u32 seg = 0; seg < glyph.num_segments; seg++) {
+            f32 dist = INFINITY;
+
+            if (glyph.flags[index] & TT_POINT_FLAG_LINE) {
+                v2_i16 p0_16 = glyph.points[index++];
+                v2_i16 p1_16 = glyph.points[index];
+
+                v2_f32 p0 = { p0_16.x, -p0_16.y };
+                v2_f32 p1 = { p1_16.x, -p1_16.y };
+
+                draw_points[0].x = p0.x;
+                draw_points[0].y = p0.y;
+                draw_points[1].x = p1.x;
+                draw_points[1].y = p1.y;
+
+                debug_draw_lines(draw_points, 2, 2.0f, (v4_f32){ 1, 1, 1, 1 });
+
+                v2_f32 line_vec = v2_f32_sub(p1, p0);
+                v2_f32 point_vec = v2_f32_sub(p, p0);
+
+                f32 t = v2_f32_dot(point_vec, line_vec) / v2_f32_dot(line_vec, line_vec);
+                t = CLAMP(t, 0.0f, 1.0f);
+
+                v2_f32 line_point = v2_f32_add(p0, v2_f32_scale(line_vec, t));
+                dist = v2_f32_dist(p, line_point);
+            } else {
+                v2_i16 p0_16 = glyph.points[index++];
+                v2_i16 p1_16 = glyph.points[index++];
+                v2_i16 p2_16 = glyph.points[index];
+
+                v2_f32 p0 = { p0_16.x, -p0_16.y };
+                v2_f32 p1 = { p1_16.x, -p1_16.y };
+                v2_f32 p2 = { p2_16.x, -p2_16.y };
+
+                v2_f32 c0 = v2_f32_sub(p, p0);
+                v2_f32 c1 = v2_f32_sub(p1, p0);
+                v2_f32 c2 = v2_f32_add(p2, v2_f32_add(v2_f32_scale(p1, -2.0f), p0));
+
+                for (u32 i = 0; i <= 10; i++) {
+                    f32 t = (f32)i / 10.0f;
+
+                    draw_points[i] = v2_f32_add(
+                        v2_f32_add(
+                            v2_f32_scale(c2, t * t),
+                            v2_f32_scale(c1, 2.0f * t)
+                        ), p0
+                    ); 
+                }
+
+                debug_draw_lines(draw_points, 11, 2.0f, (v4_f32){ 1, 1, 1, 1 });
+
+                f32 a = v2_f32_dot(c2, c2);
+                f32 b = 3.0f * v2_f32_dot(c1, c2);
+                f32 c = 2.0f * v2_f32_dot(c1, c1) - v2_f32_dot(c2, c0);
+                f32 d = -v2_f32_dot(c1, c0);
+
+                f32 ts[3] = { 0 };
+                u32 num_t = solve_cubic(ts, a, b, c, d);
+
+                /*{
+                    for (u32 i = 0; i < 101; i++) {
+                        f32 x = (f32)i / 50.0f - 1.0f;
+                        f32 y = a * x * x * x + b * x * x + c * x + d;
+
+                        draw_points[i].x = x * 500.0f;
+                        draw_points[i].y = y;
+                    }
+
+                    debug_draw_lines(draw_points, 101, 2.0f, (v4_f32){ 1, 0, 0, 1 });
+                    for (u32 i = 0; i < num_t; i++) {
+                        draw_points[i].x = ts[i] * 500.0f;
+                        draw_points[i].y = 0.0f;
+                    }
+                    debug_draw_circles(draw_points, num_t, 10.0f, (v4_f32){ 0, 0, 1, 1 });
+                }*/
+
+                for (u32 i = 0; i < num_t; i++) {
+                    f32 t = CLAMP(ts[i], 0.0f, 1.0f);
+
+                    v2_f32 bez_point = v2_f32_add(
+                        v2_f32_add(
+                            v2_f32_scale(c2, t * t),
+                            v2_f32_scale(c1, 2.0f * t)
+                        ), p0
+                    );
+
+                    f32 cur_dist = v2_f32_dist(p, bez_point);
+                    dist = MIN(dist, cur_dist);
+                }
+            }
+
+            if (glyph.flags[index] & TT_POINT_FLAG_CONTOUR_END) {
+                index++;
+            }
+
+            if (dist < min_dist) {
+                min_dist = dist;
+            }
+        }
+
+        if (min_dist < INFINITY) {
+            debug_draw_circles(&p, 1, min_dist, (v4_f32){ 0, 1, 0, 1 });
+        }
+
+        /*u32 rows = 6;
         u32 cols = 16;
         for (u32 i = 0; i < NUM_FONTS; i++) {
             f32 font_offset = 160 * (f32)(rows + 1) * (f32)i;
@@ -176,7 +284,7 @@ int main(int argc, char** argv) {
                     );
                 }
             }
-        }
+        }*/
 
         win_end_frame(win);
 
