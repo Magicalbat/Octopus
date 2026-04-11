@@ -38,8 +38,8 @@ int main(int argc, char** argv) {
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
 
     string8 fonts[] = {
-        STR8_LIT("res/Envy Code R.ttf"),
         STR8_LIT("res/Symbola.ttf"),
+        STR8_LIT("res/Envy Code R.ttf"),
         STR8_LIT("res/arial.ttf"),
         STR8_LIT("res/comic.ttf"),
         STR8_LIT("res/corbeli.ttf"),
@@ -57,6 +57,20 @@ int main(int argc, char** argv) {
         info_emitf("Parsing %.*s...", STR8_FMT(fonts[i]));
         font_files[i] = plat_file_read(perm_arena, fonts[i]);
         tt_font_init(font_files[i], &font_infos[i]);
+    }
+
+    {
+        tt_glyph_data test_glyph = tt_glyph_data_from_codepoint(
+            perm_arena, font_files[0], &font_infos[0], 'a'
+        );
+        bitmap_r8 bmp = { .width = 64, .height = 64, };
+        bmp.data = PUSH_ARRAY(perm_arena, u8, bmp.width * bmp.height);
+
+        tt_raster_glyph_sdf(
+            &bmp, (v2_i32){ 0, 0 }, &test_glyph, 
+            tt_scale_for_em(font_files[0], &font_infos[0], 64),
+            1, 4.0f
+        );
     }
 
     win_gfx_backend_init();

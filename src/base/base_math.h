@@ -1,19 +1,13 @@
 
-typedef struct {
-    i16 x, y;
-} v2_i16;
+#define PI 3.14159265358979323846
 
-typedef struct {
-    f32 x, y;       
-} v2_f32;
+typedef struct { i16 x, y; } v2_i16;
+typedef struct { i32 x, y; } v2_i32;
+typedef struct { f32 x, y; } v2_f32;
 
-typedef struct {
-    f32 x, y, z;    
-} v3_f32;
+typedef struct { f32 x, y, z; } v3_f32;
 
-typedef struct {
-    f32 x, y, z, w; 
-} v4_f32;
+typedef struct { f32 x, y, z, w; } v4_f32;
 
 typedef struct {
     f32 m[9];
@@ -24,6 +18,13 @@ typedef struct {
     f32 width;
     f32 aspect_ratio;
 } view2_f32;
+
+// Solves 0=ax^2 + bx + c
+// Returns the number of solutions
+u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c);
+// Solves 0=ax^3 + bx^2 + cx + d
+// Returns the number of solutions
+u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d);
 
 v2_f32 v2_f32_add(v2_f32 a, v2_f32 b);
 v2_f32 v2_f32_sub(v2_f32 a, v2_f32 b);

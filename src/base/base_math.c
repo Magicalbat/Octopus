@@ -1,5 +1,92 @@
 
-#define _F32_EPSILON 1e-6f
+#define _F32_EPSILON 1e-8f
+
+u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
+    if (solutions == NULL) {
+        return 0;
+    }
+
+    if (ABS(a) < _F32_EPSILON || ABS(b) > 1e6f*ABS(a)) {
+        if (ABS(b) < _F32_EPSILON) {
+            return 0;
+        }
+
+        solutions[0] = -c / b;
+        return 1;
+    }
+
+    f32 discriminant = b * b - 4 * a * c;
+    if (discriminant > 0) {
+        f32 sqrt_discr = sqrtf(discriminant);
+
+        solutions[0] = (-b + sqrt_discr) / (2.0f * a);
+        solutions[1] = (-b - sqrt_discr) / (2.0f * a);
+
+        return 2;
+    } else if (ABS(discriminant) < _F32_EPSILON) {
+        solutions[0] = -b / (2.0f * a);
+
+        return 1;
+    }
+
+    return 0;
+}
+
+// 0 = x^3 + (a2)(x^2) + (a1)(x) + a0
+// https://mathworld.wolfram.com/CubicFormula.html
+u32 solve_cubic_normed(f32 solutions[3], f32 a2, f32 a1, f32 a0) {
+    f32 a2_2 = a2 * a2;
+
+    f32 Q = (1.0f/9.0f) * (3.0f * a1 - a2_2);
+    f32 R = (1.0f/54.0f) * (9.0f * a2 * a1 - 27 * a0 - 2 * a2_2 * a2);
+
+    f32 R2 = R * R;
+    f32 Q3 = Q * Q * Q;
+
+    a2 *= 1.0f/3.0f;
+    if (R2 + Q3 < 0.0f) {
+        f32 t = R / sqrtf(-Q3);
+        t = CLAMP(t, -1.0f, 1.0f);
+
+        f32 theta = acosf(t);
+
+        f32 coef = 2.0f * sqrtf(-Q);
+
+        solutions[0] = coef * cosf(theta / 3.0f) - a2;
+        solutions[1] = coef * cosf((theta + 2.0f * (f32)PI) / 3.0f) - a2;
+        solutions[2] = coef * cosf((theta + 4.0f * (f32)PI) / 3.0f) - a2;
+
+        return 3;
+    }
+
+    f32 u = SIGN(R) * powf(ABS(R) + sqrtf(R2 + Q3), 1.0f / 3.0f);
+    f32 v = u == 0.0f ? 0.0f : -Q / u;
+
+    solutions[0] = (u + v) - a2;
+
+    if (u == v || ABS(u - v) < 1e-6f * ABS(u + v)) {
+        solutions[1] = -0.5f * (u + v) - a2;
+
+        return 2;
+    }
+
+    return 1;
+}
+
+u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d) {
+    if (solutions == NULL) {
+        return 0;
+    }
+
+    if (ABS(a) >= _F32_EPSILON) {
+        f32 b_a = b / a;
+        if (ABS(b_a) < _F32_EPSILON) {
+            return solve_cubic_normed(solutions, b_a, c/a, d/a);
+        }
+    }
+
+    return solve_quadratic(solutions, b, c, d);
+}
 
 v2_f32 v2_f32_add(v2_f32 a, v2_f32 b) {
     return (v2_f32){ a.x + b.x, a.y + b.y };
