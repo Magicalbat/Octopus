@@ -119,6 +119,13 @@ invalid:
     info->initialized = false;
 }
 
+f32 tt_scale_for_em(string8 file, tt_font_info* info, f32 pixels_per_em) {
+    if (info == NULL || !info->initialized) { return 1.0f; }
+
+    f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
+    return pixels_per_em / units_per_em;
+}
+
 // Used for loading in glyphs before the number of total points is known
 typedef struct {
     u32 num_segments;
@@ -695,75 +702,6 @@ u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint) {
     }
 
     return 0;
-}
-
-#define _TT_BEZ_SUB 5
-void tt_test_draw_glyph(
-    string8 file, tt_font_info* info,
-    u32 codepoint, v2_f32 translate, v2_f32 scale
-) {
-    if (info == NULL || !info->initialized) { return; }
-
-    f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
-    scale = v2_f32_scale(scale, 1.0f / units_per_em);
-
-    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-
-    tt_glyph_data glyph = tt_glyph_data_from_codepoint(scratch.arena, file, info, codepoint);
-
-    v2_f32* points = PUSH_ARRAY_NZ(scratch.arena, v2_f32, glyph.num_points);
-    for (u32 i = 0; i < glyph.num_points; i++) {
-        points[i] = (v2_f32){ 
-            glyph.points[i].x,
-            glyph.points[i].y
-        };
-
-        points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
-    }
-
-    u32 num_draw_points = 0;
-    v2_f32* draw_points = PUSH_ARRAY(scratch.arena, v2_f32, glyph.num_points * _TT_BEZ_SUB);
-
-    draw_points[num_draw_points++] = points[0];
-
-    u32 index = 0;
-    for (u32 seg = 0; seg < glyph.num_segments; seg++) {
-        if (glyph.flags[index] & TT_POINT_FLAG_LINE) {
-            // Skip over p0 (already in draw list)
-            index++;
-            v2_f32 p1 = points[index];
-
-            draw_points[num_draw_points++] = p1;
-        } else {
-            v2_f32 p0 = points[index++];
-            v2_f32 p1 = points[index++];
-            v2_f32 p2 = points[index];
-
-            for (u32 i = 0; i < _TT_BEZ_SUB; i++) {
-                f32 t = (f32)(i + 1) / _TT_BEZ_SUB;
-
-                v2_f32 m0 = v2_f32_add(p0, v2_f32_scale(v2_f32_sub(p1, p0), t));
-                v2_f32 m1 = v2_f32_add(p1, v2_f32_scale(v2_f32_sub(p2, p1), t));
-
-                v2_f32 b = v2_f32_add(m0, v2_f32_scale(v2_f32_sub(m1, m0), t));
-
-                draw_points[num_draw_points++] = b;
-            }
-        }
-
-        if (glyph.flags[index] & TT_POINT_FLAG_CONTOUR_END) {
-            debug_draw_lines(draw_points, num_draw_points, 1.0f, (v4_f32){ 1, 1, 1, 1 });
-
-            num_draw_points = 0;
-            index++;
-
-            if (index < glyph.num_points) {
-                draw_points[num_draw_points++] = points[index];
-            }
-        }
-    }
-
-    arena_scratch_release(scratch);
 }
 
 u32 _tt_calc_checksum(string8 file, u32 offset, u32 len) {

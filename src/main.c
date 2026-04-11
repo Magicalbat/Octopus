@@ -18,6 +18,11 @@ void gl_on_error(
 
 v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
 
+void test_draw_glyph(
+    string8 file, tt_font_info* info,
+    u32 codepoint, v2_f32 translate, v2_f32 scale
+);
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -136,7 +141,7 @@ int main(int argc, char** argv) {
             f32 font_offset = 160 * (f32)(rows + 1) * (f32)i;
 
             for (u32 j = 0; j < fonts[i].size; j++) {
-                tt_test_draw_glyph(
+                test_draw_glyph(
                     font_files[i], &font_infos[i], fonts[i].str[j],
                     (v2_f32){ 75 * (f32)j, font_offset },
                     (v2_f32){ 100, -100 }
@@ -151,7 +156,7 @@ int main(int argc, char** argv) {
                         font_offset + 150 * (f32)(y + 1)
                     };
 
-                    tt_test_draw_glyph(
+                    test_draw_glyph(
                         font_files[i], &font_infos[i], codepoint,
                         pos, (v2_f32){ 100, -100 }
                     );
@@ -218,4 +223,74 @@ v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p) {
 
     return p;
 }
+
+#define BEZ_SUB 5
+void test_draw_glyph(
+    string8 file, tt_font_info* info,
+    u32 codepoint, v2_f32 translate, v2_f32 scale
+) {
+    if (info == NULL || !info->initialized) { return; }
+
+    f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
+    scale = v2_f32_scale(scale, 1.0f / units_per_em);
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    tt_glyph_data glyph = tt_glyph_data_from_codepoint(scratch.arena, file, info, codepoint);
+
+    v2_f32* points = PUSH_ARRAY_NZ(scratch.arena, v2_f32, glyph.num_points);
+    for (u32 i = 0; i < glyph.num_points; i++) {
+        points[i] = (v2_f32){ 
+            glyph.points[i].x,
+            glyph.points[i].y
+        };
+
+        points[i] = v2_f32_add(v2_f32_comp_mul(points[i], scale), translate);
+    }
+
+    u32 num_draw_points = 0;
+    v2_f32* draw_points = PUSH_ARRAY(scratch.arena, v2_f32, glyph.num_points * BEZ_SUB);
+
+    draw_points[num_draw_points++] = points[0];
+
+    u32 index = 0;
+    for (u32 seg = 0; seg < glyph.num_segments; seg++) {
+        if (glyph.flags[index] & TT_POINT_FLAG_LINE) {
+            // Skip over p0 (already in draw list)
+            index++;
+            v2_f32 p1 = points[index];
+
+            draw_points[num_draw_points++] = p1;
+        } else {
+            v2_f32 p0 = points[index++];
+            v2_f32 p1 = points[index++];
+            v2_f32 p2 = points[index];
+
+            for (u32 i = 0; i < BEZ_SUB; i++) {
+                f32 t = (f32)(i + 1) / BEZ_SUB;
+
+                v2_f32 m0 = v2_f32_add(p0, v2_f32_scale(v2_f32_sub(p1, p0), t));
+                v2_f32 m1 = v2_f32_add(p1, v2_f32_scale(v2_f32_sub(p2, p1), t));
+
+                v2_f32 b = v2_f32_add(m0, v2_f32_scale(v2_f32_sub(m1, m0), t));
+
+                draw_points[num_draw_points++] = b;
+            }
+        }
+
+        if (glyph.flags[index] & TT_POINT_FLAG_CONTOUR_END) {
+            debug_draw_lines(draw_points, num_draw_points, 1.0f, (v4_f32){ 1, 1, 1, 1 });
+
+            num_draw_points = 0;
+            index++;
+
+            if (index < glyph.num_points) {
+                draw_points[num_draw_points++] = points[index];
+            }
+        }
+    }
+
+    arena_scratch_release(scratch);
+}
+
 

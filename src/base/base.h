@@ -6,4 +6,5 @@
 #include "base_log.h"
 #include "base_prng.h"
 #include "base_math.h"
+#include "base_img.h"
 

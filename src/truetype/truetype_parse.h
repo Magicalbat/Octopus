@@ -64,6 +64,8 @@ typedef struct {
 
 void tt_font_init(string8 file, tt_font_info* info);
 
+f32 tt_scale_for_em(string8 file, tt_font_info* info, f32 pixels_per_em);
+
 tt_glyph_data tt_glyph_data_from_index(
     mem_arena* arena, string8 file,
     tt_font_info* info, u32 glyph_index
@@ -75,6 +77,4 @@ tt_glyph_data tt_glyph_data_from_codepoint(
 );
 
 u32 tt_glyph_index(string8 file, tt_font_info* info, u32 codepoint);
-
-void tt_test_draw_glyph(string8 file, tt_font_info* info, u32 codepoint, v2_f32 translate, v2_f32 scale);
 
