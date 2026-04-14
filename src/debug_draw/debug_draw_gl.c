@@ -183,7 +183,7 @@ void debug_draw_circles(v2_f32* points, u32 num_points, f32 radius, v4_f32 color
 
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v2_f32) * cur_drawing, points + num_drawn);
 
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 6, (GLsizei)cur_drawing);
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)cur_drawing);
 
         num_drawn += cur_drawing;
     }
@@ -266,7 +266,7 @@ void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) 
 
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v2_f32) * cur_drawing, points + num_drawn);
 
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 6, (GLsizei)(cur_drawing - 1));
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)(cur_drawing - 1));
 
         num_drawn += cur_drawing;
     }

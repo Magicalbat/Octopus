@@ -33,6 +33,8 @@ wglCreateContextAttribsARB_func* wglCreateContextAttribsARB = NULL;
 #define WGL_CONTEXT_MINOR_VERSION_ARB           0x2092
 #define WGL_CONTEXT_FLAGS_ARB                   0x2094
 #define WGL_CONTEXT_DEBUG_BIT_ARB               0x0001
+#define WGL_CONTEXT_PROFILE_MASK_ARB            0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB        0x00000001
 
 // WGL_EXT_swap_control
 // https://registry.khronos.org/OpenGL/extensions/EXT/WGL_EXT_swap_control.txt

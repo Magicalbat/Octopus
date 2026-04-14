@@ -7,7 +7,7 @@ u32 glh_create_shader(const char* vertex_source, const char* fragment_source) {
     
     i32 success = GL_TRUE;
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-    if(success == GL_FALSE) {
+    if (success == GL_FALSE) {
         char info_log[512];
         glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
         error_emitf("Failed to compile vertex shader: %s", info_log);
@@ -19,7 +19,7 @@ u32 glh_create_shader(const char* vertex_source, const char* fragment_source) {
     glCompileShader(fragment_shader);
 
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-    if(!success) {
+    if (success == GL_FALSE) {
         char info_log[512];
         glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
         error_emitf("Failed to compile fragment shader: %s", info_log);
@@ -32,7 +32,7 @@ u32 glh_create_shader(const char* vertex_source, const char* fragment_source) {
     glLinkProgram(shader_program);
 
     glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-    if(!success) {
+    if (success == GL_FALSE) {
         char info_log[512];
         glGetProgramInfoLog(shader_program, 512, NULL, info_log);
         error_emitf("Failed to link shader: %s", info_log);

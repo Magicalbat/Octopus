@@ -23,6 +23,19 @@ void test_draw_glyph(
     u32 codepoint, v2_f32 translate, v2_f32 scale
 );
 
+const char* test_vert_source;
+const char* test_frag_source;
+
+v2_f32 unpack_point(u32 point_packed) {
+    u32 x_bits = (point_packed >>  0) & 0xffff;
+    u32 y_bits = (point_packed >> 16) & 0xffff;
+
+    float x = -32768.0f * (float)((x_bits >> 15) & 1) + (float)(x_bits & 0x7FFF);
+    float y = -32768.0f * (float)((y_bits >> 15) & 1) + (float)(y_bits & 0x7FFF);
+
+    return (v2_f32){ x, y };
+}
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -36,6 +49,7 @@ int main(int argc, char** argv) {
     prng_seed(seeds[0], seeds[1]);
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
+    mem_arena* frame_arena = arena_create(MiB(16), KiB(264), false);
 
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
@@ -71,25 +85,44 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    u32 glyph_capacity = KiB(64);
+
+    u32 vert_array, vert_buffer, glyph_ssbo;
+    u32 shader_prog;
+    i32 view_mat_loc, num_seg_loc, num_points_loc;
+
+    glGenVertexArrays(1, &vert_array);
+    glBindVertexArray(vert_array);
+
+    f32 vertices[] = {
+        0.0f,  0.0f,
+        0.0f, -1.0f, 
+        1.0f, -1.0f,
+
+        1.0f, -1.0f,
+        1.0f,  0.0f,
+        0.0f,  0.0f,
+    };
+
+    vert_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+
+    glyph_ssbo = glh_create_buffer(GL_SHADER_STORAGE_BUFFER, glyph_capacity, NULL, GL_DYNAMIC_DRAW);
+
+    u8* frag_source = str8_to_cstr(perm_arena, plat_file_read(perm_arena, STR8_LIT("test.glsl")));
+    shader_prog = glh_create_shader(test_vert_source, frag_source);
+
+    glUseProgram(shader_prog);
+    view_mat_loc = glGetUniformLocation(shader_prog, "u_view_mat");
+    num_seg_loc = glGetUniformLocation(shader_prog, "u_num_segments");
+    num_points_loc = glGetUniformLocation(shader_prog, "u_num_points");
+
     debug_draw_init(win);
 
     view2_f32 view = {
         .width = (f32)win->width,
         .aspect_ratio = (f32)win->width / (f32)win->height
     };
-
-    tt_glyph_data glyph = tt_glyph_data_from_codepoint(
-        perm_arena, font_files[0], &font_infos[0], 'a'
-    );
-
-    bitmap_r8 bmp = { .width = 64, .height = 64 };
-    bmp.data = PUSH_ARRAY(perm_arena, u8, bmp.width * bmp.height);
-
-    tt_raster_glyph_sdf(
-        &bmp, (v2_i32){ 0, 0 }, &glyph,
-        tt_scale_for_em(font_files[0], &font_infos[0], 128),
-        1, 8
-    );
+    m3_f32 view_mat = { 0 };
 
     // End of setup error frame
     {
@@ -116,7 +149,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 32;
+    u32 codepoint_offset = 'a';
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
@@ -137,31 +170,87 @@ int main(int argc, char** argv) {
         }
 
         view.aspect_ratio = (f32)win->width / (f32)win->height;
+        m3_f32_from_view2(&view_mat, view);
         debug_draw_set_view(view);
 
-        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_RIGHT)) {
+        if (WIN_KEY_JUST_DOWN(win, WIN_KEY_ARROW_RIGHT)) {
             codepoint_offset++;
         }
-        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_LEFT)) {
+        if (WIN_KEY_JUST_DOWN(win, WIN_KEY_ARROW_LEFT)) {
             if (codepoint_offset) codepoint_offset--;
         }
 
+        tt_glyph_data glyph = tt_glyph_data_from_codepoint(
+            frame_arena, font_files[0], &font_infos[0], codepoint_offset
+        );
+
         win_begin_frame(win);
+
+#if 1
+        vertices[0]  = glyph.x_min - 100; vertices[1]  = -glyph.y_max - 100;
+        vertices[2]  = glyph.x_min - 100; vertices[3]  = -glyph.y_min + 100;
+        vertices[4]  = glyph.x_max + 100; vertices[5]  = -glyph.y_min + 100;
+        vertices[6]  = glyph.x_max + 100; vertices[7]  = -glyph.y_min + 100;
+        vertices[8]  = glyph.x_max + 100; vertices[9]  = -glyph.y_max - 100;
+        vertices[10] = glyph.x_min - 100; vertices[11] = -glyph.y_max - 100;
+
+        glBindVertexArray(vert_array);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, glyph_ssbo);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, glyph.num_points, glyph.flags);
+        glBufferSubData(
+            GL_SHADER_STORAGE_BUFFER, (u32)ALIGN_UP_POW2(glyph.num_points, 4),
+            glyph.num_points * sizeof(v2_i16), glyph.points
+        );
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, glyph_ssbo);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vert_buffer);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+        glUseProgram(shader_prog);
+        glUniformMatrix3fv(view_mat_loc, 1, GL_TRUE, view_mat.m);
+        glUniform1ui(num_seg_loc, glyph.num_segments);
+        glUniform1ui(num_points_loc, glyph.num_points);
+
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(f32) * 2, NULL);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glDisableVertexAttribArray(0);
+
+#else
+
+        u32* glyph_packed = PUSH_ARRAY_NZ(frame_arena, u32, glyph.num_points + 3);
+        memcpy(glyph_packed, glyph.flags, glyph.num_points);
+        memcpy(
+            (u8*)glyph_packed + ALIGN_UP_POW2(glyph.num_points, 4),
+            glyph.points, glyph.num_points * sizeof(v2_i16)
+        );
 
         v2_f32 p = screen_to_world(win, &view, win->mouse_pos);
         f32 min_dist = INFINITY;
+
+        u32 point_offset = ((glyph.num_points + 3) / 4);
+        u32 point_index = 0;
 
         u32 index = 0;
         v2_f32 draw_points[101] = { 0 };
         for (u32 seg = 0; seg < glyph.num_segments; seg++) {
             f32 dist = INFINITY;
 
-            if (glyph.flags[index] & TT_POINT_FLAG_LINE) {
-                v2_i16 p0_16 = glyph.points[index++];
-                v2_i16 p1_16 = glyph.points[index];
+            u32 flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
 
-                v2_f32 p0 = { p0_16.x, -p0_16.y };
-                v2_f32 p1 = { p1_16.x, -p1_16.y };
+            if (flag & TT_POINT_FLAG_LINE) {
+                u32 p0_packed = glyph_packed[point_offset + point_index++];
+                u32 p1_packed = glyph_packed[point_offset + point_index];
+
+                v2_f32 p0 = unpack_point(p0_packed);
+                v2_f32 p1 = unpack_point(p1_packed);
+
+                p0.y *= -1;
+                p1.y *= -1;
 
                 draw_points[0].x = p0.x;
                 draw_points[0].y = p0.y;
@@ -179,13 +268,17 @@ int main(int argc, char** argv) {
                 v2_f32 line_point = v2_f32_add(p0, v2_f32_scale(line_vec, t));
                 dist = v2_f32_dist(p, line_point);
             } else {
-                v2_i16 p0_16 = glyph.points[index++];
-                v2_i16 p1_16 = glyph.points[index++];
-                v2_i16 p2_16 = glyph.points[index];
+                u32 p0_packed = glyph_packed[point_offset + point_index++];
+                u32 p1_packed = glyph_packed[point_offset + point_index++];
+                u32 p2_packed = glyph_packed[point_offset + point_index];
 
-                v2_f32 p0 = { p0_16.x, -p0_16.y };
-                v2_f32 p1 = { p1_16.x, -p1_16.y };
-                v2_f32 p2 = { p2_16.x, -p2_16.y };
+                v2_f32 p0 = unpack_point(p0_packed);
+                v2_f32 p1 = unpack_point(p1_packed);
+                v2_f32 p2 = unpack_point(p2_packed);
+
+                p0.y *= -1;
+                p1.y *= -1;
+                p2.y *= -1;
 
                 v2_f32 c0 = v2_f32_sub(p, p0);
                 v2_f32 c1 = v2_f32_sub(p1, p0);
@@ -212,23 +305,6 @@ int main(int argc, char** argv) {
                 f32 ts[3] = { 0 };
                 u32 num_t = solve_cubic(ts, a, b, c, d);
 
-                /*{
-                    for (u32 i = 0; i < 101; i++) {
-                        f32 x = (f32)i / 50.0f - 1.0f;
-                        f32 y = a * x * x * x + b * x * x + c * x + d;
-
-                        draw_points[i].x = x * 500.0f;
-                        draw_points[i].y = y;
-                    }
-
-                    debug_draw_lines(draw_points, 101, 2.0f, (v4_f32){ 1, 0, 0, 1 });
-                    for (u32 i = 0; i < num_t; i++) {
-                        draw_points[i].x = ts[i] * 500.0f;
-                        draw_points[i].y = 0.0f;
-                    }
-                    debug_draw_circles(draw_points, num_t, 10.0f, (v4_f32){ 0, 0, 1, 1 });
-                }*/
-
                 for (u32 i = 0; i < num_t; i++) {
                     f32 t = CLAMP(ts[i], 0.0f, 1.0f);
 
@@ -244,8 +320,9 @@ int main(int argc, char** argv) {
                 }
             }
 
-            if (glyph.flags[index] & TT_POINT_FLAG_CONTOUR_END) {
-                index++;
+            flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
+            if (flag & TT_POINT_FLAG_CONTOUR_END) {
+                point_index++;
             }
 
             if (dist < min_dist) {
@@ -254,8 +331,9 @@ int main(int argc, char** argv) {
         }
 
         if (min_dist < INFINITY) {
-            debug_draw_circles(&p, 1, min_dist, (v4_f32){ 0, 1, 0, 1 });
+            debug_draw_circles(&p, 1, min_dist, (v4_f32){ 0, 1, 0, 0.2f });
         }
+#endif
 
         /*u32 rows = 6;
         u32 cols = 16;
@@ -287,6 +365,8 @@ int main(int argc, char** argv) {
         }*/
 
         win_end_frame(win);
+
+        arena_clear(frame_arena);
 
         {
             mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -414,5 +494,103 @@ void test_draw_glyph(
 
     arena_scratch_release(scratch);
 }
+
+const char* test_vert_source = GLSL_SOURCE(
+    430,
+
+    layout (location = 0) in vec2 a_pos;
+
+    uniform mat3 u_view_mat;
+
+    out vec2 pos;
+
+    void main() {
+        pos = a_pos;
+        vec2 screen_pos = (u_view_mat * vec3(pos, 1.0)).xy;
+        gl_Position = vec4(screen_pos, 0.0, 1.0);
+    }
+);
+
+const char* test_frag_source = ""
+"#version 430 core\n"
+""
+"layout (location = 0) out vec4 out_col;\n"
+""
+"uniform uint u_num_segments;"
+"uniform uint u_num_points;"
+""
+"layout (binding = 2, std430) readonly buffer ssbo {"
+"    uint glyph_packed[];"
+"};"
+""
+"in vec2 pos;"
+""
+"\n#define POINT_FLAG_LINE        (1 << 0)\n"
+"\n#define POINT_FLAG_CONTOUR_END (1 << 1)\n"
+""
+"const float INFINITY = uintBitsToFloat(0x7F800000);"
+""
+"vec2 unpack_point(uint point_packed) {"
+"    uint x_bits = (point_packed >>  0) & 0xffff;"
+"    uint y_bits = (point_packed >> 16) & 0xffff;"
+""
+"    float x = -32768.0 * float((x_bits >> 15) & 1) + float(x_bits & 0x7FFF);"
+"    float y = -32768.0 * float((y_bits >> 15) & 1) + float(y_bits & 0x7FFF);"
+""
+"    return vec2(x, y);"
+"}\n"
+""
+"void main() {"
+"    uint point_offset = (u_num_points + 3) / 4;"
+"    uint point_index = 0;"
+""
+"    float min_dist = INFINITY;"
+""
+"    for (uint i = 0; i < u_num_segments; i++) {"
+"        uint flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;"
+""
+"        if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {"
+"            uint p0_packed = glyph_packed[point_offset + point_index++];"
+"            uint p1_packed = glyph_packed[point_offset + point_index];"
+""
+"            vec2 p0 = unpack_point(p0_packed);"
+"            vec2 p1 = unpack_point(p1_packed);"
+""
+"            p0.y *= -1;"
+"            p1.y *= -1;"
+""
+"            min_dist = min(distance(pos, p0), min_dist);"
+"            min_dist = min(distance(pos, p1), min_dist);"
+"        } else {"
+"            uint p0_packed = glyph_packed[point_offset + point_index++];"
+"            uint p1_packed = glyph_packed[point_offset + point_index++];"
+"            uint p2_packed = glyph_packed[point_offset + point_index];"
+""
+"            vec2 p0 = unpack_point(p0_packed);"
+"            vec2 p1 = unpack_point(p1_packed);"
+"            vec2 p2 = unpack_point(p2_packed);"
+""
+"            p0.y *= -1;"
+"            p1.y *= -1;"
+"            p2.y *= -1;"
+""
+"            min_dist = min(distance(pos, p0), min_dist);"
+"            min_dist = min(distance(pos, p1), min_dist);"
+"            min_dist = min(distance(pos, p2), min_dist);"
+"        }"
+""
+"        flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;"
+"        if ((flag & POINT_FLAG_CONTOUR_END) == POINT_FLAG_CONTOUR_END) {"
+"            point_index++;"
+"        }"
+"    }"
+""
+"    float dist = min_dist - 10.0;"
+"    float blending = length(vec2(dFdx(dist), dFdy(dist))) * 0.573896787348;"
+"    float alpha = smoothstep(blending, -blending, dist);"
+"    "
+"    out_col = vec4(alpha, 0., 0., 1.);"
+"}\n"
+;
 
 
