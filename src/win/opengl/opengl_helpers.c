@@ -1,8 +1,9 @@
 
-u32 glh_create_shader(const char* vertex_source, const char* fragment_source) {
+u32 glh_create_shader(string8 vertex_source, string8 fragment_source) {
     u32 vertex_shader;
     vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &vertex_source, NULL);
+    i32 vertex_size = (i32)vertex_source.size;
+    glShaderSource(vertex_shader, 1, (const char* const*)&vertex_source.str, &vertex_size);
     glCompileShader(vertex_shader);
     
     i32 success = GL_TRUE;
@@ -15,7 +16,8 @@ u32 glh_create_shader(const char* vertex_source, const char* fragment_source) {
     
     u32 fragment_shader;
     fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &fragment_source, NULL);
+    i32 fragment_size = (i32)fragment_source.size;
+    glShaderSource(fragment_shader, 1, (const char* const*)&fragment_source.str, &fragment_size);
     glCompileShader(fragment_shader);
 
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);

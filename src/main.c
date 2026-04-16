@@ -23,8 +23,8 @@ void test_draw_glyph(
     u32 codepoint, v2_f32 translate, v2_f32 scale
 );
 
-const char* test_vert_source;
-const char* test_frag_source;
+string8 test_vert_source;
+string8 test_frag_source;
 
 v2_f32 unpack_point(u32 point_packed) {
     u32 x_bits = (point_packed >>  0) & 0xffff;
@@ -53,9 +53,9 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
+        STR8_LIT("res/comic.ttf"),
         STR8_LIT("res/Envy Code R.ttf"),
         STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/comic.ttf"),
         STR8_LIT("res/corbeli.ttf"),
         STR8_LIT("res/Hack.ttf"),
         STR8_LIT("res/NotoSans-Regular.ttf"),
@@ -108,7 +108,8 @@ int main(int argc, char** argv) {
 
     glyph_ssbo = glh_create_buffer(GL_SHADER_STORAGE_BUFFER, glyph_capacity, NULL, GL_DYNAMIC_DRAW);
 
-    u8* frag_source = str8_to_cstr(perm_arena, plat_file_read(perm_arena, STR8_LIT("test.glsl")));
+    string8 frag_source = plat_file_read(perm_arena, STR8_LIT("test.glsl"));
+
     shader_prog = glh_create_shader(test_vert_source, frag_source);
 
     glUseProgram(shader_prog);
@@ -180,9 +181,18 @@ int main(int argc, char** argv) {
             if (codepoint_offset) codepoint_offset--;
         }
 
+        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_UP)) {
+            codepoint_offset++;
+        }
+        if (WIN_KEY_DOWN(win, WIN_KEY_ARROW_DOWN)) {
+            if (codepoint_offset) codepoint_offset--;
+        }
+
+
         tt_glyph_data glyph = tt_glyph_data_from_codepoint(
             frame_arena, font_files[0], &font_infos[0], codepoint_offset
         );
+        tt_glyph_color_edges(&glyph);
 
         win_begin_frame(win);
 
@@ -495,7 +505,7 @@ void test_draw_glyph(
     arena_scratch_release(scratch);
 }
 
-const char* test_vert_source = GLSL_SOURCE(
+string8 test_vert_source = GLSL_SOURCE(
     430,
 
     layout (location = 0) in vec2 a_pos;
@@ -510,87 +520,5 @@ const char* test_vert_source = GLSL_SOURCE(
         gl_Position = vec4(screen_pos, 0.0, 1.0);
     }
 );
-
-const char* test_frag_source = ""
-"#version 430 core\n"
-""
-"layout (location = 0) out vec4 out_col;\n"
-""
-"uniform uint u_num_segments;"
-"uniform uint u_num_points;"
-""
-"layout (binding = 2, std430) readonly buffer ssbo {"
-"    uint glyph_packed[];"
-"};"
-""
-"in vec2 pos;"
-""
-"\n#define POINT_FLAG_LINE        (1 << 0)\n"
-"\n#define POINT_FLAG_CONTOUR_END (1 << 1)\n"
-""
-"const float INFINITY = uintBitsToFloat(0x7F800000);"
-""
-"vec2 unpack_point(uint point_packed) {"
-"    uint x_bits = (point_packed >>  0) & 0xffff;"
-"    uint y_bits = (point_packed >> 16) & 0xffff;"
-""
-"    float x = -32768.0 * float((x_bits >> 15) & 1) + float(x_bits & 0x7FFF);"
-"    float y = -32768.0 * float((y_bits >> 15) & 1) + float(y_bits & 0x7FFF);"
-""
-"    return vec2(x, y);"
-"}\n"
-""
-"void main() {"
-"    uint point_offset = (u_num_points + 3) / 4;"
-"    uint point_index = 0;"
-""
-"    float min_dist = INFINITY;"
-""
-"    for (uint i = 0; i < u_num_segments; i++) {"
-"        uint flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;"
-""
-"        if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {"
-"            uint p0_packed = glyph_packed[point_offset + point_index++];"
-"            uint p1_packed = glyph_packed[point_offset + point_index];"
-""
-"            vec2 p0 = unpack_point(p0_packed);"
-"            vec2 p1 = unpack_point(p1_packed);"
-""
-"            p0.y *= -1;"
-"            p1.y *= -1;"
-""
-"            min_dist = min(distance(pos, p0), min_dist);"
-"            min_dist = min(distance(pos, p1), min_dist);"
-"        } else {"
-"            uint p0_packed = glyph_packed[point_offset + point_index++];"
-"            uint p1_packed = glyph_packed[point_offset + point_index++];"
-"            uint p2_packed = glyph_packed[point_offset + point_index];"
-""
-"            vec2 p0 = unpack_point(p0_packed);"
-"            vec2 p1 = unpack_point(p1_packed);"
-"            vec2 p2 = unpack_point(p2_packed);"
-""
-"            p0.y *= -1;"
-"            p1.y *= -1;"
-"            p2.y *= -1;"
-""
-"            min_dist = min(distance(pos, p0), min_dist);"
-"            min_dist = min(distance(pos, p1), min_dist);"
-"            min_dist = min(distance(pos, p2), min_dist);"
-"        }"
-""
-"        flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;"
-"        if ((flag & POINT_FLAG_CONTOUR_END) == POINT_FLAG_CONTOUR_END) {"
-"            point_index++;"
-"        }"
-"    }"
-""
-"    float dist = min_dist - 10.0;"
-"    float blending = length(vec2(dFdx(dist), dFdy(dist))) * 0.573896787348;"
-"    float alpha = smoothstep(blending, -blending, dist);"
-"    "
-"    out_col = vec4(alpha, 0., 0., 1.);"
-"}\n"
-;
 
 

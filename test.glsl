@@ -14,6 +14,10 @@ in vec2 pos;
 #define POINT_FLAG_LINE        (1 << 0)
 #define POINT_FLAG_CONTOUR_END (1 << 1)
 
+#define POINT_FLAG_RED         (1 << 4)
+#define POINT_FLAG_GREEN       (1 << 5)
+#define POINT_FLAG_BLUE        (2 << 6)
+
 const float INFINITY = uintBitsToFloat(0x7F800000);
 
 vec2 unpack_point(uint point_packed) {
@@ -114,10 +118,14 @@ void main() {
     uint point_offset = (u_num_points + 3) / 4;
     uint point_index = 0;
 
-    float min_dist = INFINITY;
+    float r_min_dist = INFINITY;
+    float g_min_dist = INFINITY;
+    float b_min_dist = INFINITY;
 
     for (uint i = 0; i < u_num_segments; i++) {
         uint flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
+
+        float dist = INFINITY;
 
         if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {
             uint p0_packed = glyph_packed[point_offset + point_index++];
@@ -136,7 +144,7 @@ void main() {
             t = clamp(t, 0.0, 1.0);
 
             vec2 line_point = p0 + line_vec * t;
-            min_dist = min(min_dist, distance(pos, line_point));
+            dist = distance(pos, line_point);
         } else {
             uint p0_packed = glyph_packed[point_offset + point_index++];
             uint p1_packed = glyph_packed[point_offset + point_index++];
@@ -164,8 +172,18 @@ void main() {
             for (uint i = 0; i < 3; i++) {
                 float t = clamp(ts[i], 0.0, 1.0);
                 vec2 bez_point = t * t * c2 + 2.0 * t * c1 + p0;
-                min_dist = min(min_dist, distance(pos, bez_point));
+                dist = min(dist, distance(pos, bez_point));
             }
+        }
+
+        if ((flag & POINT_FLAG_RED) == POINT_FLAG_RED) {
+            r_min_dist = min(r_min_dist, dist);
+        }
+        if ((flag & POINT_FLAG_GREEN) == POINT_FLAG_GREEN) {
+            g_min_dist = min(g_min_dist, dist);
+        }
+        if ((flag & POINT_FLAG_BLUE) == POINT_FLAG_BLUE) {
+            b_min_dist = min(b_min_dist, dist);
         }
 
         flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
@@ -174,10 +192,18 @@ void main() {
         }
     }
 
-    float dist = min_dist - 10.0;
-    float blending = length(vec2(dFdx(dist), dFdy(dist))) * 0.573896787348;
-    float alpha = smoothstep(blending, -blending, dist);
+    float r_dist = r_min_dist - 10.0;
+    float r_blending = length(vec2(dFdx(r_dist), dFdy(r_dist))) * 0.573896787348;
+    float red = smoothstep(r_blending, -r_blending, r_dist);
+
+    float g_dist = g_min_dist - 10.0;
+    float g_blending = length(vec2(dFdx(g_dist), dFdy(g_dist))) * 0.573896787348;
+    float green = smoothstep(g_blending, -g_blending, g_dist);
+
+    float b_dist = b_min_dist - 10.0;
+    float b_blending = length(vec2(dFdx(b_dist), dFdy(b_dist))) * 0.573896787348;
+    float blue = smoothstep(b_blending, -b_blending, b_dist);
     
-    out_col = vec4(alpha, 0., 0., 1.);
+    out_col = vec4(red, green, blue, 1.);
 }
 

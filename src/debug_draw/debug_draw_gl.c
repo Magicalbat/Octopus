@@ -27,11 +27,11 @@ typedef struct {
     i32 col_loc;
 } _dd_lines;
 
-static const char* _dd_circle_vert_source;
-static const char* _dd_circle_frag_source;
+static string8 _dd_circle_vert_source;
+static string8 _dd_circle_frag_source;
 
-static const char* _dd_line_vert_source;
-static const char* _dd_line_frag_source;
+static string8 _dd_line_vert_source;
+static string8 _dd_line_frag_source;
 
 static struct {
     const window* win;
@@ -281,7 +281,7 @@ void debug_draw_lines(v2_f32* points, u32 num_points, f32 radius, v4_f32 color) 
     glBindVertexArray(0);
 }
 
-static const char* _dd_circle_vert_source = GLSL_SOURCE(
+static string8 _dd_circle_vert_source = GLSL_SOURCE(
     330,
 
     layout (location = 0) in vec2 a_pos_pattern;
@@ -301,7 +301,7 @@ static const char* _dd_circle_vert_source = GLSL_SOURCE(
     }
 );
 
-static const char* _dd_circle_frag_source = GLSL_SOURCE(
+static string8 _dd_circle_frag_source = GLSL_SOURCE(
     330,
 
     layout (location = 0) out vec4 out_col;
@@ -319,7 +319,7 @@ static const char* _dd_circle_frag_source = GLSL_SOURCE(
     }
 );
 
-static const char* _dd_line_vert_source = GLSL_SOURCE(
+static string8 _dd_line_vert_source = GLSL_SOURCE(
     330,
 
     layout (location = 0) in vec2 a_p0;
@@ -350,7 +350,7 @@ static const char* _dd_line_vert_source = GLSL_SOURCE(
     }
 );
 
-static const char* _dd_line_frag_source = GLSL_SOURCE(
+static string8 _dd_line_frag_source = GLSL_SOURCE(
     330,
 
     layout (location = 0) out vec4 out_col;

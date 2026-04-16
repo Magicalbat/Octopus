@@ -128,6 +128,7 @@ f32 tt_scale_for_em(string8 file, tt_font_info* info, f32 pixels_per_em) {
 
 // Used for loading in glyphs before the number of total points is known
 typedef struct {
+    u32 num_contours;
     u32 num_segments;
     u32 num_points;
 
@@ -159,6 +160,8 @@ b32 _tt_glyph_add_points(
         if (entry.length < 12 + (u32)num_contours * 2 + instruction_length) {
             return false;
         }
+
+        glyph->num_contours += (u32)num_contours;
 
         u32 num_raw_points = (u32)_TT_READ_BE16(glyf_data + 10 + (num_contours - 1) * 2) + 1;
 
@@ -515,6 +518,7 @@ tt_glyph_data tt_glyph_data_from_index(
         goto fail;
     }
 
+    glyph.num_contours = temp_glyph.num_contours;
     glyph.num_segments = temp_glyph.num_segments;
     glyph.num_points = temp_glyph.num_points;
 
