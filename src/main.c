@@ -23,6 +23,25 @@ void test_draw_glyph(
     u32 codepoint, v2_f32 translate, v2_f32 scale
 );
 
+typedef struct {
+    v2_f32 translate;
+    v2_f32 scale;
+    u32 data_offset;
+    u32 num_segments;
+    u32 num_points;
+} instance;
+
+u32 num_glyphs = 0;
+v2_f32* vertex_data = NULL;
+instance* instance_data = NULL;
+u32 glyph_data_size = 0;
+u8* glyph_data = NULL;
+
+void push_glyph(
+    string8 file, tt_font_info* info,
+    u32 codepoint, v2_f32 translate, v2_f32 scale
+);
+
 string8 test_vert_source;
 string8 test_frag_source;
 
@@ -53,13 +72,13 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
-        STR8_LIT("res/comic.ttf"),
-        STR8_LIT("res/Envy Code R.ttf"),
-        STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/corbeli.ttf"),
-        STR8_LIT("res/Hack.ttf"),
-        STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/times.ttf"),
+        //STR8_LIT("res/comic.ttf"),
+        //STR8_LIT("res/Envy Code R.ttf"),
+        //STR8_LIT("res/arial.ttf"),
+        //STR8_LIT("res/corbeli.ttf"),
+        //STR8_LIT("res/Hack.ttf"),
+        //STR8_LIT("res/NotoSans-Regular.ttf"),
+        //STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -85,28 +104,26 @@ int main(int argc, char** argv) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    u32 glyph_capacity = KiB(64);
+    // Both in bytes
+    u32 glyph_capacity = KiB(128);
+    u32 max_glyphs = 256 * NUM_FONTS;
 
-    u32 vert_array, vert_buffer, glyph_ssbo;
+    u32 vert_array, vert_buffer, instance_ssbo, glyph_ssbo;
     u32 shader_prog;
-    i32 view_mat_loc, num_seg_loc, num_points_loc;
+    i32 view_mat_loc;
 
     glGenVertexArrays(1, &vert_array);
     glBindVertexArray(vert_array);
 
-    f32 vertices[] = {
-        0.0f,  0.0f,
-        0.0f, -1.0f, 
-        1.0f, -1.0f,
-
-        1.0f, -1.0f,
-        1.0f,  0.0f,
-        0.0f,  0.0f,
-    };
-
-    vert_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-
+    vert_buffer = glh_create_buffer(GL_ARRAY_BUFFER, sizeof(v2_f32) * 6 * max_glyphs, NULL, GL_DYNAMIC_DRAW);
+    instance_ssbo = glh_create_buffer(GL_SHADER_STORAGE_BUFFER, sizeof(instance) * max_glyphs, NULL, GL_DYNAMIC_DRAW);
     glyph_ssbo = glh_create_buffer(GL_SHADER_STORAGE_BUFFER, glyph_capacity, NULL, GL_DYNAMIC_DRAW);
+
+    num_glyphs = 0;
+    vertex_data = PUSH_ARRAY(perm_arena, v2_f32, 6 * max_glyphs);
+    instance_data = PUSH_ARRAY(perm_arena, instance, max_glyphs);
+    glyph_data_size = 0;
+    glyph_data = PUSH_ARRAY(perm_arena, u8, glyph_capacity);
 
     string8 frag_source = plat_file_read(perm_arena, STR8_LIT("test.glsl"));
 
@@ -114,8 +131,6 @@ int main(int argc, char** argv) {
 
     glUseProgram(shader_prog);
     view_mat_loc = glGetUniformLocation(shader_prog, "u_view_mat");
-    num_seg_loc = glGetUniformLocation(shader_prog, "u_num_segments");
-    num_points_loc = glGetUniformLocation(shader_prog, "u_num_points");
 
     debug_draw_init(win);
 
@@ -188,7 +203,6 @@ int main(int argc, char** argv) {
             if (codepoint_offset) codepoint_offset--;
         }
 
-
         tt_glyph_data glyph = tt_glyph_data_from_codepoint(
             frame_arena, font_files[0], &font_infos[0], codepoint_offset
         );
@@ -197,36 +211,69 @@ int main(int argc, char** argv) {
         win_begin_frame(win);
 
 #if 1
-        vertices[0]  = glyph.x_min - 100; vertices[1]  = -glyph.y_max - 100;
-        vertices[2]  = glyph.x_min - 100; vertices[3]  = -glyph.y_min + 100;
-        vertices[4]  = glyph.x_max + 100; vertices[5]  = -glyph.y_min + 100;
-        vertices[6]  = glyph.x_max + 100; vertices[7]  = -glyph.y_min + 100;
-        vertices[8]  = glyph.x_max + 100; vertices[9]  = -glyph.y_max - 100;
-        vertices[10] = glyph.x_min - 100; vertices[11] = -glyph.y_max - 100;
+        //vertices[0]  = glyph.x_min - 100; vertices[1]  = -glyph.y_max - 100;
+        //vertices[2]  = glyph.x_min - 100; vertices[3]  = -glyph.y_min + 100;
+        //vertices[4]  = glyph.x_max + 100; vertices[5]  = -glyph.y_min + 100;
+        //vertices[6]  = glyph.x_max + 100; vertices[7]  = -glyph.y_min + 100;
+        //vertices[8]  = glyph.x_max + 100; vertices[9]  = -glyph.y_max - 100;
+        //vertices[10] = glyph.x_min - 100; vertices[11] = -glyph.y_max - 100;
+
+        
+        num_glyphs = 0;
+        glyph_data_size = 0;
+
+        u32 rows = 6;
+        u32 cols = 16;
+        for (u32 i = 0; i < NUM_FONTS; i++) {
+            f32 font_offset = 160 * (f32)(rows + 1) * (f32)i;
+
+            for (u32 j = 0; j < fonts[i].size; j++) {
+                push_glyph(
+                    font_files[i], &font_infos[i], fonts[i].str[j],
+                    (v2_f32){ 75 * (f32)j, font_offset },
+                    (v2_f32){ 100, -100 }
+                );
+            }
+
+            for (u32 y = 0; y < rows; y++) {
+                for (u32 x = 0; x < cols; x++) {
+                    u32 codepoint = (y * cols + x) + codepoint_offset;
+                    v2_f32 pos = {
+                        150 * (f32)x,
+                        font_offset + 150 * (f32)(y + 1)
+                    };
+
+                    push_glyph(
+                        font_files[i], &font_infos[i], codepoint,
+                        pos, (v2_f32){ 100, -100 }
+                    );
+                }
+            }
+        }
 
         glBindVertexArray(vert_array);
 
+        printf("%u %u\n", num_glyphs, glyph_data_size);
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, glyph_ssbo);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, glyph.num_points, glyph.flags);
-        glBufferSubData(
-            GL_SHADER_STORAGE_BUFFER, (u32)ALIGN_UP_POW2(glyph.num_points, 4),
-            glyph.num_points * sizeof(v2_i16), glyph.points
-        );
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, glyph_ssbo);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, glyph_data_size, glyph_data);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, glyph_ssbo);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, instance_ssbo);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, num_glyphs * sizeof(instance), instance_data);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, instance_ssbo);
 
         glBindBuffer(GL_ARRAY_BUFFER, vert_buffer);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v2_f32) * 6 * num_glyphs, vertex_data);
 
         glUseProgram(shader_prog);
         glUniformMatrix3fv(view_mat_loc, 1, GL_TRUE, view_mat.m);
-        glUniform1ui(num_seg_loc, glyph.num_segments);
-        glUniform1ui(num_points_loc, glyph.num_points);
 
         glEnableVertexAttribArray(0);
 
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(f32) * 2, NULL);
 
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, num_glyphs);
 
         glDisableVertexAttribArray(0);
 
@@ -381,22 +428,18 @@ int main(int argc, char** argv) {
         {
             mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
-            string8 other_logs = log_frame_peek(
-                scratch.arena, LOG_INFO | LOG_WARN, LOG_RES_CONCAT, true
+            string8 logs = log_frame_peek(
+                scratch.arena, LOG_ALL, LOG_RES_CONCAT, true
             );
 
-            if (other_logs.size) {
-                printf("%.*s\n", STR8_FMT(other_logs));
-            }
-
-            string8 errors = log_frame_end(scratch.arena, LOG_ERROR, LOG_RES_CONCAT, true);
-
-            if (errors.size) {
-                printf("%.*s\n", STR8_FMT(errors));
+            if (logs.size) {
+                printf("%.*s\n", STR8_FMT(logs));
             }
 
             arena_scratch_release(scratch);
         }
+
+        exit(1);
     }
 
     debug_draw_destroy();
@@ -505,6 +548,49 @@ void test_draw_glyph(
     arena_scratch_release(scratch);
 }
 
+void push_glyph(
+    string8 file, tt_font_info* info,
+    u32 codepoint, v2_f32 translate, v2_f32 scale
+) {
+    if (info == NULL || !info->initialized) { return; }
+
+    f32 units_per_em = (f32)_TT_READ_BE16(file.str + info->head.offset + 18);
+    scale = v2_f32_scale(scale, 1.0f / units_per_em);
+
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    tt_glyph_data glyph = tt_glyph_data_from_codepoint(scratch.arena, file, info, codepoint);
+
+    u32 vi = num_glyphs * 6;
+    vertex_data[vi+0] = (v2_f32){ glyph.x_min - 100, glyph.y_min - 100 };
+    vertex_data[vi+1] = (v2_f32){ glyph.x_min - 100, glyph.y_max + 100 };
+    vertex_data[vi+2] = (v2_f32){ glyph.x_max + 100, glyph.y_min + 100 };
+    vertex_data[vi+3] = (v2_f32){ glyph.x_max + 100, glyph.y_max + 100 };
+    vertex_data[vi+4] = (v2_f32){ glyph.x_max + 100, glyph.y_min - 100 };
+    vertex_data[vi+5] = (v2_f32){ glyph.x_min - 100, glyph.y_min - 100 };
+
+    for (u32 i = 0; i < 6; i++) {
+        vertex_data[vi + i] = v2_f32_add(v2_f32_comp_mul(vertex_data[vi+i], scale), translate);
+    }
+
+    u32 data_offset = glyph_data_size;
+    instance_data[num_glyphs++] = (instance){
+        translate, scale,
+        data_offset, glyph.num_segments, glyph.num_points,
+    };
+
+    memcpy(glyph_data + data_offset, glyph.flags, glyph.num_points);
+    memcpy(
+        glyph_data + data_offset + ALIGN_UP_POW2(glyph.num_points, 4),
+        glyph.points,
+        glyph.num_points * sizeof(v2_i16)
+    );
+
+    glyph_data_size += ALIGN_UP_POW2(glyph.num_points, 4) + glyph.num_points * sizeof(v2_i16);
+    
+    arena_scratch_release(scratch);
+}
+
 string8 test_vert_source = GLSL_SOURCE(
     430,
 
@@ -512,10 +598,13 @@ string8 test_vert_source = GLSL_SOURCE(
 
     uniform mat3 u_view_mat;
 
+    flat out int instance_id;
     out vec2 pos;
 
     void main() {
+        instance_id = gl_InstanceID;
         pos = a_pos;
+
         vec2 screen_pos = (u_view_mat * vec3(pos, 1.0)).xy;
         gl_Position = vec4(screen_pos, 0.0, 1.0);
     }

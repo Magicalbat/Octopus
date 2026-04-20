@@ -1,14 +1,24 @@
 #version 430 core
 
+struct instance_data {
+    vec2 translate;
+    vec2 scale;
+    uint data_offset;
+    uint num_segments;
+    uint num_points;
+};
+
 layout (location = 0) out vec4 out_col;
 
-uniform uint u_num_segments;
-uniform uint u_num_points;
-
-layout (binding = 2, std430) readonly buffer ssbo {
+layout (binding = 0, std430) readonly buffer glyph_ssbo {
     uint glyph_packed[];
 };
 
+layout (binding = 1, std430) readonly buffer instance_ssbo {
+    instance_data instances[];
+};
+
+flat in int instance_id;
 in vec2 pos;
 
 #define POINT_FLAG_LINE        (1 << 0)
@@ -20,14 +30,23 @@ in vec2 pos;
 
 const float INFINITY = uintBitsToFloat(0x7F800000);
 
-vec2 unpack_point(uint point_packed) {
-    uint x_bits = (point_packed >>  0) & 0xffff;
-    uint y_bits = (point_packed >> 16) & 0xffff;
+uint get_flag(uint flag_index) {
+    uint offset = instances[instance_id].data_offset;
 
-    float x = -32768.0 * float((x_bits >> 15) & 1) + float(x_bits & 0x7FFF);
-    float y = -32768.0 * float((y_bits >> 15) & 1) + float(y_bits & 0x7FFF);
+    uint flag = glyph_packed[offset + flag_index / 4];
+    flag = (flag >> ((flag_index % 4) * 8)) & 0xff;
 
-    return vec2(x, y);
+    return flag;
+}
+
+vec2 get_point(uint data_index) {
+    uint offset = instances[instance_id].data_offset;
+    vec2 p = unpackSnorm2x16(glyph_packed[offset + data_index]) * 32727.0;
+
+    p *= instances[instance_id].scale;
+    p += instances[instance_id].translate;
+
+    return p;
 }
 
 #define EPSILON 1e-8
@@ -115,27 +134,24 @@ vec3 solve_cubic(float a, float b, float c, float d) {
 }
 
 void main() {
-    uint point_offset = (u_num_points + 3) / 4;
+    uint num_segments = instances[instance_id].num_segments;
+    uint num_points = instances[instance_id].num_points;
+
+    uint point_offset = (num_points + 3) / 4;
     uint point_index = 0;
 
     float r_min_dist = INFINITY;
     float g_min_dist = INFINITY;
     float b_min_dist = INFINITY;
 
-    for (uint i = 0; i < u_num_segments; i++) {
-        uint flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
+    for (uint i = 0; i < num_segments; i++) {
+        uint flag = get_flag(point_index);
 
         float dist = INFINITY;
 
         if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {
-            uint p0_packed = glyph_packed[point_offset + point_index++];
-            uint p1_packed = glyph_packed[point_offset + point_index];
-
-            vec2 p0 = unpack_point(p0_packed);
-            vec2 p1 = unpack_point(p1_packed);
-
-            p0.y *= -1;
-            p1.y *= -1;
+            vec2 p0 = get_point(point_offset + point_index++);
+            vec2 p1 = get_point(point_offset + point_index);
 
             vec2 line_vec = p1 - p0;
             vec2 point_vec = pos - p0;
@@ -146,17 +162,9 @@ void main() {
             vec2 line_point = p0 + line_vec * t;
             dist = distance(pos, line_point);
         } else {
-            uint p0_packed = glyph_packed[point_offset + point_index++];
-            uint p1_packed = glyph_packed[point_offset + point_index++];
-            uint p2_packed = glyph_packed[point_offset + point_index];
-
-            vec2 p0 = unpack_point(p0_packed);
-            vec2 p1 = unpack_point(p1_packed);
-            vec2 p2 = unpack_point(p2_packed);
-
-            p0.y *= -1;
-            p1.y *= -1;
-            p2.y *= -1;
+            vec2 p0 = get_point(point_offset + point_index++);
+            vec2 p1 = get_point(point_offset + point_index++);
+            vec2 p2 = get_point(point_offset + point_index);
 
             vec2 c0 = pos - p0;
             vec2 c1 = p1 - p0;
@@ -186,7 +194,7 @@ void main() {
             b_min_dist = min(b_min_dist, dist);
         }
 
-        flag = (glyph_packed[point_index / 4] >> ((point_index % 4) * 8)) & 0xff;
+        flag = get_flag(point_index);
         if ((flag & POINT_FLAG_CONTOUR_END) == POINT_FLAG_CONTOUR_END) {
             point_index++;
         }
