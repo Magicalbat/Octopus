@@ -18,7 +18,7 @@ layout (binding = 1, std430) readonly buffer instance_ssbo {
     instance_data instances[];
 };
 
-flat in int instance_id;
+flat in int glyph_id;
 in vec2 pos;
 
 #define POINT_FLAG_LINE        (1 << 0)
@@ -31,7 +31,7 @@ in vec2 pos;
 const float INFINITY = uintBitsToFloat(0x7F800000);
 
 uint get_flag(uint flag_index) {
-    uint offset = instances[instance_id].data_offset;
+    uint offset = instances[glyph_id].data_offset / 4;
 
     uint flag = glyph_packed[offset + flag_index / 4];
     flag = (flag >> ((flag_index % 4) * 8)) & 0xff;
@@ -40,11 +40,11 @@ uint get_flag(uint flag_index) {
 }
 
 vec2 get_point(uint data_index) {
-    uint offset = instances[instance_id].data_offset;
+    uint offset = instances[glyph_id].data_offset / 4;
     vec2 p = unpackSnorm2x16(glyph_packed[offset + data_index]) * 32727.0;
 
-    p *= instances[instance_id].scale;
-    p += instances[instance_id].translate;
+    p *= instances[glyph_id].scale;
+    p += instances[glyph_id].translate;
 
     return p;
 }
@@ -134,8 +134,8 @@ vec3 solve_cubic(float a, float b, float c, float d) {
 }
 
 void main() {
-    uint num_segments = instances[instance_id].num_segments;
-    uint num_points = instances[instance_id].num_points;
+    uint num_segments = instances[glyph_id].num_segments;
+    uint num_points = instances[glyph_id].num_points;
 
     uint point_offset = (num_points + 3) / 4;
     uint point_index = 0;
@@ -200,15 +200,15 @@ void main() {
         }
     }
 
-    float r_dist = r_min_dist - 10.0;
+    float r_dist = r_min_dist - 1.0;
     float r_blending = length(vec2(dFdx(r_dist), dFdy(r_dist))) * 0.573896787348;
     float red = smoothstep(r_blending, -r_blending, r_dist);
 
-    float g_dist = g_min_dist - 10.0;
+    float g_dist = g_min_dist - 1.0;
     float g_blending = length(vec2(dFdx(g_dist), dFdy(g_dist))) * 0.573896787348;
     float green = smoothstep(g_blending, -g_blending, g_dist);
 
-    float b_dist = b_min_dist - 10.0;
+    float b_dist = b_min_dist - 1.0;
     float b_blending = length(vec2(dFdx(b_dist), dFdy(b_dist))) * 0.573896787348;
     float blue = smoothstep(b_blending, -b_blending, b_dist);
     

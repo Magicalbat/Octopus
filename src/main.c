@@ -29,6 +29,7 @@ typedef struct {
     u32 data_offset;
     u32 num_segments;
     u32 num_points;
+    u32 _padding;
 } instance;
 
 u32 num_glyphs = 0;
@@ -36,6 +37,8 @@ v2_f32* vertex_data = NULL;
 instance* instance_data = NULL;
 u32 glyph_data_size = 0;
 u8* glyph_data = NULL;
+
+tt_glyph_data test_glyph = { 0 };
 
 void push_glyph(
     string8 file, tt_font_info* info,
@@ -69,6 +72,37 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
     mem_arena* frame_arena = arena_create(MiB(16), KiB(264), false);
+
+    tt_point_flag flags[] = {
+        TT_POINT_FLAG_LINE,
+        TT_POINT_FLAG_NONE,
+        TT_POINT_FLAG_NONE,
+        TT_POINT_FLAG_NONE,
+        TT_POINT_FLAG_NONE,
+        TT_POINT_FLAG_CONTOUR_END,
+    };
+    v2_i16 points[] = {
+        {    0,    0 },
+        {    0, 1000 },
+        { 1000, 1000 },
+        { 1000,  500 },
+        { 1000,    0 },
+        {    0,    0 }
+    };
+    
+    test_glyph = (tt_glyph_data){
+        .x_min = 0,
+        .x_max = 1000,
+        .y_min = 0,
+        .y_max = 1000,
+
+        .num_contours = 1,
+        .num_segments = 3,
+        .num_points = 6,
+
+        .flags = flags,
+        .points = points
+    };
 
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
@@ -165,7 +199,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 'a';
+    u32 codepoint_offset = 32;
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
@@ -203,22 +237,9 @@ int main(int argc, char** argv) {
             if (codepoint_offset) codepoint_offset--;
         }
 
-        tt_glyph_data glyph = tt_glyph_data_from_codepoint(
-            frame_arena, font_files[0], &font_infos[0], codepoint_offset
-        );
-        tt_glyph_color_edges(&glyph);
-
         win_begin_frame(win);
 
 #if 1
-        //vertices[0]  = glyph.x_min - 100; vertices[1]  = -glyph.y_max - 100;
-        //vertices[2]  = glyph.x_min - 100; vertices[3]  = -glyph.y_min + 100;
-        //vertices[4]  = glyph.x_max + 100; vertices[5]  = -glyph.y_min + 100;
-        //vertices[6]  = glyph.x_max + 100; vertices[7]  = -glyph.y_min + 100;
-        //vertices[8]  = glyph.x_max + 100; vertices[9]  = -glyph.y_max - 100;
-        //vertices[10] = glyph.x_min - 100; vertices[11] = -glyph.y_max - 100;
-
-        
         num_glyphs = 0;
         glyph_data_size = 0;
 
@@ -251,9 +272,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        glBindVertexArray(vert_array);
+        printf("%5u\r", codepoint_offset);
+        fflush(stdout);
 
-        printf("%u %u\n", num_glyphs, glyph_data_size);
+        glBindVertexArray(vert_array);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, glyph_ssbo);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, glyph_data_size, glyph_data);
@@ -271,9 +293,9 @@ int main(int argc, char** argv) {
 
         glEnableVertexAttribArray(0);
 
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(f32) * 2, NULL);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(v2_f32), NULL);
 
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, num_glyphs);
+        glDrawArrays(GL_TRIANGLES, 0, 6 * (i32)num_glyphs);
 
         glDisableVertexAttribArray(0);
 
@@ -438,8 +460,6 @@ int main(int argc, char** argv) {
 
             arena_scratch_release(scratch);
         }
-
-        exit(1);
     }
 
     debug_draw_destroy();
@@ -560,23 +580,28 @@ void push_glyph(
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     tt_glyph_data glyph = tt_glyph_data_from_codepoint(scratch.arena, file, info, codepoint);
+    tt_glyph_color_edges(&glyph);
 
     u32 vi = num_glyphs * 6;
     vertex_data[vi+0] = (v2_f32){ glyph.x_min - 100, glyph.y_min - 100 };
     vertex_data[vi+1] = (v2_f32){ glyph.x_min - 100, glyph.y_max + 100 };
-    vertex_data[vi+2] = (v2_f32){ glyph.x_max + 100, glyph.y_min + 100 };
+    vertex_data[vi+2] = (v2_f32){ glyph.x_max + 100, glyph.y_min - 100 };
     vertex_data[vi+3] = (v2_f32){ glyph.x_max + 100, glyph.y_max + 100 };
     vertex_data[vi+4] = (v2_f32){ glyph.x_max + 100, glyph.y_min - 100 };
-    vertex_data[vi+5] = (v2_f32){ glyph.x_min - 100, glyph.y_min - 100 };
+    vertex_data[vi+5] = (v2_f32){ glyph.x_min - 100, glyph.y_max + 100 };
 
     for (u32 i = 0; i < 6; i++) {
         vertex_data[vi + i] = v2_f32_add(v2_f32_comp_mul(vertex_data[vi+i], scale), translate);
     }
 
     u32 data_offset = glyph_data_size;
+
     instance_data[num_glyphs++] = (instance){
-        translate, scale,
-        data_offset, glyph.num_segments, glyph.num_points,
+        .translate = translate,
+        .scale = scale,
+        .data_offset = data_offset,
+        .num_segments = glyph.num_segments,
+        .num_points = glyph.num_points,
     };
 
     memcpy(glyph_data + data_offset, glyph.flags, glyph.num_points);
@@ -598,11 +623,11 @@ string8 test_vert_source = GLSL_SOURCE(
 
     uniform mat3 u_view_mat;
 
-    flat out int instance_id;
+    flat out int glyph_id;
     out vec2 pos;
 
     void main() {
-        instance_id = gl_InstanceID;
+        glyph_id = gl_VertexID / 6;
         pos = a_pos;
 
         vec2 screen_pos = (u_view_mat * vec3(pos, 1.0)).xy;
