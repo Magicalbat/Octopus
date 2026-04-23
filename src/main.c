@@ -38,8 +38,6 @@ instance* instance_data = NULL;
 u32 glyph_data_size = 0;
 u8* glyph_data = NULL;
 
-tt_glyph_data test_glyph = { 0 };
-
 void push_glyph(
     string8 file, tt_font_info* info,
     u32 codepoint, v2_f32 translate, v2_f32 scale
@@ -73,46 +71,15 @@ int main(int argc, char** argv) {
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
     mem_arena* frame_arena = arena_create(MiB(16), KiB(264), false);
 
-    tt_point_flag flags[] = {
-        TT_POINT_FLAG_LINE,
-        TT_POINT_FLAG_NONE,
-        TT_POINT_FLAG_NONE,
-        TT_POINT_FLAG_NONE,
-        TT_POINT_FLAG_NONE,
-        TT_POINT_FLAG_CONTOUR_END,
-    };
-    v2_i16 points[] = {
-        {    0,    0 },
-        {    0, 1000 },
-        { 1000, 1000 },
-        { 1000,  500 },
-        { 1000,    0 },
-        {    0,    0 }
-    };
-    
-    test_glyph = (tt_glyph_data){
-        .x_min = 0,
-        .x_max = 1000,
-        .y_min = 0,
-        .y_max = 1000,
-
-        .num_contours = 1,
-        .num_segments = 3,
-        .num_points = 6,
-
-        .flags = flags,
-        .points = points
-    };
-
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
-        //STR8_LIT("res/comic.ttf"),
-        //STR8_LIT("res/Envy Code R.ttf"),
-        //STR8_LIT("res/arial.ttf"),
-        //STR8_LIT("res/corbeli.ttf"),
-        //STR8_LIT("res/Hack.ttf"),
-        //STR8_LIT("res/NotoSans-Regular.ttf"),
-        //STR8_LIT("res/times.ttf"),
+        STR8_LIT("res/comic.ttf"),
+        STR8_LIT("res/Envy Code R.ttf"),
+        STR8_LIT("res/arial.ttf"),
+        STR8_LIT("res/corbeli.ttf"),
+        STR8_LIT("res/Hack.ttf"),
+        STR8_LIT("res/NotoSans-Regular.ttf"),
+        STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -139,7 +106,7 @@ int main(int argc, char** argv) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Both in bytes
-    u32 glyph_capacity = KiB(128);
+    u32 glyph_capacity = KiB(512);
     u32 max_glyphs = 256 * NUM_FONTS;
 
     u32 vert_array, vert_buffer, instance_ssbo, glyph_ssbo;
@@ -199,7 +166,7 @@ int main(int argc, char** argv) {
 
     win->clear_color = (v4_f32){ 0.0f, 0.2f, 0.4f, 1.0f };
 
-    u32 codepoint_offset = 32;
+    u32 codepoint_offset = 33;
 
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
@@ -271,9 +238,6 @@ int main(int argc, char** argv) {
                 }
             }
         }
-
-        printf("%5u\r", codepoint_offset);
-        fflush(stdout);
 
         glBindVertexArray(vert_array);
 

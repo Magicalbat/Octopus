@@ -1,5 +1,11 @@
 #version 430 core
 
+struct dist_info {
+    float sdist;
+    float orthogonality;
+    float param;
+};
+
 struct instance_data {
     vec2 translate;
     vec2 scale;
@@ -30,23 +36,8 @@ in vec2 pos;
 
 const float INFINITY = uintBitsToFloat(0x7F800000);
 
-uint get_flag(uint flag_index) {
-    uint offset = instances[glyph_id].data_offset / 4;
-
-    uint flag = glyph_packed[offset + flag_index / 4];
-    flag = (flag >> ((flag_index % 4) * 8)) & 0xff;
-
-    return flag;
-}
-
-vec2 get_point(uint data_index) {
-    uint offset = instances[glyph_id].data_offset / 4;
-    vec2 p = unpackSnorm2x16(glyph_packed[offset + data_index]) * 32727.0;
-
-    p *= instances[glyph_id].scale;
-    p += instances[glyph_id].translate;
-
-    return p;
+float cross(vec2 a, vec2 b) {
+    return a.x * b.y - a.y * b.x;
 }
 
 #define EPSILON 1e-8
@@ -122,7 +113,6 @@ vec3 solve_cubic_normed(float a2, float a1, float a0) {
 }
 
 vec3 solve_cubic(float a, float b, float c, float d) {
-
     if (abs(a) >= EPSILON) {
         float b_a = b / a;
         if (abs(b_a) < 1e6f) {
@@ -133,6 +123,97 @@ vec3 solve_cubic(float a, float b, float c, float d) {
     return vec3(solve_quadratic(b, c, d), 0.0);
 }
 
+dist_info line_dist(vec2 p0, vec2 p1) {
+    vec2 line_vec = p1 - p0;
+    vec2 point_vec = pos - p0;
+
+    float t = dot(point_vec, line_vec) / dot(line_vec, line_vec);
+    t = clamp(t, 0.0, 1.0);
+
+    vec2 line_point = p0 + line_vec * t;
+    vec2 line_to_point = pos - line_point;
+
+    float dist = length(line_to_point);
+
+    vec2 line_dir = normalize(line_vec);
+    vec2 point_dir = line_to_point / dist;
+
+    float ortho = cross(line_dir, point_dir);
+    float s = ortho < 0.0 ? -1 : 1;
+
+    return dist_info(s * dist, s * ortho, t);
+}
+
+dist_info bez_dist(vec2 p0, vec2 p1, vec2 p2) {
+    vec2 c0 = pos - p0;
+    vec2 c1 = p1 - p0;
+    vec2 c2 = p2 - 2.0 * p1 + p0;
+
+    float a = dot(c2, c2);
+    float b = 3.0 * dot(c1, c2);
+    float c = 2.0 * dot(c1, c1) - dot(c2, c0);
+    float d = -dot(c1, c0);
+
+    vec3 ts = solve_cubic(a, b, c, d);
+
+    float t = 0.0;
+    vec2 bez_to_point = vec2(0);
+    float dist = INFINITY;
+
+    for (uint i = 0; i < 3; i++) {
+        float cur_t = clamp(ts[i], 0.0, 1.0);
+        vec2 cur_bez_point = cur_t * (cur_t * c2 + 2.0 * c1) + p0;
+        vec2 cur_bez_to_point = pos - cur_bez_point;
+        float cur_dist = length(cur_bez_to_point);
+
+        if (cur_dist < dist) {
+            t = cur_t;
+            bez_to_point = cur_bez_to_point;
+            dist = cur_dist;
+        }
+    }
+
+    vec2 bez_dir = normalize(t * c2 + c1);
+    vec2 point_dir = bez_to_point / dist;
+
+    float ortho = cross(bez_dir, point_dir);
+    float s = ortho < 0.0 ? -1 : 1;
+
+    return dist_info(s * dist, s * ortho, t);
+}
+
+bool dist_less(dist_info a, dist_info b) {
+    float a_dist = abs(a.sdist);
+    float b_dist = abs(b.sdist);
+
+    if (a_dist < b_dist) {
+        return true;
+    } else if (abs(a_dist - b_dist) < 1e-8) {
+        return a.orthogonality > b.orthogonality;
+    }
+
+    return false;
+}
+
+uint get_flag(uint flag_index) {
+    uint offset = instances[glyph_id].data_offset / 4;
+
+    uint flag = glyph_packed[offset + flag_index / 4];
+    flag = (flag >> ((flag_index % 4) * 8)) & 0xff;
+
+    return flag;
+}
+
+vec2 get_point(uint data_index) {
+    uint offset = instances[glyph_id].data_offset / 4;
+    vec2 p = unpackSnorm2x16(glyph_packed[offset + data_index]) * 32727.0;
+
+    p *= instances[glyph_id].scale;
+    p += instances[glyph_id].translate;
+
+    return p;
+}
+
 void main() {
     uint num_segments = instances[glyph_id].num_segments;
     uint num_points = instances[glyph_id].num_points;
@@ -140,78 +221,41 @@ void main() {
     uint point_offset = (num_points + 3) / 4;
     uint point_index = 0;
 
-    float r_min_dist = INFINITY;
-    float g_min_dist = INFINITY;
-    float b_min_dist = INFINITY;
+    dist_info dist = dist_info(INFINITY, 0, 0);
 
     for (uint i = 0; i < num_segments; i++) {
         uint flag = get_flag(point_index);
 
-        float dist = INFINITY;
+        dist_info cur_dist = dist_info(INFINITY, 0, 0);
 
         if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {
             vec2 p0 = get_point(point_offset + point_index++);
             vec2 p1 = get_point(point_offset + point_index);
 
-            vec2 line_vec = p1 - p0;
-            vec2 point_vec = pos - p0;
-
-            float t = dot(point_vec, line_vec) / dot(line_vec, line_vec);
-            t = clamp(t, 0.0, 1.0);
-
-            vec2 line_point = p0 + line_vec * t;
-            dist = distance(pos, line_point);
+            cur_dist = line_dist(p0, p1);
         } else {
             vec2 p0 = get_point(point_offset + point_index++);
             vec2 p1 = get_point(point_offset + point_index++);
             vec2 p2 = get_point(point_offset + point_index);
 
-            vec2 c0 = pos - p0;
-            vec2 c1 = p1 - p0;
-            vec2 c2 = p2 - 2.0 * p1 + p0;
-
-            float a = dot(c2, c2);
-            float b = 3.0 * dot(c1, c2);
-            float c = 2.0 * dot(c1, c1) - dot(c2, c0);
-            float d = -dot(c1, c0);
-
-            vec3 ts = solve_cubic(a, b, c, d);
-
-            for (uint i = 0; i < 3; i++) {
-                float t = clamp(ts[i], 0.0, 1.0);
-                vec2 bez_point = t * t * c2 + 2.0 * t * c1 + p0;
-                dist = min(dist, distance(pos, bez_point));
-            }
-        }
-
-        if ((flag & POINT_FLAG_RED) == POINT_FLAG_RED) {
-            r_min_dist = min(r_min_dist, dist);
-        }
-        if ((flag & POINT_FLAG_GREEN) == POINT_FLAG_GREEN) {
-            g_min_dist = min(g_min_dist, dist);
-        }
-        if ((flag & POINT_FLAG_BLUE) == POINT_FLAG_BLUE) {
-            b_min_dist = min(b_min_dist, dist);
+            cur_dist = bez_dist(p0, p1, p2);
         }
 
         flag = get_flag(point_index);
         if ((flag & POINT_FLAG_CONTOUR_END) == POINT_FLAG_CONTOUR_END) {
             point_index++;
         }
+
+        if (dist_less(cur_dist, dist)) {
+            dist = cur_dist;
+        }
     }
 
-    float r_dist = r_min_dist - 1.0;
-    float r_blending = length(vec2(dFdx(r_dist), dFdy(r_dist))) * 0.573896787348;
-    float red = smoothstep(r_blending, -r_blending, r_dist);
+    float d = dist.sdist;
+    d = clamp(d, -10.0, 10.0);
+    float outline = 1 / ((20 * d) * (20 * d) + 1);
+    d = d / 20.0 + 0.5;
 
-    float g_dist = g_min_dist - 1.0;
-    float g_blending = length(vec2(dFdx(g_dist), dFdy(g_dist))) * 0.573896787348;
-    float green = smoothstep(g_blending, -g_blending, g_dist);
-
-    float b_dist = b_min_dist - 1.0;
-    float b_blending = length(vec2(dFdx(b_dist), dFdy(b_dist))) * 0.573896787348;
-    float blue = smoothstep(b_blending, -b_blending, b_dist);
-    
-    out_col = vec4(red, green, blue, 1.);
+    out_col = vec4(outline, d, d, 1);
 }
 
