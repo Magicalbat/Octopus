@@ -24,8 +24,10 @@ layout (binding = 1, std430) readonly buffer instance_ssbo {
     instance_data instances[];
 };
 
+uniform vec2 u_mouse_pos;
+
 flat in int glyph_id;
-in vec2 pos;
+in vec2 world_pos;
 
 #define POINT_FLAG_LINE        (1 << 0)
 #define POINT_FLAG_CONTOUR_END (1 << 1)
@@ -38,6 +40,10 @@ const float INFINITY = uintBitsToFloat(0x7F800000);
 
 float cross(vec2 a, vec2 b) {
     return a.x * b.y - a.y * b.x;
+}
+
+float nz_sign(float x) {
+    return x < 0.0 ? -1.0 : 1.0;
 }
 
 #define EPSILON 1e-8
@@ -104,7 +110,7 @@ vec3 solve_cubic_normed(float a2, float a1, float a0) {
     vec3 solutions = vec3((S + T) - a2, 1.0, 0.0);
 
     if (abs(S - T) < EPSILON) {
-        solutions.x = -0.5f * (S + T) - a2;
+        solutions.y = -0.5f * (S + T) - a2;
 
         return solutions;
     }
@@ -123,28 +129,28 @@ vec3 solve_cubic(float a, float b, float c, float d) {
     return vec3(solve_quadratic(b, c, d), 0.0);
 }
 
-dist_info line_dist(vec2 p0, vec2 p1) {
+dist_info line_dist(vec2 pos, vec2 p0, vec2 p1) {
     vec2 line_vec = p1 - p0;
     vec2 point_vec = pos - p0;
 
     float t = dot(point_vec, line_vec) / dot(line_vec, line_vec);
-    t = clamp(t, 0.0, 1.0);
+    t = max(t, 0.0);
 
-    vec2 line_point = p0 + line_vec * t;
-    vec2 line_to_point = pos - line_point;
+    vec2 line_point = t >= 1.0 ? p1 : p0 + line_vec * t;
+    vec2 point_to_line = line_point - pos;
 
-    float dist = length(line_to_point);
+    float dist = length(point_to_line);
+    float s = nz_sign(cross(line_vec, point_to_line));
 
     vec2 line_dir = normalize(line_vec);
-    vec2 point_dir = line_to_point / dist;
+    vec2 point_dir = normalize(pos - line_point);
 
-    float ortho = cross(line_dir, point_dir);
-    float s = ortho < 0.0 ? -1 : 1;
+    float ortho = abs(cross(line_dir, point_dir));
 
-    return dist_info(s * dist, s * ortho, t);
+    return dist_info(s * dist, ortho, t);
 }
 
-dist_info bez_dist(vec2 p0, vec2 p1, vec2 p2) {
+dist_info bez_dist(vec2 pos, vec2 p0, vec2 p1, vec2 p2) {
     vec2 c0 = pos - p0;
     vec2 c1 = p1 - p0;
     vec2 c2 = p2 - 2.0 * p1 + p0;
@@ -157,42 +163,47 @@ dist_info bez_dist(vec2 p0, vec2 p1, vec2 p2) {
     vec3 ts = solve_cubic(a, b, c, d);
 
     float t = 0.0;
-    vec2 bez_to_point = vec2(0);
+    vec2 bez_point = vec2(0);
     float dist = INFINITY;
 
     for (uint i = 0; i < 3; i++) {
-        float cur_t = clamp(ts[i], 0.0, 1.0);
-        vec2 cur_bez_point = cur_t * (cur_t * c2 + 2.0 * c1) + p0;
-        vec2 cur_bez_to_point = pos - cur_bez_point;
-        float cur_dist = length(cur_bez_to_point);
+        float cur_t = ts[i];
+        vec2 cur_bez_point = vec2(0);
+
+        if (cur_t <= 0.0) {
+            cur_t = 0.0;
+            cur_bez_point = p0;
+        } else if (cur_t >= 1.0) {
+            cur_t = 1.0;
+            cur_bez_point = p2;
+        } else {
+            cur_bez_point = cur_t * (cur_t * c2 + 2.0 * c1) + p0;
+        }
+
+        float cur_dist = length(pos - cur_bez_point);
 
         if (cur_dist < dist) {
             t = cur_t;
-            bez_to_point = cur_bez_to_point;
+            bez_point = cur_bez_point;
             dist = cur_dist;
         }
     }
 
+    vec2 point_to_bez = bez_point - pos;
     vec2 bez_dir = normalize(t * c2 + c1);
-    vec2 point_dir = bez_to_point / dist;
 
-    float ortho = cross(bez_dir, point_dir);
-    float s = ortho < 0.0 ? -1 : 1;
+    float s = nz_sign(cross(bez_dir, point_to_bez));
+    vec2 point_dir = normalize(pos - bez_point);
+    float ortho = abs(cross(bez_dir, point_dir));
 
-    return dist_info(s * dist, s * ortho, t);
+    return dist_info(s * dist, ortho, t);
 }
 
 bool dist_less(dist_info a, dist_info b) {
     float a_dist = abs(a.sdist);
     float b_dist = abs(b.sdist);
 
-    if (a_dist < b_dist) {
-        return true;
-    } else if (abs(a_dist - b_dist) < 1e-8) {
-        return a.orthogonality > b.orthogonality;
-    }
-
-    return false;
+    return (a_dist < b_dist) || (a_dist == b_dist && a.orthogonality > b.orthogonality);
 }
 
 uint get_flag(uint flag_index) {
@@ -221,24 +232,25 @@ void main() {
     uint point_offset = (num_points + 3) / 4;
     uint point_index = 0;
 
-    dist_info dist = dist_info(INFINITY, 0, 0);
+    uint mouse_edge = 0;
+    dist_info mouse_dist = dist_info(INFINITY, 0, 0);
 
-    for (uint i = 0; i < num_segments; i++) {
+    /*for (uint i = 0; i < num_segments; i++) {
         uint flag = get_flag(point_index);
 
-        dist_info cur_dist = dist_info(INFINITY, 0, 0);
+        dist_info cur_mouse_dist = dist_info(INFINITY, 0, 0);
 
         if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {
             vec2 p0 = get_point(point_offset + point_index++);
             vec2 p1 = get_point(point_offset + point_index);
 
-            cur_dist = line_dist(p0, p1);
+            cur_mouse_dist = line_dist(u_mouse_pos, p0, p1);
         } else {
             vec2 p0 = get_point(point_offset + point_index++);
             vec2 p1 = get_point(point_offset + point_index++);
             vec2 p2 = get_point(point_offset + point_index);
 
-            cur_dist = bez_dist(p0, p1, p2);
+            cur_mouse_dist = bez_dist(u_mouse_pos, p0, p1, p2);
         }
 
         flag = get_flag(point_index);
@@ -246,16 +258,57 @@ void main() {
             point_index++;
         }
 
-        if (dist_less(cur_dist, dist)) {
-            dist = cur_dist;
+        if (dist_less(cur_mouse_dist, mouse_dist)) {
+            mouse_edge = i;
+            mouse_dist = cur_mouse_dist;
+        }
+    }*/
+
+    point_offset = (num_points + 3) / 4;
+    point_index = 0;
+
+    uint curve_edge = 0;
+    dist_info curve_dist = dist_info(INFINITY, 0, 0);
+
+    for (uint i = 0; i < num_segments; i++) {
+        uint flag = get_flag(point_index);
+
+        dist_info cur_curve_dist = dist_info(INFINITY, 0, 0);
+
+        if ((flag & POINT_FLAG_LINE) == POINT_FLAG_LINE) {
+            vec2 p0 = get_point(point_offset + point_index++);
+            vec2 p1 = get_point(point_offset + point_index);
+
+            cur_curve_dist = line_dist(world_pos, p0, p1);
+        } else {
+            vec2 p0 = get_point(point_offset + point_index++);
+            vec2 p1 = get_point(point_offset + point_index++);
+            vec2 p2 = get_point(point_offset + point_index);
+
+            cur_curve_dist = bez_dist(world_pos, p0, p1, p2);
+        }
+
+        flag = get_flag(point_index);
+        if ((flag & POINT_FLAG_CONTOUR_END) == POINT_FLAG_CONTOUR_END) {
+            point_index++;
+        }
+
+        if (dist_less(cur_curve_dist, curve_dist)) {
+            curve_edge = i;
+            curve_dist = cur_curve_dist;
         }
     }
 
-    float d = dist.sdist;
+    float d = curve_dist.sdist;
     d = clamp(d, -10.0, 10.0);
     float outline = 1 / ((20 * d) * (20 * d) + 1);
     d = d / 20.0 + 0.5;
 
-    out_col = vec4(outline, d, d, 1);
+    out_col = vec4(
+        outline,
+        curve_edge == mouse_edge ? outline : 0.0,
+        d,
+        1.0
+    );
 }
 

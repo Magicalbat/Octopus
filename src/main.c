@@ -73,13 +73,13 @@ int main(int argc, char** argv) {
 
     string8 fonts[] = {
         STR8_LIT("res/Symbola.ttf"),
-        STR8_LIT("res/comic.ttf"),
-        STR8_LIT("res/Envy Code R.ttf"),
-        STR8_LIT("res/arial.ttf"),
-        STR8_LIT("res/corbeli.ttf"),
-        STR8_LIT("res/Hack.ttf"),
-        STR8_LIT("res/NotoSans-Regular.ttf"),
-        STR8_LIT("res/times.ttf"),
+        //STR8_LIT("res/comic.ttf"),
+        //STR8_LIT("res/Envy Code R.ttf"),
+        //STR8_LIT("res/arial.ttf"),
+        //STR8_LIT("res/corbeli.ttf"),
+        //STR8_LIT("res/Hack.ttf"),
+        //STR8_LIT("res/NotoSans-Regular.ttf"),
+        //STR8_LIT("res/times.ttf"),
     };
 
 #define NUM_FONTS (sizeof(fonts) / sizeof(fonts[0]))
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
 
     u32 vert_array, vert_buffer, instance_ssbo, glyph_ssbo;
     u32 shader_prog;
-    i32 view_mat_loc;
+    i32 view_mat_loc, mouse_pos_loc;
 
     glGenVertexArrays(1, &vert_array);
     glBindVertexArray(vert_array);
@@ -132,6 +132,7 @@ int main(int argc, char** argv) {
 
     glUseProgram(shader_prog);
     view_mat_loc = glGetUniformLocation(shader_prog, "u_view_mat");
+    mouse_pos_loc = glGetUniformLocation(shader_prog, "u_mouse_pos");
 
     debug_draw_init(win);
 
@@ -254,6 +255,8 @@ int main(int argc, char** argv) {
 
         glUseProgram(shader_prog);
         glUniformMatrix3fv(view_mat_loc, 1, GL_TRUE, view_mat.m);
+        v2_f32 mouse_pos = screen_to_world(win, &view, win->mouse_pos);
+        glUniform2f(mouse_pos_loc, mouse_pos.x, mouse_pos.y);
 
         glEnableVertexAttribArray(0);
 
@@ -588,13 +591,13 @@ string8 test_vert_source = GLSL_SOURCE(
     uniform mat3 u_view_mat;
 
     flat out int glyph_id;
-    out vec2 pos;
+    out vec2 world_pos;
 
     void main() {
         glyph_id = gl_VertexID / 6;
-        pos = a_pos;
+        world_pos = a_pos;
 
-        vec2 screen_pos = (u_view_mat * vec3(pos, 1.0)).xy;
+        vec2 screen_pos = (u_view_mat * vec3(a_pos, 1.0)).xy;
         gl_Position = vec4(screen_pos, 0.0, 1.0);
     }
 );
