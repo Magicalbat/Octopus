@@ -81,19 +81,6 @@ int main(int argc, char** argv) {
 
         win_process_events(win);
 
-        view.center.x += win->mouse_scroll.x * view.width * 0.04f;
-        view.center.y -= win->mouse_scroll.y * view.width * 0.04f;
-
-        if (win->touchpad_zoom != 1.0f) {
-            // Zooming such that the mouse stays in the same position
-            v2_f32 init_mousepos = screen_to_world(win, &view, win->mouse_pos);
-            view.width *= win->touchpad_zoom;
-            v2_f32 final_mousepos = screen_to_world(win, &view, win->mouse_pos);
-
-            v2_f32 diff = v2_f32_sub(final_mousepos, init_mousepos);
-            view.center = v2_f32_sub(view.center, diff);
-        }
-
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         m3_f32_from_view2(&view_mat, view);
         debug_draw_set_view(view);

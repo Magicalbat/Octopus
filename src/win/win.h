@@ -157,20 +157,6 @@ typedef struct {
     u32 raw_dpi;
     // DPI given by the OS for scaling UI
     u32 dpi;
-
-    // Increments of scroll deltas
-    // i.e. +1 indicates the wheel was rotated one increment up
-    // Floating point to allow finer control for more dynamic input devices
-    v2_f32 mouse_scroll;
-    f32 touchpad_zoom;
-
-    v2_f32 mouse_pos;
-
-    b8 mouse_buttons[WIN_MB_COUNT];
-    b8 prev_mouse_buttons[WIN_MB_COUNT];
-
-    b8 keys[WIN_KEY_COUNT];
-    b8 prev_keys[WIN_KEY_COUNT];
 } window;
 
 #define WIN_MOUSE_DOWN(win, mb) (win->mouse_buttons[mb])

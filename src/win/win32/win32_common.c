@@ -1,7 +1,4 @@
 
-#define BT_IMPLEMENTATION
-#include "better_trackpad.h"
-
 static b32 _w32_win_initialized = false;
 static win_key _w32_keymap[256];
 
@@ -62,21 +59,6 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
-    bt_init(arena, &win->plat_info->bt, &(bt_context_desc){
-        .hwnd = win->plat_info->window,
-        .exit_timeout_us = 5 * 1000,
-        .zoom_deadzone_mm = 9,
-        .flags.disable_raw_msgs = 1,
-        .flags.disable_contact_msgs = 1,
-    });
-
-    if (!win->plat_info->bt.initialized) {
-        warn_emitf(
-            "Failed to init better trackpad: %s",
-            win->plat_info->bt.err_str
-        );
-    }
-
     SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)win);
 
     if (!_win_equip_gfx(arena, win)) {
@@ -106,13 +88,7 @@ void win_destroy(window* win) {
 }
 
 void win_process_events(window* win) {
-    memcpy(win->prev_mouse_buttons, win->mouse_buttons, WIN_MB_COUNT);
-    memcpy(win->prev_keys, win->keys, WIN_KEY_COUNT);
-
-    win->mouse_scroll = (v2_f32){ 0, 0 };
-    win->touchpad_zoom = 1.0f;
-
-    bt_passive_update(&win->plat_info->bt, win->plat_info->window);
+    UNUSED(win);
 
     // Processing events
     MSG msg = { 0 };
@@ -128,49 +104,25 @@ static LRESULT CALLBACK _w32_window_proc(
     window* win = (window*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
 
     switch (uMsg) {
-        case WM_INPUT: {
-            bt_process_input(&win->plat_info->bt, win->plat_info->window, wParam, lParam);
-        } break;
+        case WM_MOUSEMOVE: { } break;
 
-        case BT_MSG_GESTURE_ZOOM: {
-            bt_gesture_zoom zoom = BT_GESTURE_ZOOM_LPARAM(lParam);
-            win->touchpad_zoom *= 1.0f - zoom.dist_change / zoom.start_dist;
-        } break;
-
-        case WM_MOUSEMOVE: {
-            win->mouse_pos.x = (f32)((lParam) & 0xffff);
-            win->mouse_pos.y = (f32)((lParam >> 16) & 0xffff);
-        } break;
-
-        case WM_LBUTTONDOWN: { win->mouse_buttons[WIN_MB_LEFT] = true; } break;
-        case WM_LBUTTONUP: { win->mouse_buttons[WIN_MB_LEFT] = false; } break;
-        case WM_MBUTTONDOWN: { win->mouse_buttons[WIN_MB_MIDDLE] = true; } break;
-        case WM_MBUTTONUP: { win->mouse_buttons[WIN_MB_MIDDLE] = false; } break;
-        case WM_RBUTTONDOWN: { win->mouse_buttons[WIN_MB_RIGHT] = true; } break;
-        case WM_RBUTTONUP: { win->mouse_buttons[WIN_MB_RIGHT] = false; } break;
+        case WM_LBUTTONDOWN: {} break;
+        case WM_LBUTTONUP: {} break;
+        case WM_MBUTTONDOWN: {} break;
+        case WM_MBUTTONUP: {} break;
+        case WM_RBUTTONDOWN: {} break;
+        case WM_RBUTTONUP: {} break;
 
         case WM_MOUSEWHEEL: {
-            if (win->plat_info->bt.gesture_state != BT_GES_ZOOM) {
-                f32 delta = (f32)GET_WHEEL_DELTA_WPARAM(wParam);
-                win->mouse_scroll.y += delta / (f32)WHEEL_DELTA;;
-            }
         } break;
 
         case WM_MOUSEHWHEEL: {
-            f32 delta = (f32)GET_WHEEL_DELTA_WPARAM(wParam);
-            win->mouse_scroll.x += delta / (f32)WHEEL_DELTA;
         } break;
 
         case WM_KEYDOWN: {
-            win_key down_key = wParam <= sizeof(_w32_keymap) /
-                sizeof(_w32_keymap[0]) ? _w32_keymap[wParam] : WIN_KEY_NONE;
-            win->keys[down_key] = true;
         } break;
 
         case WM_KEYUP: {
-            win_key up_key = wParam <= sizeof(_w32_keymap) /
-                sizeof(_w32_keymap[0]) ? _w32_keymap[wParam] : WIN_KEY_NONE;
-            win->keys[up_key] = false;
         } break;
 
         case WM_DPICHANGED: {
