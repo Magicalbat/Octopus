@@ -35,6 +35,10 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
     win->height = height;
     win->plat_info = PUSH_STRUCT(maybe_temp.arena, _win_plat_info);
 
+    win->plat_info->win_data_no_arena = (_w32_win_data) {
+        .win = win
+    };
+
     RECT win_rect = { 0, 0, (i32)width, (i32)height };
     if (!AdjustWindowRect(&win_rect, WS_OVERLAPPEDWINDOW, FALSE)) {
         error_emit("Failed to adjust window rect");
@@ -58,6 +62,12 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         error_emit("Failed to create window");
         goto fail;
     }
+
+    SetWindowLongPtrW(
+        win->plat_info->window,
+        GWLP_USERDATA,
+        (LONG_PTR)(&win->plat_info->win_data_no_arena)
+    );
 
     if (!_win_equip_gfx(arena, win)) {
         goto fail;
@@ -85,14 +95,21 @@ void win_destroy(window* win) {
     DestroyWindow(win->plat_info->window);
 }
 
-typedef struct {
-    mem_arena* frame_arena;
-    window* win;
-} _w32_win_data;
-
 void win_process_events(mem_arena* frame_arena, window* win) {
     win->first_event = NULL;
     win->last_event = NULL;
+
+    win->prev_mouse_pos = win->cur_mouse_pos;
+    memcpy(
+        win->prev_mouse_buttons,
+        win->cur_mouse_buttons,
+        sizeof(win->prev_mouse_buttons[0]) * WIN_MB_COUNT
+    );
+    memcpy(
+        win->prev_keys,
+        win->cur_keys,
+        sizeof(win->prev_keys[0]) * WIN_KEY_COUNT
+    );
 
     _w32_win_data data = { frame_arena, win };
 
@@ -105,7 +122,11 @@ void win_process_events(mem_arena* frame_arena, window* win) {
         DispatchMessageW(&msg);
     }
 
-    SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)NULL);
+    SetWindowLongPtrW(
+        win->plat_info->window, 
+        GWLP_USERDATA, 
+        (LONG_PTR)(&win->plat_info->win_data_no_arena)
+    );
 }
 
 #define _W32_MOUSE_POS(lParam) (v2_f32){ \
@@ -160,17 +181,24 @@ static LRESULT CALLBACK _w32_window_proc(
     _w32_win_data* data = (_w32_win_data*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
     if (data == NULL) { 
-        warn_emit("Win32 Window Proc called unexpectedly");
         return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
 
     mem_arena* frame_arena = data->frame_arena;
     window* win = data->win;
 
-    mem_arena_temp maybe_temp = arena_temp_begin(frame_arena);
-    win_event* event = PUSH_STRUCT(frame_arena, win_event);
+    mem_arena_temp maybe_temp = { 0 };
+    b32 post_event = false;
 
-    b32 post_event = true;
+    // This is so that the rest can execute fine without
+    win_event dummy_event = { 0 };
+    win_event* event = &dummy_event;
+
+    if (frame_arena != NULL) {
+        maybe_temp = arena_temp_begin(frame_arena);
+        post_event = true;
+        event = PUSH_STRUCT(frame_arena, win_event);
+    }
 
     switch (uMsg) {
         case WM_MOUSEMOVE: {
@@ -275,7 +303,7 @@ static LRESULT CALLBACK _w32_window_proc(
 
     if (post_event) {
         SLL_PUSH_BACK(win->first_event, win->last_event, event);
-    } else {
+    } else if (maybe_temp.arena != NULL) {
         arena_temp_end(maybe_temp);
     }
 

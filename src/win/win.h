@@ -20,7 +20,7 @@ typedef enum {
     WIN_FLAG_SHOULD_CLOSE = 0b1,
 } win_flags;
 
-typedef struct {
+typedef struct window {
     struct _win_plat_info* plat_info;
     struct _win_gfx_info* gfx_info;
 
@@ -34,6 +34,10 @@ typedef struct {
     u32 raw_dpi;
     // DPI given by the OS for scaling UI
     u32 dpi;
+
+    v2_f32 prev_mouse_pos;
+    b8 prev_mouse_buttons[WIN_MB_COUNT];
+    b8 prev_keys[WIN_KEY_COUNT];
 
     f32 cur_scroll;
     v2_f32 cur_zoom;

@@ -9,12 +9,30 @@
 #include "win/win.c"
 #include "debug_draw/debug_draw.c"
 
+#define _PB_SIZE 64
+
+typedef struct point_bucket {
+    struct point_bucket* next;
+    u32 num_points;
+    v2_f32 points[_PB_SIZE];
+} point_bucket;
+
+typedef struct {
+    point_bucket* first_bucket;
+    point_bucket* last_bucket;
+
+    u32 total_points;
+} point_list;
+
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,
     GLsizei length, const GLchar* message, const void* user_param
 );
 
 v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
+
+void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p);
+v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl);
 
 int main(int argc, char** argv) {
     UNUSED(argc);
@@ -51,6 +69,8 @@ int main(int argc, char** argv) {
     };
     m3_f32 view_mat = { 0 };
 
+    point_list test_points = { 0 };
+
     // End of setup error frame
     {
         mem_arena_temp scratch = arena_scratch_get(NULL, 0);
@@ -81,50 +101,19 @@ int main(int argc, char** argv) {
 
         win_process_events(frame_arena, win);
 
+        b32 mouse_down = win->prev_mouse_buttons[WIN_MB_LEFT];
         for (win_event* event = win->first_event; event != NULL; event = event->next) {
-            switch (event->kind) {
-                case WIN_EVENT_MOUSE_MOVE: {
-                    if (win->cur_keys[WIN_KEY_SPACE]) {
-                        v2_f32 pos = event->mouse_move.pos;
-                        info_emitf("Mouse move: (%.2f %.2f)", pos.x, pos.y);
-                    }
-                } break;
+            if (event->kind == WIN_EVENT_MOUSE_MOVE && mouse_down) {
+                v2_f32 world_pos = screen_to_world(win, &view, event->mouse_move.pos);
+                point_list_push(perm_arena, &test_points, world_pos);
+            }
 
-                case WIN_EVENT_MOUSE_DOWN: {
-                    switch (event->mouse_down.button) {
-                        case WIN_MB_LEFT: 
-                            info_emit("Left mouse button down");
-                            break;
-                        case WIN_MB_MIDDLE: 
-                            info_emit("Middle mouse button down");
-                            break;
-                        case WIN_MB_RIGHT:
-                            info_emit("Right mouse button down");
-                            break;
-                    }
-                } break;
+            if (event->kind == WIN_EVENT_MOUSE_DOWN && event->mouse_down.button == WIN_MB_LEFT) {
+                mouse_down = true;
+            }
 
-                case WIN_EVENT_MOUSE_UP: {
-                   switch (event->mouse_up.button) {
-                        case WIN_MB_LEFT: 
-                            info_emit("Left mouse button up");
-                            break;
-                        case WIN_MB_MIDDLE: 
-                            info_emit("Middle mouse button up");
-                            break;
-                        case WIN_MB_RIGHT:
-                            info_emit("Right mouse button up");
-                            break;
-                    } 
-                } break;
-
-                case WIN_EVENT_KEY_DOWN: {
-                    info_emitf("Key %d down", event->key_down.key);
-                } break;
-
-                case WIN_EVENT_KEY_UP: {
-                    info_emitf("Key %d up", event->key_up.key);
-                } break;
+            if (event->kind == WIN_EVENT_MOUSE_UP && event->mouse_up.button == WIN_MB_LEFT) {
+                mouse_down = false;
             }
         }
 
@@ -134,8 +123,20 @@ int main(int argc, char** argv) {
 
         win_begin_frame(win);
 
-        v2_f32 test_point = { 0.0f, 0.0f };
-        debug_draw_circles(&test_point, 1, 10, (v4_f32){ 1, 1, 1, 1 });
+        v2_f32 test_square[] = {
+            (v2_f32){ -100, -100 },
+            (v2_f32){ -100,  100 },
+            (v2_f32){  100,  100 },
+            (v2_f32){  100, -100 },
+            (v2_f32){ -100, -100 },
+        };
+        debug_draw_lines(test_square, 5, 5, (v4_f32){ 1, 1, 1, 1 });
+
+        v2_f32* test_points_arr = point_list_as_arr(frame_arena, &test_points);
+        debug_draw_circles(
+            test_points_arr, test_points.total_points,
+            2, (v4_f32){ 0, 1, 0, 1 }
+        );
 
         win_end_frame(win);
 
@@ -191,5 +192,36 @@ v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p) {
     p = v2_f32_add(p, view->center);
 
     return p;
+}
+
+void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p) {
+    if (pl->last_bucket != NULL && pl->last_bucket->num_points < _PB_SIZE) {
+        point_bucket* bucket = pl->last_bucket;
+
+        bucket->points[bucket->num_points++] = p;
+    } else {
+        point_bucket* bucket = PUSH_STRUCT(arena, point_bucket);
+
+        bucket->points[bucket->num_points++] = p;
+
+        SLL_PUSH_BACK(pl->first_bucket, pl->last_bucket, bucket);
+    }
+
+    pl->total_points++;
+}
+
+v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl) {
+    v2_f32* out = PUSH_ARRAY(arena, v2_f32, pl->total_points);
+    u32 out_index = 0;
+
+    for (point_bucket* bucket = pl->first_bucket; bucket != NULL; bucket = bucket->next) {
+        for (u32 i = 0; i < bucket->num_points; i++) {
+            if (out_index >= pl->total_points) { return out; }
+
+            out[out_index++] = bucket->points[i];
+        }
+    }
+
+    return out;
 }
 
