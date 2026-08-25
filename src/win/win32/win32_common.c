@@ -59,8 +59,6 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
-    SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)win);
-
     if (!_win_equip_gfx(arena, win)) {
         goto fail;
     }
@@ -87,8 +85,18 @@ void win_destroy(window* win) {
     DestroyWindow(win->plat_info->window);
 }
 
-void win_process_events(window* win) {
-    UNUSED(win);
+typedef struct {
+    mem_arena* frame_arena;
+    window* win;
+} _w32_win_data;
+
+void win_process_events(mem_arena* frame_arena, window* win) {
+    win->first_event = NULL;
+    win->last_event = NULL;
+
+    _w32_win_data data = { frame_arena, win };
+
+    SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)(&data));
 
     // Processing events
     MSG msg = { 0 };
@@ -96,36 +104,142 @@ void win_process_events(window* win) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+
+    SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)NULL);
+}
+
+#define _W32_MOUSE_POS(lParam) (v2_f32){ \
+    (f32)((lParam) & 0xffff), \
+    (f32)(((lParam) >> 16) & 0xffff) \
+}
+
+static void _w32_process_mousedown(
+    LPARAM lParam, window* win,
+    win_event* event, win_mouse_button mb
+) {
+    assert(mb < WIN_MB_COUNT);
+
+    v2_f32 mouse_pos = _W32_MOUSE_POS(lParam);
+
+    win->cur_mouse_pos = mouse_pos;
+    win->cur_mouse_buttons[mb] = true;
+
+    *event = (win_event) {
+        .kind = WIN_EVENT_MOUSE_DOWN,
+        .mouse_down = (win_event_mouse_down) {
+            .pos = mouse_pos,
+            .button = mb,
+        }
+    };
+}
+
+static void _w32_process_mouseup(
+    LPARAM lParam, window* win,
+    win_event* event, win_mouse_button mb
+) {
+    assert(mb < WIN_MB_COUNT);
+
+    v2_f32 mouse_pos = _W32_MOUSE_POS(lParam);
+
+    win->cur_mouse_pos = mouse_pos;
+    win->cur_mouse_buttons[mb] = false;
+
+    *event = (win_event) {
+        .kind = WIN_EVENT_MOUSE_UP,
+        .mouse_up = (win_event_mouse_up) {
+            .pos = mouse_pos,
+            .button = mb,
+        }
+    };
 }
 
 static LRESULT CALLBACK _w32_window_proc(
-    HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
+    HWND hWnd, UINT uMsg,
+    WPARAM wParam, LPARAM lParam
 ) {
-    window* win = (window*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+    _w32_win_data* data = (_w32_win_data*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+    if (data == NULL) { 
+        warn_emit("Win32 Window Proc called unexpectedly");
+        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+    }
+
+    mem_arena* frame_arena = data->frame_arena;
+    window* win = data->win;
+
+    mem_arena_temp maybe_temp = arena_temp_begin(frame_arena);
+    win_event* event = PUSH_STRUCT(frame_arena, win_event);
+
+    b32 post_event = true;
 
     switch (uMsg) {
-        case WM_MOUSEMOVE: { } break;
+        case WM_MOUSEMOVE: {
+            v2_f32 mouse_pos = _W32_MOUSE_POS(lParam);
 
-        case WM_LBUTTONDOWN: {} break;
-        case WM_LBUTTONUP: {} break;
-        case WM_MBUTTONDOWN: {} break;
-        case WM_MBUTTONUP: {} break;
-        case WM_RBUTTONDOWN: {} break;
-        case WM_RBUTTONUP: {} break;
+            win->cur_mouse_pos = mouse_pos;
 
-        case WM_MOUSEWHEEL: {
+            *event = (win_event) {
+                .kind = WIN_EVENT_MOUSE_MOVE,
+                .mouse_move = (win_event_mouse_move) {
+                    .pos = mouse_pos
+                }
+            };
         } break;
 
-        case WM_MOUSEHWHEEL: {
+        case WM_LBUTTONDOWN: {
+            _w32_process_mousedown(lParam, win, event, WIN_MB_LEFT);
+        } break;
+        case WM_LBUTTONUP: {
+            _w32_process_mouseup(lParam, win, event, WIN_MB_LEFT);
+        } break;
+
+        case WM_MBUTTONDOWN: {
+            _w32_process_mousedown(lParam, win, event, WIN_MB_MIDDLE);
+        } break;
+
+        case WM_MBUTTONUP: {
+            _w32_process_mouseup(lParam, win, event, WIN_MB_MIDDLE);
+        } break;
+
+        case WM_RBUTTONDOWN: {
+            _w32_process_mousedown(lParam, win, event, WIN_MB_RIGHT);
+        } break;
+
+        case WM_RBUTTONUP: {
+            _w32_process_mouseup(lParam, win, event, WIN_MB_RIGHT);
         } break;
 
         case WM_KEYDOWN: {
+            win_key key = wParam <= ARRAY_LEN(_w32_keymap) ?
+                _w32_keymap[wParam] : WIN_KEY_NONE;
+
+            win->cur_keys[key] = true;
+
+            *event = (win_event) {
+                .kind = WIN_EVENT_KEY_DOWN,
+                .key_down = (win_event_key_down) {
+                    .key = key
+                }
+            };
         } break;
 
         case WM_KEYUP: {
+            win_key key = wParam <= ARRAY_LEN(_w32_keymap) ?
+                _w32_keymap[wParam] : WIN_KEY_NONE;
+
+            win->cur_keys[key] = false;
+
+            *event = (win_event) {
+                .kind = WIN_EVENT_KEY_UP,
+                .key_up = (win_event_key_up) {
+                    .key = key
+                }
+            };
         } break;
 
         case WM_DPICHANGED: {
+            post_event = false;
+
             _w32_update_win_dpi(win);
 
             const RECT* new_win_rect = (RECT*)lParam;
@@ -139,6 +253,8 @@ static LRESULT CALLBACK _w32_window_proc(
         } break;
 
         case WM_SIZE: {
+            post_event = false;
+
             u32 width = (u32)LOWORD(lParam);
             u32 height = (u32)HIWORD(lParam);
 
@@ -147,12 +263,20 @@ static LRESULT CALLBACK _w32_window_proc(
         } break;
 
         case WM_CLOSE: {
+            post_event = false;
+
             win->flags |= WIN_FLAG_SHOULD_CLOSE;
         } break;
 
         default: {
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
         } break;
+    }
+
+    if (post_event) {
+        SLL_PUSH_BACK(win->first_event, win->last_event, event);
+    } else {
+        arena_temp_end(maybe_temp);
     }
 
     return 0;

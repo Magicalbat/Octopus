@@ -28,8 +28,8 @@ int main(int argc, char** argv) {
     plat_get_entropy(seeds, sizeof(seeds));
     prng_seed(seeds[0], seeds[1]);
 
-    mem_arena* perm_arena = arena_create(MiB(64), KiB(264), true);
-    mem_arena* frame_arena = arena_create(MiB(16), KiB(264), false);
+    mem_arena* perm_arena = arena_create(MiB(64), KiB(264), ARENA_FLAG_GROWABLE);
+    mem_arena* frame_arena = arena_create(MiB(16), KiB(264), 0);
 
     win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
@@ -79,7 +79,54 @@ int main(int argc, char** argv) {
     while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
         log_frame_begin();
 
-        win_process_events(win);
+        win_process_events(frame_arena, win);
+
+        for (win_event* event = win->first_event; event != NULL; event = event->next) {
+            switch (event->kind) {
+                case WIN_EVENT_MOUSE_MOVE: {
+                    if (win->cur_keys[WIN_KEY_SPACE]) {
+                        v2_f32 pos = event->mouse_move.pos;
+                        info_emitf("Mouse move: (%.2f %.2f)", pos.x, pos.y);
+                    }
+                } break;
+
+                case WIN_EVENT_MOUSE_DOWN: {
+                    switch (event->mouse_down.button) {
+                        case WIN_MB_LEFT: 
+                            info_emit("Left mouse button down");
+                            break;
+                        case WIN_MB_MIDDLE: 
+                            info_emit("Middle mouse button down");
+                            break;
+                        case WIN_MB_RIGHT:
+                            info_emit("Right mouse button down");
+                            break;
+                    }
+                } break;
+
+                case WIN_EVENT_MOUSE_UP: {
+                   switch (event->mouse_up.button) {
+                        case WIN_MB_LEFT: 
+                            info_emit("Left mouse button up");
+                            break;
+                        case WIN_MB_MIDDLE: 
+                            info_emit("Middle mouse button up");
+                            break;
+                        case WIN_MB_RIGHT:
+                            info_emit("Right mouse button up");
+                            break;
+                    } 
+                } break;
+
+                case WIN_EVENT_KEY_DOWN: {
+                    info_emitf("Key %d down", event->key_down.key);
+                } break;
+
+                case WIN_EVENT_KEY_UP: {
+                    info_emitf("Key %d up", event->key_up.key);
+                } break;
+            }
+        }
 
         view.aspect_ratio = (f32)win->width / (f32)win->height;
         m3_f32_from_view2(&view_mat, view);
