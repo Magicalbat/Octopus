@@ -69,7 +69,9 @@ int main(int argc, char** argv) {
     };
     m3_f32 view_mat = { 0 };
 
-    point_list test_points = { 0 };
+    mem_arena* point_arena = arena_create(MiB(4), KiB(64), 0);
+    point_list touch_point_list = { 0 };
+    i64 cur_point_id = -1;
 
     // End of setup error frame
     {
@@ -101,19 +103,53 @@ int main(int argc, char** argv) {
 
         win_process_events(frame_arena, win);
 
-        b32 mouse_down = win->prev_mouse_buttons[WIN_MB_LEFT];
-        for (win_event* event = win->first_event; event != NULL; event = event->next) {
-            if (event->kind == WIN_EVENT_MOUSE_MOVE && mouse_down) {
-                v2_f32 world_pos = screen_to_world(win, &view, event->mouse_move.pos);
-                point_list_push(perm_arena, &test_points, world_pos);
+        for (win_event* e = win->first_event; e != NULL; e = e->next) {
+            b32 push = true;
+            v2_f32 screen_pos = { 0 };
+            i64 touch_id = -1;
+
+            switch (e->kind) {
+                case WIN_EVENT_TOUCH_DOWN: {
+                    screen_pos = e->touch_down.touch_info.pos;
+                    touch_id = (i64)e->touch_down.touch_info.id;;
+
+                    if (cur_point_id < 0) {
+                        arena_clear(point_arena);
+                        touch_point_list = (point_list){ 0 };
+
+                        cur_point_id = touch_id;
+                    }
+                } break;
+
+                case WIN_EVENT_TOUCH_MOVE: {
+                    screen_pos = e->touch_move.touch_info.pos;
+                    touch_id = (i64)e->touch_move.touch_info.id;;
+                } break;
+
+                case WIN_EVENT_TOUCH_UP: {
+                    screen_pos = e->touch_up.touch_info.pos;
+                    touch_id = (i64)e->touch_up.touch_info.id;;
+
+                    if (touch_id == cur_point_id) {
+                        point_list_push(
+                            point_arena, &touch_point_list,
+                            screen_to_world(win, &view, screen_pos)
+                        );
+
+                        cur_point_id = -1;
+                    }
+                } break;
+
+                default: {
+                    push = false;
+                };
             }
 
-            if (event->kind == WIN_EVENT_MOUSE_DOWN && event->mouse_down.button == WIN_MB_LEFT) {
-                mouse_down = true;
-            }
-
-            if (event->kind == WIN_EVENT_MOUSE_UP && event->mouse_up.button == WIN_MB_LEFT) {
-                mouse_down = false;
+            if (push && touch_id == cur_point_id) {
+                point_list_push(
+                    point_arena, &touch_point_list,
+                    screen_to_world(win, &view, screen_pos)
+                );
             }
         }
 
@@ -132,10 +168,10 @@ int main(int argc, char** argv) {
         };
         debug_draw_lines(test_square, 5, 5, (v4_f32){ 1, 1, 1, 1 });
 
-        v2_f32* test_points_arr = point_list_as_arr(frame_arena, &test_points);
+        v2_f32* touch_points = point_list_as_arr(frame_arena, &touch_point_list);
         debug_draw_circles(
-            test_points_arr, test_points.total_points,
-            2, (v4_f32){ 0, 1, 0, 1 }
+            touch_points, touch_point_list.total_points, 
+            3, (v4_f32){ 0, 1, 0, 1 }
         );
 
         win_end_frame(win);

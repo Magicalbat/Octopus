@@ -2,11 +2,6 @@
 typedef u8 win_mouse_button;
 typedef u8 win_key;
 
-// TODO: scrolling
-// TODO: zooming
-// TODO: touch events
-// TODO: pen events
-
 typedef struct {
     v2_f32 pos; 
 } win_event_mouse_move;
@@ -29,6 +24,28 @@ typedef struct {
     win_key key;
 } win_event_key_up;
 
+typedef struct {
+    u32 id;
+    u64 time_us;
+
+    v2_f32 pos;
+
+    // [0, 1]
+    f32 pressure;
+} win_touch_info;
+
+typedef struct {
+    win_touch_info touch_info;
+} win_event_touch_down;
+
+typedef struct {
+    win_touch_info touch_info;
+} win_event_touch_move;
+
+typedef struct {
+    win_touch_info touch_info;
+} win_event_touch_up;
+
 typedef struct win_event {
     struct win_event* next;
 
@@ -36,16 +53,30 @@ typedef struct win_event {
         WIN_EVENT_MOUSE_MOVE,
         WIN_EVENT_MOUSE_DOWN,
         WIN_EVENT_MOUSE_UP,
+
         WIN_EVENT_KEY_DOWN,
         WIN_EVENT_KEY_UP,
+
+        WIN_EVENT_TOUCH_DOWN,
+        WIN_EVENT_TOUCH_MOVE,
+        WIN_EVENT_TOUCH_UP,
+
+        // TODO: scrolling
+        // TODO: zooming
+        // TODO: pen events
     } kind;
 
     union {
         win_event_mouse_move mouse_move;
         win_event_mouse_down mouse_down;
         win_event_mouse_up mouse_up;
+
         win_event_key_down key_down;
         win_event_key_up key_up;
+
+        win_event_touch_down touch_down;
+        win_event_touch_move touch_move;
+        win_event_touch_up touch_up;
     };
 } win_event;
 

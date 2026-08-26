@@ -174,6 +174,70 @@ static void _w32_process_mouseup(
     };
 }
 
+static void _w32_process_touches(
+    // Must be a valid arena
+    mem_arena* frame_arena,
+    window* win,
+    // The last event that gets implicity pushed to the event list by the 
+    // default window_proc execution path
+    win_event* last_event,
+    POINTER_TOUCH_INFO* touch_infos,
+    u32 entry_count
+) {
+    for (u32 i = 0; i < entry_count; i++) {
+        POINTER_INFO* pointer_info = &touch_infos[i].pointerInfo;
+
+        mem_arena_temp maybe_temp = arena_temp_begin(frame_arena);
+        win_event* cur_event = i == entry_count - 1 ?
+            last_event : PUSH_STRUCT(frame_arena, win_event);
+
+        u64 perf_count = pointer_info->PerformanceCount;
+
+        POINT wnd_pos = pointer_info->ptPixelLocation;
+        ScreenToClient(win->plat_info->window, &wnd_pos);
+
+        u32 pressure_unscaled = touch_infos[i].pressure;
+        
+        win_touch_info touch = {
+            .id = pointer_info->pointerId,
+            .time_us = perf_count / w32_perf_freq,
+            .pos = (v2_f32){
+                .x = (f32)wnd_pos.x,
+                .y = (f32)wnd_pos.y,
+            },
+            .pressure = (f32)pressure_unscaled / 1024.0f,
+        };
+
+        if (pointer_info->pointerFlags & POINTER_FLAG_DOWN) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_TOUCH_DOWN,
+                .touch_down = (win_event_touch_down) {
+                    .touch_info = touch
+                }
+            };
+        } else if (pointer_info->pointerFlags & POINTER_FLAG_UP) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_TOUCH_UP,
+                .touch_up = (win_event_touch_up) {
+                    .touch_info = touch
+                }
+            };
+        } else if (pointer_info->pointerFlags & POINTER_FLAG_INCONTACT) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_TOUCH_MOVE,
+                .touch_move = (win_event_touch_move) {
+                    .touch_info = touch
+                }
+            };
+        } else {
+            arena_temp_end(maybe_temp);
+            continue;
+        }
+
+        SLL_PUSH_BACK(win->first_event, win->last_event, cur_event);
+    }
+}
+
 static LRESULT CALLBACK _w32_window_proc(
     HWND hWnd, UINT uMsg,
     WPARAM wParam, LPARAM lParam
@@ -263,6 +327,52 @@ static LRESULT CALLBACK _w32_window_proc(
                     .key = key
                 }
             };
+        } break;
+
+        case WM_POINTERDOWN:
+        case WM_POINTERUPDATE:
+        case WM_POINTERUP: {
+            // Unlike mouse events, pointer updates do not update any window
+            // state as a side effect, only produce events in the event list.
+            // As such, it requires having a valid frame arena
+            if (frame_arena == NULL) {
+                post_event = false;
+                break;
+            }
+
+            u32 pointer_id = GET_POINTERID_WPARAM(wParam);
+            POINTER_INFO pointer_info = { 0 };
+
+            if (!GetPointerInfo(pointer_id, &pointer_info)) {
+                post_event = false;
+                break;
+            }
+
+            if (pointer_info.pointerType == PT_TOUCH) {
+                mem_arena_temp scratch = arena_scratch_get(&frame_arena, 1);
+
+                u32 entry_count = pointer_info.historyCount;
+
+                POINTER_TOUCH_INFO* touch_infos = PUSH_ARRAY(
+                    scratch.arena,
+                    POINTER_TOUCH_INFO,
+                    entry_count
+                );
+
+                if (!GetPointerTouchInfoHistory(
+                    pointer_id, &entry_count, touch_infos
+                ) || entry_count != pointer_info.historyCount) {
+                    post_event = false;
+                    break;
+                }
+
+                _w32_process_touches(
+                    frame_arena, win, event,
+                    touch_infos, entry_count
+                );
+
+                arena_scratch_release(scratch);
+            }
         } break;
 
         case WM_DPICHANGED: {
