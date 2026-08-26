@@ -111,6 +111,8 @@ void win_process_events(mem_arena* frame_arena, window* win) {
         sizeof(win->prev_keys[0]) * WIN_KEY_COUNT
     );
 
+    win->cur_scroll = (v2_f32){ 0 };
+
     _w32_win_data data = { frame_arena, win };
 
     SetWindowLongPtrW(win->plat_info->window, GWLP_USERDATA, (LONG_PTR)(&data));
@@ -274,6 +276,34 @@ static LRESULT CALLBACK _w32_window_proc(
                 .kind = WIN_EVENT_MOUSE_MOVE,
                 .mouse_move = (win_event_mouse_move) {
                     .pos = mouse_pos
+                }
+            };
+        } break;
+
+        case WM_MOUSEWHEEL: {
+            i32 delta_unscaled = (i32)GET_WHEEL_DELTA_WPARAM(wParam);
+            f32 delta_y = (f32)delta_unscaled / (f32)WHEEL_DELTA;
+
+            win->cur_scroll.y += delta_y;
+
+            *event = (win_event) {
+                .kind = WIN_EVENT_SCROLL,
+                .scroll = (win_event_scroll) {
+                    .delta.y = delta_y
+                }
+            };
+        } break;
+
+        case WM_MOUSEHWHEEL: {
+            i32 delta_unscaled = (i32)GET_WHEEL_DELTA_WPARAM(wParam);
+            f32 delta_x = (f32)delta_unscaled / (f32)WHEEL_DELTA;
+
+            win->cur_scroll.x += delta_x;
+
+            *event = (win_event) {
+                .kind = WIN_EVENT_SCROLL,
+                .scroll = (win_event_scroll) {
+                    .delta.x = delta_x
                 }
             };
         } break;

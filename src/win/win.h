@@ -39,7 +39,7 @@ typedef struct window {
     b8 prev_mouse_buttons[WIN_MB_COUNT];
     b8 prev_keys[WIN_KEY_COUNT];
 
-    f32 cur_scroll;
+    v2_f32 cur_scroll;
     v2_f32 cur_zoom;
     v2_f32 cur_mouse_pos;
     b8 cur_mouse_buttons[WIN_MB_COUNT];

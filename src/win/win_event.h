@@ -17,6 +17,10 @@ typedef struct {
 } win_event_mouse_up;
 
 typedef struct {
+    v2_f32 delta;
+} win_event_scroll;
+
+typedef struct {
     win_key key;
 } win_event_key_down;
 
@@ -54,6 +58,8 @@ typedef struct win_event {
         WIN_EVENT_MOUSE_DOWN,
         WIN_EVENT_MOUSE_UP,
 
+        WIN_EVENT_SCROLL,
+
         WIN_EVENT_KEY_DOWN,
         WIN_EVENT_KEY_UP,
 
@@ -61,7 +67,6 @@ typedef struct win_event {
         WIN_EVENT_TOUCH_MOVE,
         WIN_EVENT_TOUCH_UP,
 
-        // TODO: scrolling
         // TODO: zooming
         // TODO: pen events
     } kind;
@@ -70,6 +75,8 @@ typedef struct win_event {
         win_event_mouse_move mouse_move;
         win_event_mouse_down mouse_down;
         win_event_mouse_up mouse_up;
+
+        win_event_scroll scroll;
 
         win_event_key_down key_down;
         win_event_key_up key_up;

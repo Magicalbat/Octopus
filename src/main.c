@@ -153,9 +153,15 @@ int main(int argc, char** argv) {
             }
         }
 
-        view.aspect_ratio = (f32)win->width / (f32)win->height;
-        m3_f32_from_view2(&view_mat, view);
-        debug_draw_set_view(view);
+        // Updating view
+        {
+            view.center.x += win->cur_scroll.x * view.width * 0.04f;
+            view.center.y -= win->cur_scroll.y * view.width * 0.04f;
+
+            view.aspect_ratio = (f32)win->width / (f32)win->height;
+            m3_f32_from_view2(&view_mat, view);
+            debug_draw_set_view(view);
+        }
 
         win_begin_frame(win);
 
