@@ -88,6 +88,63 @@ u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d) {
     return solve_quadratic(solutions, b, c, d);
 }
 
+v2_i16 v2_i16_add(v2_i16 a, v2_i16 b) {
+    return (v2_i16){ a.x + b.x, a.y + b.y };
+}
+
+v2_i16 v2_i16_sub(v2_i16 a, v2_i16 b) {
+    return (v2_i16){ a.x - b.x, a.y - b.y };
+}
+
+v2_i16 v2_i16_comp_mul(v2_i16 a, v2_i16 b) {
+    return (v2_i16){ a.x * b.x, a.y * b.y };
+}
+
+v2_i16 v2_i16_mul(v2_i16 a, i16 b) {
+    return (v2_i16){ a.x * b, a.y * b };
+}
+
+v2_i16 v2_i16_div(v2_i16 a, i16 b) {
+    return (v2_i16){ a.x / b, a.y / b};
+}
+
+v2_i16 v2_i16_perp(v2_i16 v) {
+    return (v2_i16){ (i16)-v.y, v.x };
+}
+
+f32 v2_i16_dot(v2_i16 a, v2_i16 b) {
+    return (f32)(a.x * b.x + a.y * b.y);
+}
+
+f32 v2_i16_sqr_dist(v2_i16 a, v2_i16 b) {
+    return (f32)(b.x - a.x) * (f32)(b.x - a.x) +
+        (f32)(b.y - a.y) * (f32)(b.y - a.y);
+}
+
+f32 v2_i16_dist(v2_i16 a, v2_i16 b) {
+    return sqrtf(v2_i16_sqr_dist(a, b));
+}
+
+b32 v2_i16_eq(v2_i16 a, v2_i16 b) {
+    return a.x == b.x && a.y == b.y;
+}
+
+f32 v2_i16_sqr_len(v2_i16 v) {
+    return (f32)v.x * v.x + (f32)v.y * v.y;
+}
+
+f32 v2_i16_len(v2_i16 v) {
+    return sqrtf(v2_i16_sqr_len(v));
+}
+
+v2_f32 v2_f32_from_i16(v2_i16 v16) {
+    return (v2_f32){ (f32)v16.x, (f32)v16.y };
+}
+
+v2_f32 v2_f32_from_i32(v2_i32 v32) {
+    return (v2_f32){ (f32)v32.x, (f32)v32.y };
+}
+
 v2_f32 v2_f32_add(v2_f32 a, v2_f32 b) {
     return (v2_f32){ a.x + b.x, a.y + b.y };
 }

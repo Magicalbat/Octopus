@@ -26,6 +26,21 @@ u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c);
 // Returns the number of solutions
 u32 solve_cubic(f32 solutions[3], f32 a, f32 b, f32 c, f32 d);
 
+v2_i16 v2_i16_add(v2_i16 a, v2_i16 b);
+v2_i16 v2_i16_sub(v2_i16 a, v2_i16 b);
+v2_i16 v2_i16_comp_mul(v2_i16 a, v2_i16 b);
+v2_i16 v2_i16_scale(v2_i16 v, f32 s);
+v2_i16 v2_i16_perp(v2_i16 v);
+f32 v2_i16_cross(v2_i16 a, v2_i16 b);
+f32 v2_i16_dot(v2_i16 a, v2_i16 b);
+f32 v2_i16_sqr_dist(v2_i16 a, v2_i16 b);
+f32 v2_i16_dist(v2_i16 a, v2_i16 b);
+b32 v2_i16_eq(v2_i16 a, v2_i16 b);
+f32 v2_i16_sqr_len(v2_i16 v);
+f32 v2_i16_len(v2_i16 v);
+
+v2_f32 v2_f32_from_i16(v2_i16 v16);
+v2_f32 v2_f32_from_i32(v2_i32 v32);
 v2_f32 v2_f32_add(v2_f32 a, v2_f32 b);
 v2_f32 v2_f32_sub(v2_f32 a, v2_f32 b);
 v2_f32 v2_f32_comp_mul(v2_f32 a, v2_f32 b);
