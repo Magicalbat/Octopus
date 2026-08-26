@@ -1,4 +1,6 @@
 
+#include "win32_trackpad.c"
+
 static b32 _w32_win_initialized = false;
 static win_key _w32_keymap[256];
 
