@@ -31,6 +31,9 @@ void gl_on_error(
 
 v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
 
+// Updates view given scrolling and zooming events
+void update_view(window* win, view2_f32* view, m3_f32* view_mat);
+
 void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p);
 v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl);
 
@@ -153,15 +156,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Updating view
-        {
-            view.center.x += win->cur_scroll.x * view.width * 0.04f;
-            view.center.y -= win->cur_scroll.y * view.width * 0.04f;
-
-            view.aspect_ratio = (f32)win->width / (f32)win->height;
-            m3_f32_from_view2(&view_mat, view);
-            debug_draw_set_view(view);
-        }
+        update_view(win, &view, &view_mat);
 
         win_begin_frame(win);
 
@@ -219,9 +214,9 @@ void gl_on_error(
     UNUSED(user_param);
 
     if (severity == GL_DEBUG_SEVERITY_HIGH) {
-        error_emitf("OpenGL Error: %s", message);
+        error_emitf("[OpenGL Error] %s", message);
     } else {
-        info_emitf("OpenGL Message: %s", message);
+        info_emitf("[OpenGL Message] %s", message);
     }
 }
 
@@ -234,6 +229,25 @@ v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p) {
     p = v2_f32_add(p, view->center);
 
     return p;
+}
+
+void update_view(window* win, view2_f32* view, m3_f32* view_mat) {
+    view->center.x += win->cur_scroll.x * view->width * 0.04f;
+    view->center.y -= win->cur_scroll.y * view->width * 0.04f;
+
+    if (win->cur_trackpad_zoom != 1.0f) {
+        // Zooming such that the mouse stays in the same position
+        v2_f32 init_mousepos = screen_to_world(win, view, win->cur_mouse_pos);
+        view->width *= win->cur_trackpad_zoom;
+        v2_f32 final_mousepos = screen_to_world(win, view, win->cur_mouse_pos);
+
+        v2_f32 diff = v2_f32_sub(final_mousepos, init_mousepos);
+        view->center = v2_f32_sub(view->center, diff);
+    }
+
+    view->aspect_ratio = (f32)win->width / (f32)win->height;
+    m3_f32_from_view2(view_mat, *view);
+    debug_draw_set_view(*view);
 }
 
 void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p) {

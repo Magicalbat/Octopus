@@ -1,11 +1,12 @@
 
 #define W32_WIN_CLASS_NAME L"OctopusWindow"
 
-#include "win32_trackpad.h"
-
 #include <ShellScalingApi.h>
 
 typedef struct window window;
+
+// win32_trackpad needs window pre-defined
+#include "win32_trackpad.h"
 
 typedef struct {
     mem_arena* frame_arena;
@@ -20,6 +21,6 @@ typedef struct _win_plat_info {
     _w32_win_data win_data_no_arena;
 
     // Used to detect trackpad zoom gestures
-    _w32_trackpad_context trackpad_context;
+    _w32_trackpad_context* trackpad_context;
 } _win_plat_info;
 

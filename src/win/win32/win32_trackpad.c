@@ -1,8 +1,4 @@
 
-#define _W32_TRACKPAD_EXIT_TIMEOUT_US 5000
-#define _W32_TRACKPAD_PAN_DEADZONE_MM 2
-#define _W32_TRACKPAD_ZOOM_DEADZONE_MM 9
-
 static b32 _w32_trackpad_valid_value_cap(HIDP_VALUE_CAPS* value_cap);
 static b32 _w32_trackpad_to_mm(u16 units, u16 units_exp, f32* val);
 
@@ -70,7 +66,7 @@ _w32_trackpad_context* _w32_trackpad_init(mem_arena* arena, HWND hwnd) {
     RAWINPUTDEVICE rid = {
         .usUsagePage = 0x0d,
         .usUsage = 0x05,
-        .dwFlags = RIDEV_INPUTSINK,
+        .dwFlags = 0,//RIDEV_INPUTSINK,
         .hwndTarget = hwnd
     };
 
@@ -230,6 +226,10 @@ _w32_trackpad_context* _w32_trackpad_init(mem_arena* arena, HWND hwnd) {
         goto error;
     }
 
+    // Start with max
+    context->min_scantime_diff = 0xffff;
+    context->prev_ges_scantime = -1;
+
     context->x_min_logical = (i16)value_caps[x_idx].LogicalMin;
     context->x_max_logical = (i16)value_caps[x_idx].LogicalMax;
     context->y_min_logical = (i16)value_caps[y_idx].LogicalMin;
@@ -280,7 +280,7 @@ _w32_trackpad_context* _w32_trackpad_init(mem_arena* arena, HWND hwnd) {
         (f32)(context->x_max_mm - context->x_min_mm);
 
     f32 pan_deadzone = _W32_TRACKPAD_PAN_DEADZONE_MM * mm_to_logical;
-    f32 zoom_deadzone = _W32_TRACKPAD_ZOOM_DEADZONE_MM *mm_to_logical;
+    f32 zoom_deadzone = _W32_TRACKPAD_ZOOM_DEADZONE_MM * mm_to_logical;
 
     context->pan_sqr_deadzone = pan_deadzone * pan_deadzone;
     context->zoom_sqr_deadzone = zoom_deadzone * zoom_deadzone;
@@ -298,11 +298,267 @@ error:
 }
 
 b32 _w32_trackpad_detect_zoom(
+    window* win,
     _w32_trackpad_context* context,
-    HWND hWnd, LPARAM lParam
-);
+    win_event* event,
+    LPARAM lParam
+) {
+    if (context == NULL) { return false; }
+    if (!context->has_trackpad || !context->initialized) { return false; }
 
-void _w32_trackpad_update(_w32_trackpad_context* context);
+    RAWINPUTHEADER header = { 0 };
+    u32 size = sizeof(RAWINPUTHEADER);
+
+    if (
+        GetRawInputData(
+            (HRAWINPUT)lParam, RID_HEADER, &header,
+            &size, sizeof(RAWINPUTHEADER)
+        ) != sizeof(RAWINPUTHEADER)
+    ) {
+        error_emit("[Win32 Trackpad] Failed to get RAWINPUTHEADER");
+
+        return false;
+    }
+
+    if (
+        header.hDevice != context->device_handle ||
+        header.dwSize > context->rawinput_size
+    ) {
+        return false;
+    }
+
+    size = context->rawinput_size;
+
+    if (
+        GetRawInputData(
+            (HRAWINPUT)lParam, RID_INPUT, context->rawinput,
+            &size, sizeof(RAWINPUTHEADER)
+        ) != header.dwSize
+    ) {
+        error_emit("[Win32 Trackpad] Failed to get RAWINPUT data");
+
+        goto end;
+    }
+
+    u32 num_contacts_seen = 0;
+    i16 contact_ids[_W32_TRACKPAD_MAX_CONTACTS] = { 0 };
+    i16 contact_xs[_W32_TRACKPAD_MAX_CONTACTS] = { 0 };
+    i16 contact_ys[_W32_TRACKPAD_MAX_CONTACTS] = { 0 };
+
+    PCHAR report = (PCHAR)context->rawinput->data.hid.bRawData;
+    u32 report_length = context->rawinput->data.hid.dwSizeHid;
+
+    ULONG contact_count = 0;
+    if (
+        HidP_GetUsageValue(
+            HidP_Input, 0x0d, 0, 0x54, &contact_count,
+            context->ppd, report, report_length
+        ) != HIDP_STATUS_SUCCESS
+    ) {
+        error_emit("[Win32 Trackpad] Failed to get contact count");
+        
+        goto end;
+    }
+
+    ULONG scantime = 0;
+    if (
+        HidP_GetUsageValue(
+            HidP_Input, 0x0d, 0, 0x56, &scantime,
+            context->ppd, report, report_length
+        ) != HIDP_STATUS_SUCCESS
+    ) {
+        error_emit("[Win32 Trackpad] Failed to get scan time");
+        
+        goto end;
+    }
+
+    for (
+        u32 i = 0;
+        i < context->num_link_collections &&
+        num_contacts_seen < contact_count;
+        i++
+    ) {
+        ULONG id = 0, x = 0, y = 0;
+        u16 lc = context->link_collections[i];
+
+        if (
+            HidP_GetUsageValue(
+                HidP_Input, 0x0d, lc, 0x51, &id,
+                context->ppd, report, report_length
+            ) != HIDP_STATUS_SUCCESS
+        ) {
+            error_emit("[Win32 Trackpad] Failed to get contact id usage value");
+
+            goto end;
+        }
+
+        b8 seen_contact = 0;
+        for (u32 j = 0; j < num_contacts_seen; j++) {
+            if (contact_ids[j] == (u16)id) {
+                seen_contact = true;
+                break;
+            }
+        }
+
+        if (seen_contact) { continue; }
+
+        if (num_contacts_seen >= _W32_TRACKPAD_MAX_CONTACTS) {
+            error_emit(
+                "[Win32 Trackpad]"
+                "Ran out of contacts (try increasing _W32_TRACKPAD_MAX_CONTACTS)"
+            );
+
+            goto end;
+        }
+
+        contact_ids[num_contacts_seen++] = (i16)id;
+
+        if (
+            HidP_GetUsageValue(
+                HidP_Input, 0x01, lc, 0x30, &x,
+                context->ppd, report, report_length
+            ) != HIDP_STATUS_SUCCESS ||
+            HidP_GetUsageValue(
+                HidP_Input, 0x01, lc, 0x31, &y,
+                context->ppd, report, report_length
+            ) != HIDP_STATUS_SUCCESS
+        ) {
+            error_emit("[Win32 Trackpad] Failed to get contact x and/or y");
+
+            goto end;
+        }
+
+        contact_xs[num_contacts_seen - 1] = (i16)x;
+        contact_ys[num_contacts_seen - 1] = (i16)y;
+    }
+
+    if (contact_count != 2) {
+        context->gesture_state = _W32_TRACKPAD_GES_NONE;
+        goto end;
+    }
+
+    v2_i16 contact0 = (v2_i16){
+        contact_xs[0],
+        contact_ys[0],
+    };
+
+    v2_i16 contact1 = (v2_i16){
+        contact_xs[1],
+        contact_ys[1],
+    };
+
+    if (context->gesture_state == _W32_TRACKPAD_GES_NONE) { 
+        context->gesture_state = _W32_TRACKPAD_GES_UNDECIDED;
+
+        context->ges_start0 = contact0;
+        context->ges_start1 = contact1;
+    }
+
+    _w32_trackpad_gesture_state prev_state = context->gesture_state;
+
+    // Check for pan gesture
+    if (context->gesture_state == _W32_TRACKPAD_GES_UNDECIDED) {
+        v2_i16 start_mid = v2_i16_div(
+            v2_i16_add(
+                context->ges_start0, context->ges_start1
+            ), 2
+        );
+
+        v2_i16 cur_mid = v2_i16_div(v2_i16_add(contact0, contact1), 2);
+
+        f32 sqr_dist = v2_i16_sqr_dist(start_mid, cur_mid);
+
+        if (sqr_dist > context->pan_sqr_deadzone) {
+            context->gesture_state = _W32_TRACKPAD_GES_PAN;
+        }
+    }
+
+    // Check for zoom gesture
+    if (context->gesture_state == _W32_TRACKPAD_GES_UNDECIDED) {
+        f32 start_sqr_dist = v2_i16_sqr_dist(
+            context->ges_start0, context->ges_start1
+        );
+        f32 cur_sqr_dist = v2_i16_sqr_dist(contact0, contact1);
+
+        f32 sqr_dist_change = ABS(cur_sqr_dist - start_sqr_dist);
+
+        if (sqr_dist_change > context->zoom_sqr_deadzone) {
+            context->gesture_state = _W32_TRACKPAD_GES_ZOOM;
+        }
+    }
+
+    if (context->gesture_state != _W32_TRACKPAD_GES_UNDECIDED) {
+        if (prev_state == _W32_TRACKPAD_GES_UNDECIDED) {
+            context->ges_prev0 = context->ges_start0;
+            context->ges_prev1 = context->ges_start1;
+        }
+
+        // Skipping over inputs where nothing moved
+        if (
+            v2_i16_eq(contact0, context->ges_prev0) &&  
+            v2_i16_eq(contact1, context->ges_prev1) 
+        ) {
+            goto end;
+        }
+    }
+
+    if (context->gesture_state == _W32_TRACKPAD_GES_PAN) {
+        // Ignoring any actual pan processing for now
+        // i.e. deferring to win32 WM_MOUSEWHEEL messages
+    }
+
+    if (context->gesture_state == _W32_TRACKPAD_GES_ZOOM) {
+        f32 start_dist = v2_i16_dist(context->ges_start0, context->ges_start1);
+        f32 prev_dist = v2_i16_dist(context->ges_prev0, context->ges_prev1);
+        f32 cur_dist = v2_i16_dist(contact0, contact1);
+
+        f32 dist_change = cur_dist - prev_dist;
+
+        win->cur_trackpad_zoom *= 1.0f - dist_change / start_dist;
+
+        *event = (win_event) {
+            .kind = WIN_EVENT_TRACKPAD_ZOOM,
+            .trackpad_zoom = (win_event_trackpad_zoom) {
+                .start_dist = start_dist,
+                .dist_change = dist_change
+            }
+        };
+    }
+
+    if (context->gesture_state != _W32_TRACKPAD_GES_UNDECIDED) {
+        context->ges_prev0 = contact0;
+        context->ges_prev1 = contact1;
+
+        if (context->prev_ges_scantime != -1) {
+            u16 prev_scantime = (u16)context->prev_ges_scantime;
+            
+            if (scantime >= prev_scantime) {
+                u16 scantime_diff = (u16)scantime - prev_scantime;
+
+                if (scantime_diff < context->min_scantime_diff) {
+                    context->min_scantime_diff = scantime_diff;
+                }
+            }
+        }
+
+        context->prev_ges_scantime = (i32)scantime;
+    }
+
+end:
+    context->prev_input_us = plat_time_usec();
+
+    return event->kind != WIN_EVENT_NONE;
+}
+
+void _w32_trackpad_update(_w32_trackpad_context* context) {
+    if (context == NULL) { return; }
+    if (!context->has_trackpad || !context->initialized) { return; }
+
+    u64 down_time = plat_time_usec() - context->prev_input_us;
+    if (down_time >= _W32_TRACKPAD_EXIT_TIMEOUT_US) {
+        context->gesture_state = _W32_TRACKPAD_GES_NONE;
+    }
+}
 
 // Note(Ian)
 // Currently, all the values are designed to be 16 bit, not ranges,

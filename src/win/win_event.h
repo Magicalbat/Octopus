@@ -21,6 +21,11 @@ typedef struct {
 } win_event_scroll;
 
 typedef struct {
+    f32 start_dist;
+    f32 dist_change;
+} win_event_trackpad_zoom;
+
+typedef struct {
     win_key key;
 } win_event_key_down;
 
@@ -54,11 +59,15 @@ typedef struct win_event {
     struct win_event* next;
 
     enum {
+        WIN_EVENT_NONE = 0,
+
         WIN_EVENT_MOUSE_MOVE,
         WIN_EVENT_MOUSE_DOWN,
         WIN_EVENT_MOUSE_UP,
 
         WIN_EVENT_SCROLL,
+
+        WIN_EVENT_TRACKPAD_ZOOM,
 
         WIN_EVENT_KEY_DOWN,
         WIN_EVENT_KEY_UP,
@@ -67,7 +76,6 @@ typedef struct win_event {
         WIN_EVENT_TOUCH_MOVE,
         WIN_EVENT_TOUCH_UP,
 
-        // TODO: zooming
         // TODO: pen events
     } kind;
 
@@ -77,6 +85,8 @@ typedef struct win_event {
         win_event_mouse_up mouse_up;
 
         win_event_scroll scroll;
+
+        win_event_trackpad_zoom trackpad_zoom;
 
         win_event_key_down key_down;
         win_event_key_up key_up;

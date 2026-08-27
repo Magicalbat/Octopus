@@ -65,6 +65,10 @@ window* win_create(mem_arena* arena, u32 width, u32 height, string8 title) {
         goto fail;
     }
 
+    win->plat_info->trackpad_context = _w32_trackpad_init(
+        arena, win->plat_info->window
+    );
+
     SetWindowLongPtrW(
         win->plat_info->window,
         GWLP_USERDATA,
@@ -114,6 +118,9 @@ void win_process_events(mem_arena* frame_arena, window* win) {
     );
 
     win->cur_scroll = (v2_f32){ 0 };
+    win->cur_trackpad_zoom = 1.0f;
+
+    _w32_trackpad_update(win->plat_info->trackpad_context);
 
     _w32_win_data data = { frame_arena, win };
 
@@ -257,6 +264,7 @@ static LRESULT CALLBACK _w32_window_proc(
 
     mem_arena_temp maybe_temp = { 0 };
     b32 post_event = false;
+    b32 return_def = false;
 
     // This is so that the rest can execute fine without
     win_event dummy_event = { 0 };
@@ -269,6 +277,17 @@ static LRESULT CALLBACK _w32_window_proc(
     }
 
     switch (uMsg) {
+        case WM_INPUT: {
+            // This updates win->trackpad_zoom and produces
+            // WIN_EVENT_TRACKPAD_ZOOM events
+            b32 emitted = _w32_trackpad_detect_zoom(
+                win, win->plat_info->trackpad_context,
+                event, lParam
+            );
+
+            post_event = emitted;
+        } break;
+
         case WM_MOUSEMOVE: {
             v2_f32 mouse_pos = _W32_MOUSE_POS(lParam);
 
@@ -283,17 +302,23 @@ static LRESULT CALLBACK _w32_window_proc(
         } break;
 
         case WM_MOUSEWHEEL: {
-            i32 delta_unscaled = (i32)GET_WHEEL_DELTA_WPARAM(wParam);
-            f32 delta_y = (f32)delta_unscaled / (f32)WHEEL_DELTA;
+            _w32_trackpad_context* tc = win->plat_info->trackpad_context;
 
-            win->cur_scroll.y += delta_y;
+            if (tc != NULL && tc->gesture_state == _W32_TRACKPAD_GES_ZOOM) {
+                post_event = false;
+            } else {
+                i32 delta_unscaled = (i32)GET_WHEEL_DELTA_WPARAM(wParam);
+                f32 delta_y = (f32)delta_unscaled / (f32)WHEEL_DELTA;
 
-            *event = (win_event) {
-                .kind = WIN_EVENT_SCROLL,
-                .scroll = (win_event_scroll) {
-                    .delta.y = delta_y
-                }
-            };
+                win->cur_scroll.y += delta_y;
+
+                *event = (win_event) {
+                    .kind = WIN_EVENT_SCROLL,
+                    .scroll = (win_event_scroll) {
+                        .delta.y = delta_y
+                    }
+                };
+            }
         } break;
 
         case WM_MOUSEHWHEEL: {
@@ -364,6 +389,8 @@ static LRESULT CALLBACK _w32_window_proc(
         case WM_POINTERDOWN:
         case WM_POINTERUPDATE:
         case WM_POINTERUP: {
+            return_def = true;
+
             // Unlike mouse events, pointer updates do not update any window
             // state as a side effect, only produce events in the event list.
             // As such, it requires having a valid frame arena
@@ -449,7 +476,7 @@ static LRESULT CALLBACK _w32_window_proc(
         arena_temp_end(maybe_temp);
     }
 
-    return 0;
+    return return_def ? DefWindowProcW(hWnd, uMsg, wParam, lParam) : 0;
 }
 
 static void _w32_update_win_dpi(window* win) {
