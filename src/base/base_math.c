@@ -1,6 +1,80 @@
 
 #define _F32_EPSILON 1e-8f
 
+u32 clz_u64(u64 n) {
+    if (n == 0) { return 64; }
+
+#if defined(COMPILER_CLANG) || defined (COMPILER_GCC)
+    return (u32)__builtin_clzll(n);
+#elif defined(COMPILER_MSVC)
+    return __lzcnt64(n);
+#else
+
+    // Based on this article and stackoverflow post:
+    // https://andrewlock.net/counting-the-leading-zeroes-in-a-binary-number/
+    // https://stackoverflow.com/questions/10439242/count-leading-zeroes-in-an-int32/10439333#10439333
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n |= n >> 32;
+
+    n -= n >> 1 & 0x5555555555555555ULL;
+    n = (n >> 2 & 0x3333333333333333ULL) + (n & 0x3333333333333333ULL);
+    n = (n >> 4) + n & 0x0f0f0f0f0f0f0f0fULL;
+    n += n >> 8;
+    n += n >> 16;
+    n += n >> 32;
+
+    return 64 - (n & 0x7f);
+#endif
+}
+
+u32 clz_u32(u32 n) {
+    if (n == 0) { return 32; }
+
+#if defined(COMPILER_CLANG) || defined (COMPILER_GCC)
+    return (u32)__builtin_clz(n);
+#elif defined(COMPILER_MSVC)
+    return __lzcnt(n);
+#else
+
+    // Based on this article and stackoverflow post:
+    // https://andrewlock.net/counting-the-leading-zeroes-in-a-binary-number/
+    // https://stackoverflow.com/questions/10439242/count-leading-zeroes-in-an-int32/10439333#10439333
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+
+    n -= n >> 1 & 0x55555555;
+    n = (n >> 2 & 0x33333333) + (n & 0x33333333);
+    n = (n >> 4) + n & 0x0f0f0f0f;
+    n += n >> 8;
+    n += n >> 16;
+
+    return 32 - (n & 0x3f);
+#endif
+}
+
+u32 log2_u32(u32 value) {
+    return 31 - clz_u32(value);
+}
+
+u32 round_up_pow2_u32(u32 n) {
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n++;
+
+    return n;
+}
+
 u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c) {
     if (solutions == NULL) {
         return 0;

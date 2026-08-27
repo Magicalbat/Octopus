@@ -19,6 +19,15 @@ typedef struct {
     f32 aspect_ratio;
 } view2_f32;
 
+#define MAX_U32 (~(u32)(0))
+
+u32 clz_u64(u64 n);
+u32 clz_u32(u32 n);
+
+u32 log2_u32(u32 n);
+
+u32 round_up_pow2_u32(u32 n);
+
 // Solves 0=ax^2 + bx + c
 // Returns the number of solutions
 u32 solve_quadratic(f32 solutions[2], f32 a, f32 b, f32 c);
