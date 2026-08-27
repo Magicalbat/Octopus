@@ -211,7 +211,7 @@ static void _w32_process_touches(
         
         win_touch_info touch = {
             .id = pointer_info->pointerId,
-            .time_us = perf_count / w32_perf_freq,
+            .time_us = perf_count * 1000000 / w32_perf_freq,
             .pos = (v2_f32){
                 .x = (f32)wnd_pos.x,
                 .y = (f32)wnd_pos.y,
@@ -235,9 +235,96 @@ static void _w32_process_touches(
             };
         } else if (pointer_info->pointerFlags & POINTER_FLAG_INCONTACT) {
             *cur_event = (win_event) {
-                .kind = WIN_EVENT_TOUCH_MOVE,
-                .touch_move = (win_event_touch_move) {
+                .kind = WIN_EVENT_TOUCH_UPDATE,
+                .touch_update = (win_event_touch_update) {
                     .touch_info = touch
+                }
+            };
+        } else {
+            arena_temp_end(maybe_temp);
+            continue;
+        }
+
+        SLL_PUSH_BACK(win->first_event, win->last_event, cur_event);
+    }
+}
+
+static win_pen_flags _w32_translate_pen_flags(PEN_FLAGS flags) {
+    win_pen_flags out = 0;
+
+    if (flags & PEN_FLAG_ERASER) { out |= WIN_PEN_FLAG_ERASER; }
+    if (flags & PEN_FLAG_BARREL) { out |= WIN_PEN_FLAG_BARREL; }
+
+    return out;
+}
+
+static void _w32_process_pen_pointers(
+    // Must be a valid arena
+    mem_arena* frame_arena,
+    window* win,
+    // The last event that gets implicity pushed to the event list by the 
+    // default window_proc execution path
+    win_event* last_event,
+    POINTER_PEN_INFO* pen_infos,
+    u32 entry_count
+) {
+    for (u32 i = 0; i < entry_count; i++) {
+        POINTER_INFO* pointer_info = &pen_infos[i].pointerInfo;
+
+        mem_arena_temp maybe_temp = arena_temp_begin(frame_arena);
+        win_event* cur_event = i == entry_count - 1 ?
+            last_event : PUSH_STRUCT(frame_arena, win_event);
+
+        u64 perf_count = pointer_info->PerformanceCount;
+
+        POINT wnd_pos = pointer_info->ptPixelLocation;
+        ScreenToClient(win->plat_info->window, &wnd_pos);
+
+        win_pen_info pen_sample = {
+            .id = pointer_info->pointerId,
+            .flags = _w32_translate_pen_flags(pen_infos[i].penFlags),
+            .time_us = perf_count * 1000000 / w32_perf_freq,
+            .pos = (v2_f32){
+                .x = (f32)wnd_pos.x,
+                .y = (f32)wnd_pos.y,
+            },
+        };
+
+        if (pen_infos[i].penMask & PEN_MASK_PRESSURE) {
+            pen_sample.pressure = (f32)pen_infos[i].pressure / 1024;
+        }
+
+        if (pen_infos[i].penMask & PEN_MASK_ROTATION) {
+            pen_sample.rotation = (f32)pen_infos[i].rotation / 180.0f * (f32)PI;
+        }
+
+        if (pen_infos[i].penMask & PEN_MASK_TILT_X) {
+            pen_sample.tilt.x = (f32)pen_infos[i].tiltX / 180.0f * (f32)PI;
+        }
+
+        if (pen_infos[i].penMask & PEN_MASK_TILT_Y) {
+            pen_sample.tilt.y = (f32)pen_infos[i].tiltY / 180.0f * (f32)PI;
+        }
+
+        if (pointer_info->pointerFlags & POINTER_FLAG_DOWN) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_PEN_DOWN,
+                .pen_down = (win_event_pen_down) {
+                    .pen_info = pen_sample,
+                }
+            };
+        } else if (pointer_info->pointerFlags & POINTER_FLAG_UP) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_PEN_UP,
+                .pen_up = (win_event_pen_up) {
+                    .pen_info = pen_sample,
+                }
+            };
+        } else if (pointer_info->pointerFlags & POINTER_FLAG_INCONTACT) {
+            *cur_event = (win_event) {
+                .kind = WIN_EVENT_PEN_UPDATE,
+                .pen_update = (win_event_pen_update) {
+                    .pen_info = pen_sample,
                 }
             };
         } else {
@@ -389,13 +476,12 @@ static LRESULT CALLBACK _w32_window_proc(
         case WM_POINTERDOWN:
         case WM_POINTERUPDATE:
         case WM_POINTERUP: {
-            return_def = true;
-
             // Unlike mouse events, pointer updates do not update any window
             // state as a side effect, only produce events in the event list.
             // As such, it requires having a valid frame arena
             if (frame_arena == NULL) {
                 post_event = false;
+                return_def = true;
                 break;
             }
 
@@ -407,10 +493,10 @@ static LRESULT CALLBACK _w32_window_proc(
                 break;
             }
 
+            u32 entry_count = pointer_info.historyCount;
+
             if (pointer_info.pointerType == PT_TOUCH) {
                 mem_arena_temp scratch = arena_scratch_get(&frame_arena, 1);
-
-                u32 entry_count = pointer_info.historyCount;
 
                 POINTER_TOUCH_INFO* touch_infos = PUSH_ARRAY(
                     scratch.arena,
@@ -422,6 +508,7 @@ static LRESULT CALLBACK _w32_window_proc(
                     pointer_id, &entry_count, touch_infos
                 ) || entry_count != pointer_info.historyCount) {
                     post_event = false;
+                    arena_scratch_release(scratch);
                     break;
                 }
 
@@ -431,6 +518,31 @@ static LRESULT CALLBACK _w32_window_proc(
                 );
 
                 arena_scratch_release(scratch);
+            } else if (pointer_info.pointerType == PT_PEN) {
+                mem_arena_temp scratch = arena_scratch_get(&frame_arena, 1);
+
+                POINTER_PEN_INFO* pen_infos = PUSH_ARRAY(
+                    scratch.arena,
+                    POINTER_PEN_INFO,
+                    entry_count
+                );
+
+                if (!GetPointerPenInfoHistory(
+                    pointer_id, &entry_count, pen_infos
+                ) || entry_count != pointer_info.historyCount) {
+                    post_event = false;
+                    arena_scratch_release(scratch);
+                    break;
+                }
+
+                _w32_process_pen_pointers(
+                    frame_arena, win, event,
+                    pen_infos, entry_count
+                );
+
+                arena_scratch_release(scratch);
+            } else {
+                return_def = true;
             }
         } break;
 

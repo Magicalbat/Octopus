@@ -24,6 +24,11 @@ typedef struct {
     u32 total_points;
 } point_list;
 
+typedef struct {
+    point_bucket* first_bucket;
+    point_bucket* last_bucket;
+} point_free_list;
+
 void gl_on_error(
     GLenum source, GLenum type, GLuint id, GLenum severity,
     GLsizei length, const GLchar* message, const void* user_param
@@ -34,8 +39,12 @@ v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
 // Updates view given scrolling and zooming events
 void update_view(window* win, view2_f32* view, m3_f32* view_mat);
 
-void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p);
+void point_list_push(
+    mem_arena* arena, point_free_list* pfl,
+    point_list* pl, v2_f32 p
+);
 v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl);
+void point_list_clear(point_list* pl, point_free_list* pfl);
 
 int main(int argc, char** argv) {
     UNUSED(argc);
@@ -72,9 +81,12 @@ int main(int argc, char** argv) {
     };
     m3_f32 view_mat = { 0 };
 
-    mem_arena* point_arena = arena_create(MiB(4), KiB(64), 0);
-    point_list touch_point_list = { 0 };
-    i64 cur_point_id = -1;
+    point_free_list pfl = { 0 };
+    point_list touch_points = { 0 };
+    point_list pen_points = { 0 };
+
+    i64 cur_touch_id = -1;
+    i64 cur_pen_id = -1;
 
     // End of setup error frame
     {
@@ -116,30 +128,29 @@ int main(int argc, char** argv) {
                     screen_pos = e->touch_down.touch_info.pos;
                     touch_id = (i64)e->touch_down.touch_info.id;;
 
-                    if (cur_point_id < 0) {
-                        arena_clear(point_arena);
-                        touch_point_list = (point_list){ 0 };
+                    if (cur_touch_id < 0) {
+                        point_list_clear(&touch_points, &pfl);
 
-                        cur_point_id = touch_id;
+                        cur_touch_id = touch_id;
                     }
                 } break;
 
-                case WIN_EVENT_TOUCH_MOVE: {
-                    screen_pos = e->touch_move.touch_info.pos;
-                    touch_id = (i64)e->touch_move.touch_info.id;;
+                case WIN_EVENT_TOUCH_UPDATE: {
+                    screen_pos = e->touch_update.touch_info.pos;
+                    touch_id = (i64)e->touch_update.touch_info.id;;
                 } break;
 
                 case WIN_EVENT_TOUCH_UP: {
                     screen_pos = e->touch_up.touch_info.pos;
                     touch_id = (i64)e->touch_up.touch_info.id;;
 
-                    if (touch_id == cur_point_id) {
+                    if (touch_id == cur_touch_id) {
                         point_list_push(
-                            point_arena, &touch_point_list,
+                            perm_arena, &pfl, &touch_points,
                             screen_to_world(win, &view, screen_pos)
                         );
 
-                        cur_point_id = -1;
+                        cur_touch_id = -1;
                     }
                 } break;
 
@@ -148,9 +159,58 @@ int main(int argc, char** argv) {
                 };
             }
 
-            if (push && touch_id == cur_point_id) {
+            if (push && touch_id == cur_touch_id) {
                 point_list_push(
-                    point_arena, &touch_point_list,
+                    perm_arena, &pfl, &touch_points,
+                    screen_to_world(win, &view, screen_pos)
+                );
+            }
+        }
+
+        for (win_event* e = win->first_event; e != NULL; e = e->next) {
+            b32 push = true;
+            v2_f32 screen_pos = { 0 };
+            i64 pen_id = -1;
+
+            switch (e->kind) {
+                case WIN_EVENT_PEN_DOWN: {
+                    screen_pos = e->pen_down.pen_info.pos;
+                    pen_id = (i64)e->pen_down.pen_info.id;;
+
+                    if (cur_pen_id < 0) {
+                        point_list_clear(&pen_points, &pfl);
+
+                        cur_pen_id = pen_id;
+                    }
+                } break;
+
+                case WIN_EVENT_PEN_UPDATE: {
+                    screen_pos = e->pen_update.pen_info.pos;
+                    pen_id = (i64)e->pen_update.pen_info.id;;
+                } break;
+
+                case WIN_EVENT_PEN_UP: {
+                    screen_pos = e->pen_up.pen_info.pos;
+                    pen_id = (i64)e->pen_up.pen_info.id;;
+
+                    if (pen_id == cur_pen_id) {
+                        point_list_push(
+                            perm_arena, &pfl, &pen_points,
+                            screen_to_world(win, &view, screen_pos)
+                        );
+
+                        cur_pen_id = -1;
+                    }
+                } break;
+
+                default: {
+                    push = false;
+                };
+            }
+
+            if (push && pen_id == cur_pen_id) {
+                point_list_push(
+                    perm_arena, &pfl, &pen_points,
                     screen_to_world(win, &view, screen_pos)
                 );
             }
@@ -169,10 +229,16 @@ int main(int argc, char** argv) {
         };
         debug_draw_lines(test_square, 5, 5, (v4_f32){ 1, 1, 1, 1 });
 
-        v2_f32* touch_points = point_list_as_arr(frame_arena, &touch_point_list);
-        debug_draw_circles(
-            touch_points, touch_point_list.total_points, 
+        v2_f32* touch_points_arr = point_list_as_arr(frame_arena, &touch_points);
+        debug_draw_lines(
+            touch_points_arr, touch_points.total_points, 
             3, (v4_f32){ 0, 1, 0, 1 }
+        );
+
+        v2_f32* pen_points_arr = point_list_as_arr(frame_arena, &pen_points);
+        debug_draw_lines(
+            pen_points_arr, pen_points.total_points, 
+            3, (v4_f32){ 1, 0, 0, 1 }
         );
 
         win_end_frame(win);
@@ -250,13 +316,24 @@ void update_view(window* win, view2_f32* view, m3_f32* view_mat) {
     debug_draw_set_view(*view);
 }
 
-void point_list_push(mem_arena* arena, point_list* pl, v2_f32 p) {
+void point_list_push(
+    mem_arena* arena, point_free_list* pfl,
+    point_list* pl, v2_f32 p
+) {
     if (pl->last_bucket != NULL && pl->last_bucket->num_points < _PB_SIZE) {
         point_bucket* bucket = pl->last_bucket;
 
         bucket->points[bucket->num_points++] = p;
     } else {
-        point_bucket* bucket = PUSH_STRUCT(arena, point_bucket);
+        point_bucket* bucket = NULL;
+
+        if (pfl->first_bucket != NULL) {
+            bucket = pfl->first_bucket;
+
+            SLL_POP_FRONT(pfl->first_bucket, pfl->last_bucket);
+        } else {
+            bucket = PUSH_STRUCT(arena, point_bucket);
+        }
 
         bucket->points[bucket->num_points++] = p;
 
@@ -279,5 +356,19 @@ v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl) {
     }
 
     return out;
+}
+
+void point_list_clear(point_list* pl, point_free_list* pfl) {
+    point_bucket* next = NULL;
+
+    for (point_bucket* bucket = pl->first_bucket; bucket != NULL; bucket = next) {
+        next = bucket->next;
+
+        memset(bucket, 0, sizeof(point_bucket));
+
+        SLL_PUSH_BACK(pfl->first_bucket, pfl->last_bucket, bucket);
+    }
+
+    memset(pl, 0, sizeof(point_list));
 }
 

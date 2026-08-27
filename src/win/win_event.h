@@ -49,11 +49,49 @@ typedef struct {
 
 typedef struct {
     win_touch_info touch_info;
-} win_event_touch_move;
+} win_event_touch_update;
 
 typedef struct {
     win_touch_info touch_info;
 } win_event_touch_up;
+
+typedef u32 win_pen_flags;
+
+typedef enum {
+    WIN_PEN_FLAG_NONE   = 0b00,
+    WIN_PEN_FLAG_ERASER = 0b01,
+    WIN_PEN_FLAG_BARREL = 0b10,
+} _win_pen_flags_enum;
+
+typedef struct {
+    u32 id;
+    win_pen_flags flags;
+
+    u64 time_us;
+
+    v2_f32 pos;
+
+    // [0, 1]
+    f32 pressure;
+
+    // From 0 to 2pi
+    f32 rotation;
+
+    // From -pi/2 to +pi/2
+    v2_f32 tilt;
+} win_pen_info;
+
+typedef struct {
+    win_pen_info pen_info;
+} win_event_pen_down;
+
+typedef struct {
+    win_pen_info pen_info;
+} win_event_pen_update;
+
+typedef struct {
+    win_pen_info pen_info;
+} win_event_pen_up;
 
 typedef struct win_event {
     struct win_event* next;
@@ -73,10 +111,12 @@ typedef struct win_event {
         WIN_EVENT_KEY_UP,
 
         WIN_EVENT_TOUCH_DOWN,
-        WIN_EVENT_TOUCH_MOVE,
+        WIN_EVENT_TOUCH_UPDATE,
         WIN_EVENT_TOUCH_UP,
 
-        // TODO: pen events
+        WIN_EVENT_PEN_DOWN,
+        WIN_EVENT_PEN_UPDATE,
+        WIN_EVENT_PEN_UP,
     } kind;
 
     union {
@@ -92,8 +132,12 @@ typedef struct win_event {
         win_event_key_up key_up;
 
         win_event_touch_down touch_down;
-        win_event_touch_move touch_move;
+        win_event_touch_update touch_update;
         win_event_touch_up touch_up;
+
+        win_event_pen_down pen_down;
+        win_event_pen_update pen_update;
+        win_event_pen_up pen_up;
     };
 } win_event;
 
