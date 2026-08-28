@@ -230,13 +230,13 @@ int main(int argc, char** argv) {
         debug_draw_lines(test_square, 5, 5, (v4_f32){ 1, 1, 1, 1 });
 
         v2_f32* touch_points_arr = point_list_as_arr(frame_arena, &touch_points);
-        debug_draw_lines(
+        debug_draw_circles(
             touch_points_arr, touch_points.total_points, 
             3, (v4_f32){ 0, 1, 0, 1 }
         );
 
         v2_f32* pen_points_arr = point_list_as_arr(frame_arena, &pen_points);
-        debug_draw_lines(
+        debug_draw_circles(
             pen_points_arr, pen_points.total_points, 
             3, (v4_f32){ 1, 0, 0, 1 }
         );

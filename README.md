@@ -1,7 +1,15 @@
 # Octopus
 Octopus will be a note taking and PDF markup application
 
-## Project Layers
+## Implementation Notes
+
+### String formatting 
+
+I am currently playing around with the idea of having a custom string format 
+schema, which works slightly differently from the stock printf. This applies 
+to formatting functions as well as downstream logging functions.
+
+### Project Layers
 - `base` (no namespace):
     - Underyling functions used in all other layers
 - `debug_draw` (`debug_draw_`):

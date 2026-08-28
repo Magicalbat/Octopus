@@ -72,15 +72,15 @@ void str8_to_lower_ip(string8 in, string8* out);
 string8 str8_to_upper(mem_arena* arena, string8 str);
 string8 str8_to_lower(mem_arena* arena, string8 str);
 
+string8 str8_pushfv(mem_arena* arena, const char* fmt, va_list args);
+string8 str8_pushf(mem_arena* arena, const char* fmt, ...);
+
 string8 str8_concat_simple(mem_arena* arena, const string8_list* list);
 string8 str8_concat(
     mem_arena* arena,
     const string8_list* list,
     const string8_concat_desc* desc
 );
-
-string8 str8_pushfv(mem_arena* arena, const char* fmt, va_list args);
-string8 str8_pushf(mem_arena* arena, const char* fmt, ...);
 
 void str8_list_add_existing(string8_list* list, string8_node* node);
 void str8_list_add(mem_arena* arena, string8_list* list, string8 str);
