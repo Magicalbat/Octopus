@@ -2,7 +2,7 @@
 string8 str8_from_cstr(u8* cstr) {
     u8* start = cstr;
 
-    while (*(cstr++));
+    for (; *cstr != 0; cstr += 1);
 
     return (string8) {
         .str = start,
