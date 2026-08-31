@@ -3,7 +3,7 @@
 Custom String Formatting
 ------------------------
 
-Basic Syntax: "{(type):(format settings)}"
+Basic Syntax: "{(type):(format type and format settings)}"
 Example: "{u32:04x}"
 
 Use "{{" and "}}" to actually get '{' and '}'
@@ -16,14 +16,7 @@ Supported types:
     - Strings: cstring (null terminated char*), string8
     - Vectors: v2_i16, v2_i32, v2_f32, v3_f32, v4_f32
 
-Supported format settings:
-    - Number or *: specifies a minimum length
-        - * specifies a u32 length in the variadic args
-        - e.g. {u32:4} specifies a min length of 4, keeping the numbers 
-        - e.g. {u16:05} specifies a min length of 5, padded with 0
-        - e.g. {string8:4} will prepend spaces if the string is too short
-    - .Number or .*: specifies the minimum length after the decimal
-        - .* specifies a u32 length in the variadic args
+Supported format type:
     - d: specifies decimal formatting
         - Default for integers (and integer vectors)
     - e/E: specifies scientific notation (E for capital)
@@ -41,6 +34,17 @@ Supported format settings:
         - Must be used with integer types
         - e.g. {u8:u} can generally be used for ascii characters
         - e.g. {u32:u} could be used to print something like U'👍'
+
+Only one format type can be specified at a time
+
+Supported format settings:
+    - Number or *: specifies a minimum length
+        - * specifies a u32 length in the variadic args
+        - e.g. {u32:4} specifies a min length of 4, keeping the numbers 
+        - e.g. {u16:05} specifies a min length of 5, padded with 0
+        - e.g. {string8:4} will prepend spaces if the string is too short
+    - .Number or .*: specifies the minimum length after the decimal
+        - .* specifies a u32 length in the variadic args
     - -: Left-justify output within width (default is right)
     - |: Center output within width (default is right)
     - +: All numbers are preceded by their sign
@@ -48,7 +52,7 @@ Supported format settings:
     - 0: Pads number with zeros based on the specified width
     - ': Adds commas to large numbers where appropriate (i.e. every 3 digits)
 
-Format settings can be specified in any order
+Format type and settings can be specified in any order
 
 Note on vectors:
     - Vectors are essentially translated as follows
@@ -59,6 +63,8 @@ Note on vectors:
     - If this is too limiting, just manually format each component as you like
 */
 
-string8 str8_format_va(mem_arena* arena, const char* fmt, va_list args);
-string8 str8_format(mem_arena* arena, const char* fmt, ...);
+string8 str8_formatv(mem_arena* arena, string8 fmt, va_list args);
+string8 str8_format(mem_arena* arena, string8 fmt, ...);
 
+string8 str8_formatv_cstr(mem_arena* arena, const char* fmt, va_list args);
+string8 str8_format_cstr(mem_arena* arena, const char* fmt, ...);
