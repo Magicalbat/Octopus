@@ -29,11 +29,6 @@ typedef struct {
     point_bucket* last_bucket;
 } point_free_list;
 
-void gl_on_error(
-    GLenum source, GLenum type, GLuint id, GLenum severity,
-    GLsizei length, const GLchar* message, const void* user_param
-);
-
 v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p);
 
 // Updates view given scrolling and zooming events
@@ -45,15 +40,6 @@ void point_list_push(
 );
 v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl);
 void point_list_clear(point_list* pl, point_free_list* pfl);
-
-b32 contains(u32* nums, u32 size, u32 target) {
-    for (u32 i = 0; i < size; i++) {
-        if (nums[i] == target) 
-            return true;
-    }
-
-    return false;
-}
 
 int main(int argc, char** argv) {
     UNUSED(argc);
@@ -73,14 +59,6 @@ int main(int argc, char** argv) {
     win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
     win_make_current(win);
-
-#ifndef NDEBUG
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(gl_on_error, NULL);
-#endif
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     debug_draw_init(win);
 
@@ -276,23 +254,6 @@ int main(int argc, char** argv) {
     arena_destroy(perm_arena);
 
     return 0;
-}
-
-void gl_on_error(
-    GLenum source, GLenum type, GLuint id, GLenum severity,
-    GLsizei length, const GLchar* message, const void* user_param
-) {
-    UNUSED(source);
-    UNUSED(type);
-    UNUSED(id);
-    UNUSED(length);
-    UNUSED(user_param);
-
-    if (severity == GL_DEBUG_SEVERITY_HIGH) {
-        error_emitf("OpenGL Error: %s", message);
-    } else {
-        info_emitf("OpenGL Message: %s", message);
-    }
 }
 
 v2_f32 screen_to_world(window* win, view2_f32* view, v2_f32 p) {

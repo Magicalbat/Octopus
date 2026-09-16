@@ -8,7 +8,3 @@ void win_begin_frame(window* win) {
     glViewport(0, 0, (GLsizei)win->width, (GLsizei)win->height);
 }
 
-void win_end_frame(window* win) {
-    _win_gfx_swap(win);
-}
-

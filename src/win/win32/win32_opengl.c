@@ -195,7 +195,7 @@ void win_make_current(window* win) {
     }
 }
 
-void _win_gfx_swap(window* win) {
+void win_end_frame(window* win) {
     if (win != NULL && win->gfx_info != NULL) {
         SwapBuffers(win->gfx_info->hdc);
     }
