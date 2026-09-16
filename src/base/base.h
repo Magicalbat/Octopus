@@ -5,6 +5,5 @@
 #include "base_prng.h"
 #include "base_math.h"
 #include "base_str.h"
-#include "base_fmt.h"
 #include "base_log.h"
 

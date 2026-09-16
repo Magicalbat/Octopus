@@ -32,10 +32,10 @@ u32 log_frame_peek_count(u32 level_mask) {
 }
 
 static const string8 _level_prefixes[] = {
-    [LOG_INFO] = STR8_CONST_LIT("Info: "),
-    [LOG_WARN] = STR8_CONST_LIT("Warning: "),
-    [LOG_ERROR] = STR8_CONST_LIT("Error: "),
-    STR8_CONST_LIT("Unknown Log: "),
+    [LOG_INFO]  = STR8_CONST_LIT("[Info] "),
+    [LOG_WARN]  = STR8_CONST_LIT("[Warning] "),
+    [LOG_ERROR] = STR8_CONST_LIT("[Error] "),
+    STR8_CONST_LIT("[Unknown Log Level] "),
 };
 
 #define _LOG_PREFIX_INDEX(level) \

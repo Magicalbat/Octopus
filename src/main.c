@@ -46,6 +46,15 @@ void point_list_push(
 v2_f32* point_list_as_arr(mem_arena* arena, point_list* pl);
 void point_list_clear(point_list* pl, point_free_list* pfl);
 
+b32 contains(u32* nums, u32 size, u32 target) {
+    for (u32 i = 0; i < size; i++) {
+        if (nums[i] == target) 
+            return true;
+    }
+
+    return false;
+}
+
 int main(int argc, char** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -60,33 +69,6 @@ int main(int argc, char** argv) {
 
     mem_arena* perm_arena = arena_create(MiB(64), KiB(264), ARENA_FLAG_GROWABLE);
     mem_arena* frame_arena = arena_create(MiB(16), KiB(264), 0);
-
-    str8_format_cstr(perm_arena, "{{ {f32:5.2} }}", 42.2789f);
-    str8_format_cstr(perm_arena, "{f32:*.2}", 10, 42.2789f);
-    str8_format_cstr(perm_arena, "{f64:5.*}", 5, 42.2789);
-    str8_format_cstr(perm_arena, "{f64:*.*}", 1, 2, 42.2789);
-    str8_format_cstr(perm_arena, "{u8}", 'A');
-    str8_format_cstr(perm_arena, "{u8:c}", 'A');
-    str8_format_cstr(perm_arena, "{i32:+4}", 123);
-    str8_format_cstr(perm_arena, "{i32: *}", 12, 123);
-    str8_format_cstr(perm_arena, "{i32:6x}", -123);
-    str8_format_cstr(perm_arena, "0x{u32:|06x}", 0xab);
-    str8_format_cstr(perm_arena, "0x{u64:-06x}", 0xab);
-
-    {
-        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
-        string8 other_logs = log_frame_peek(
-            scratch.arena, LOG_INFO | LOG_WARN, LOG_RES_CONCAT, true
-        );
-
-        if (other_logs.size) {
-            printf("%.*s\n", STR8_FMT(other_logs));
-        }
-
-        arena_scratch_release(scratch);
-    }
-
-    return 0;
 
     win_gfx_backend_init();
     window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
@@ -307,9 +289,9 @@ void gl_on_error(
     UNUSED(user_param);
 
     if (severity == GL_DEBUG_SEVERITY_HIGH) {
-        error_emitf("[OpenGL Error] %s", message);
+        error_emitf("OpenGL Error: %s", message);
     } else {
-        info_emitf("[OpenGL Message] %s", message);
+        info_emitf("OpenGL Message: %s", message);
     }
 }
 
