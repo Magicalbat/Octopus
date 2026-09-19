@@ -128,6 +128,8 @@ void win_gfx_backend_init(void) {
     UnregisterClassW(dummy_class_name, module_handle);
 }
 
+void win_gfx_backend_terminate(void) { }
+
 b32 _win_equip_gfx(mem_arena* arena, window* win) {
     if (!_w32gl_backend_initialized) {
         error_emit("Win32 OpenGL backend is not initialized");

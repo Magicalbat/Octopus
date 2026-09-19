@@ -15,6 +15,7 @@ void _win_unequip_gfx(window* win);
 #   elif defined(PLATFORM_LINUX)
 #   endif
 #elif defined(WIN_GFX_API_VULKAN)
+#   include "vulkan/vulkan_common.c"
 #   if defined(PLATFORM_WIN32)
 #       include "win32/win32_vulkan.c"
 #   endif

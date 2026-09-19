@@ -1,7 +1,7 @@
 
-void win_gfx_backend_init(void) { }
-
 b32 _win_equip_gfx(mem_arena* arena, window* win) {
+
+    return true;
 }
 
 void _win_unequip_gfx(window* win) {

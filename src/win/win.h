@@ -14,10 +14,12 @@
 #   elif defined(PLATFORM_LINUX)
 #   endif
 #elif defined(WIN_GFX_API_VULKAN)
-#   include <vulkan/vulkan.h>
 #   if defined(PLATFORM_WIN32)
 #       include "win32/win32_vulkan.h"
+#       define VK_USE_PLATFORM_WIN32_KHR
 #   endif
+#   include <vulkan/vulkan.h>
+#   include "vulkan/vulkan_common.h"
 #endif
 
 typedef enum {
@@ -55,6 +57,7 @@ typedef struct window {
 } window;
 
 void win_gfx_backend_init(void);
+void win_gfx_backend_terminate(void);
 
 window* win_create(mem_arena* arena, u32 width, u32 height, string8 title);
 void win_destroy(window* win);
