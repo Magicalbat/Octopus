@@ -275,7 +275,7 @@ f32 v2_f32_len(v2_f32 v) {
 
 v2_f32 v2_f32_norm(v2_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y);
-    if (ABS(len) > _F32_EPSILON)
+    if (len > _F32_EPSILON)
         return (v2_f32){ v.x / len, v.y / len };
     return (v2_f32){ 1, 0 };
 }
@@ -338,7 +338,7 @@ f32 v3_f32_len(v3_f32 v) {
 
 v3_f32 v3_f32_norm(v3_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-    if (ABS(len) > _F32_EPSILON) {
+    if (len > _F32_EPSILON) {
         f32 r = 1.0f / len;
         return (v3_f32){ v.x * r, v.y * r, v.z * r };
     }
@@ -397,7 +397,7 @@ f32 v4_f32_len(v4_f32 v) {
 
 v4_f32 v4_f32_norm(v4_f32 v) {
     f32 len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
-    if (ABS(len) > _F32_EPSILON) {
+    if (len > _F32_EPSILON) {
         f32 r = 1.0f / len;
         return (v4_f32){ v.x * r, v.y * r, v.z * r, v.w * r };
     }
