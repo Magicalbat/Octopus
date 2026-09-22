@@ -1,6 +1,7 @@
 
 b32 _vk_init_instance(void);
 b32 _vk_pick_physical_device(void);
+b32 _vk_create_device(void);
 
 // Preferred layers
 const char* _vk_layers[] = {
@@ -28,6 +29,7 @@ void win_gfx_backend_init(void) {
 
     if (!_vk_init_instance()) { goto error; }
     if (!_vk_pick_physical_device()) { goto error; }
+    if (!_vk_create_device()) { goto error; }
 
     vk_state.initialized = true;
     return;
@@ -303,6 +305,211 @@ b32 _vk_pick_physical_device(void) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(vk_state.physical_device, &props);
     info_emitf("Using device '%s' for Vulkan", props.deviceName);
+
+    return true;
+}
+
+u32 _vk_find_queue_family(
+    u32 family_count,
+    VkQueueFamilyProperties* family_props,
+    u32 desired_flags,
+    u32 avoid_count, u32* avoid_families
+) {
+    // First look for a dedicated family
+    for (u32 i = 0; i < family_count; i++) {
+        if (family_props[i].queueFlags & desired_flags) {
+            b32 conflict = false;
+
+            for (u32 j = 0; j < avoid_count; j++) {
+                if (i == avoid_families[j]) {
+                    conflict = true;
+                    break;
+                }
+            }
+            
+            if (!conflict) { return i; }
+        }
+    }
+
+    // If dedicated search failed, fallback to a family in use while 
+    // prioritizing families with higher counts
+    u32 max_count = 0;
+    u32 max_count_family = UINT32_MAX;
+    
+    for (u32 i = 0; i < family_count; i++) {
+        if (
+            (family_props[i].queueFlags & desired_flags) &&
+            family_props[i].queueCount > max_count
+        ) {
+            max_count = family_props[i].queueCount;
+            max_count_family = i;
+        }
+    }
+
+    return max_count_family;
+}
+
+b32 _vk_create_device(void) {
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u32 queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        vk_state.physical_device, &queue_family_count, NULL
+    );
+
+    VkQueueFamilyProperties* family_props = PUSH_ARRAY(
+        scratch.arena, VkQueueFamilyProperties, queue_family_count
+    );
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        vk_state.physical_device, &queue_family_count, family_props
+    );
+
+    // graphics, compute, transfer
+    u32 queue_families[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
+
+    queue_families[0] = _vk_find_queue_family(
+        queue_family_count, family_props,
+        VK_QUEUE_GRAPHICS_BIT,
+        0, queue_families
+    );
+    queue_families[1] = _vk_find_queue_family(
+        queue_family_count, family_props,
+        VK_QUEUE_COMPUTE_BIT,
+        1, queue_families
+    );
+    queue_families[2] = _vk_find_queue_family(
+        queue_family_count, family_props,
+        VK_QUEUE_TRANSFER_BIT,
+        2, queue_families
+    );
+
+
+    u32 used_families = 0;
+    u32* queue_counts = PUSH_ARRAY(scratch.arena, u32, queue_family_count);
+    for (u32 i = 0; i < 3; i++) {
+        if (queue_counts[queue_families[i]] == 0) {
+            used_families++;
+        }
+
+        queue_counts[queue_families[i]]++;
+    }
+
+    f32 default_priority = 0.5f;
+
+    VkDeviceQueueCreateInfo* queue_create_infos = PUSH_ARRAY(
+        scratch.arena, VkDeviceQueueCreateInfo, used_families
+    );
+
+    for (
+        u32 i = 0, j = 0;
+        i < 3 && j < used_families;
+        i++, j += (queue_counts[i] != 0)
+    ) {
+        if (queue_counts[i] == 0) { continue; }
+
+        f32* priorities = &default_priority;
+
+        if (queue_counts[i] > 1) {
+            priorities = PUSH_ARRAY(scratch.arena, f32, queue_counts[i]);
+
+            for (u32 k = 0; k < queue_counts[i]; k++) {
+                // Giving higher priority to lower indices
+                priorities[k] = 1.0f - (f32)k / (f32)(queue_counts[i] - 1);
+            }
+        }
+
+        queue_create_infos[j] = (VkDeviceQueueCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = i,
+            .queueCount = queue_counts[i],
+            .pQueuePriorities = priorities,
+        };
+    }
+
+    VkPhysicalDeviceVulkan13Features device_13_features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .dynamicRendering = true
+    };
+
+    VkDeviceCreateInfo device_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &device_13_features,
+        .queueCreateInfoCount = used_families,
+        .pQueueCreateInfos = queue_create_infos,
+        .enabledExtensionCount = ARRAY_LEN(_vk_device_extensions),
+        .ppEnabledExtensionNames = _vk_device_extensions,
+    };
+
+    VkResult res = vkCreateDevice(
+        vk_state.physical_device, &device_create_info,
+        NULL, &vk_state.device
+    );
+
+    if (res != VK_SUCCESS) {
+        error_emit("Failed to create Vulkan device");
+        arena_scratch_release(scratch);
+
+        return false;
+    }
+
+    vk_state.graphics_queue = (win_vk_queue){
+        .family = queue_families[0],
+        .index = 0,
+    };
+
+    vk_state.compute_queue = (win_vk_queue){
+        .family = queue_families[1],
+        .index = (queue_families[1] == queue_families[0]),
+    };
+
+    vk_state.transfer_queue = (win_vk_queue){
+        .family = queue_families[2],
+        .index = (
+            (queue_families[2] == queue_families[0]) +
+            (queue_families[2] == queue_families[1])
+        ),
+    };
+
+    vkGetDeviceQueue(
+        vk_state.device,
+        vk_state.graphics_queue.family,
+        vk_state.graphics_queue.index,
+        &vk_state.graphics_queue.queue
+    );
+
+    vkGetDeviceQueue(
+        vk_state.device,
+        vk_state.compute_queue.family,
+        vk_state.compute_queue.index,
+        &vk_state.compute_queue.queue
+    );
+
+    vkGetDeviceQueue(
+        vk_state.device,
+        vk_state.transfer_queue.family,
+        vk_state.transfer_queue.index,
+        &vk_state.transfer_queue.queue
+    );
+
+    info_emitf(
+        "Graphics queue - { f: %u, i: %u }",
+        vk_state.graphics_queue.family,
+        vk_state.graphics_queue.index
+    );
+
+    info_emitf(
+        "Compute queue - { f: %u, i: %u }",
+        vk_state.compute_queue.family,
+        vk_state.compute_queue.index
+    );
+
+    info_emitf(
+        "Transfer queue - { f: %u, i: %u }",
+        vk_state.transfer_queue.family,
+        vk_state.transfer_queue.index
+    );
+
+    arena_scratch_release(scratch);
 
     return true;
 }
