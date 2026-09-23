@@ -226,10 +226,6 @@ _w32_trackpad_context* _w32_trackpad_init(mem_arena* arena, HWND hwnd) {
         goto error;
     }
 
-    // Start with max
-    context->min_scantime_diff = 0xffff;
-    context->prev_ges_scantime = -1;
-
     context->x_min_logical = (i16)value_caps[x_idx].LogicalMin;
     context->x_max_logical = (i16)value_caps[x_idx].LogicalMax;
     context->y_min_logical = (i16)value_caps[y_idx].LogicalMin;
@@ -360,7 +356,7 @@ b32 _w32_trackpad_detect_zoom(
         goto end;
     }
 
-    ULONG scantime = 0;
+    /*ULONG scantime = 0;
     if (
         HidP_GetUsageValue(
             HidP_Input, 0x0d, 0, 0x56, &scantime,
@@ -370,7 +366,7 @@ b32 _w32_trackpad_detect_zoom(
         error_emit("[Win32 Trackpad] Failed to get scan time");
         
         goto end;
-    }
+    }*/
 
     for (
         u32 i = 0;
@@ -436,7 +432,7 @@ b32 _w32_trackpad_detect_zoom(
         context->gesture_state = _W32_TRACKPAD_GES_NONE;
         goto end;
     }
-
+    
     v2_i16 contact0 = (v2_i16){
         contact_xs[0],
         contact_ys[0],
@@ -528,20 +524,6 @@ b32 _w32_trackpad_detect_zoom(
     if (context->gesture_state != _W32_TRACKPAD_GES_UNDECIDED) {
         context->ges_prev0 = contact0;
         context->ges_prev1 = contact1;
-
-        if (context->prev_ges_scantime != -1) {
-            u16 prev_scantime = (u16)context->prev_ges_scantime;
-            
-            if (scantime >= prev_scantime) {
-                u16 scantime_diff = (u16)scantime - prev_scantime;
-
-                if (scantime_diff < context->min_scantime_diff) {
-                    context->min_scantime_diff = scantime_diff;
-                }
-            }
-        }
-
-        context->prev_ges_scantime = (i32)scantime;
     }
 
 end:

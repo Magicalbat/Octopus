@@ -5,7 +5,7 @@
 
 #define _W32_TRACKPAD_MAX_CONTACTS 10
 
-#define _W32_TRACKPAD_EXIT_TIMEOUT_US 16000
+#define _W32_TRACKPAD_EXIT_TIMEOUT_US 15000
 #define _W32_TRACKPAD_PAN_DEADZONE_MM 2
 #define _W32_TRACKPAD_ZOOM_DEADZONE_MM 9
 
@@ -57,14 +57,6 @@ typedef struct {
     // Both in (logical units)^2
     f32 pan_sqr_deadzone;
     f32 zoom_sqr_deadzone;
-
-    // -1 indicates the first gesture scantime
-    i32 prev_ges_scantime;
-
-    // According to HUTRR83 (https://www.usb.org/sites/default/files/hutrr83_-_new_digitizer_usages_for_touchpads_0.pdf)
-    // this value should reflect the scanning frequency of the digitizer. As 
-    // such, we can use it to see if the user canceled their gesture mid-frame
-    u16 min_scantime_diff;
 
     // Gesture start positions (tracking two contacts)
     v2_i16 ges_start0;
