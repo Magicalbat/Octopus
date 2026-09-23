@@ -249,9 +249,9 @@ int main(int argc, char** argv) {
 
     debug_draw_destroy();
 
-    win_gfx_backend_terminate();
-
     win_destroy(win);
+
+    win_gfx_backend_terminate();
 
     arena_destroy(perm_arena);
 

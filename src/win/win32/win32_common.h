@@ -3,16 +3,15 @@
 
 #include <ShellScalingApi.h>
 
+// win32_trackpad needs window pre-defined
 typedef struct window window;
 
-// win32_trackpad needs window pre-defined
 #include "win32_trackpad.h"
 
 typedef struct {
     mem_arena* frame_arena;
     window* win;
 } _w32_win_data;
-
 
 typedef struct _win_plat_info {
     HWND window;

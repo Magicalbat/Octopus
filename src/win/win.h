@@ -7,7 +7,7 @@
 #endif
 
 #if defined(WIN_GFX_API_OPENGL)
-#   include "opengl/opengl_api.h"
+#   include "opengl/opengl_common.h"
 #   include "opengl/opengl_helpers.h"
 #   if defined(PLATFORM_WIN32)
 #       include "win32/win32_opengl.h"
@@ -15,11 +15,13 @@
 #   endif
 #elif defined(WIN_GFX_API_VULKAN)
 #   if defined(PLATFORM_WIN32)
-#       include "win32/win32_vulkan.h"
 #       define VK_USE_PLATFORM_WIN32_KHR
 #   endif
 #   include <vulkan/vulkan.h>
 #   include "vulkan/vulkan_common.h"
+#   if defined(PLATFORM_WIN32)
+#       include "win32/win32_vulkan.h"
+#   endif
 #endif
 
 typedef enum {

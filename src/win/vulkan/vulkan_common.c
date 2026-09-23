@@ -42,7 +42,7 @@ void win_gfx_backend_terminate(void) {
     if (vk_state.device) { vkDestroyDevice(vk_state.device, NULL); }
     if (vk_state.instance) { vkDestroyInstance(vk_state.instance, NULL); }
 
-    vk_state = (win_vk_state){ 0 };
+    vk_state = (win_vk_global_state){ 0 };
 }
 
 b32 _vk_init_instance(void) {
@@ -455,4 +455,15 @@ b32 _vk_create_device(void) {
 error:
     arena_scratch_release(scratch);
     return false;
+}
+
+b32 _win_vk_equip_gfx(win_vk_local_state* win_vk) {
+}
+
+void _win_vk_unequip_gfx(win_vk_local_state* win_vk) {
+    if (win_vk == NULL) { return; }
+
+    if (win_vk->surface != NULL) {
+        vkDestroySurfaceKHR(vk_state.instance, win_vk->surface, NULL);
+    }
 }
