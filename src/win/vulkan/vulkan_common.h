@@ -13,7 +13,6 @@ typedef struct {
     
     win_vk_queue graphics_queue;
     win_vk_queue compute_queue;
-    win_vk_queue transfer_queue;
 
     b8 initialized;
 } win_vk_state;

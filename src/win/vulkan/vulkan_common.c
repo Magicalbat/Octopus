@@ -151,6 +151,18 @@ b32 _vk_init_instance(void) {
     return true;
 }
 
+b32 _vk_can_queue_present(VkPhysicalDevice physical_device, u32 queue_family) {
+#if defined(PLATFORM_WIN32)
+    return (b32)vkGetPhysicalDeviceWin32PresentationSupportKHR(
+        physical_device, queue_family
+    );
+#endif
+
+// Note(Ian) I think that the wayland and x11 versions of this function 
+// require a reference to the display or something, so this may need to be
+// reworked in the future
+}
+
 b32 _vk_physical_device_suitable(VkPhysicalDevice physical_device) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(physical_device, &props);
@@ -182,7 +194,10 @@ b32 _vk_physical_device_suitable(VkPhysicalDevice physical_device) {
                 has_compute_queue = true;
             }
 
-            if (queue_family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            if (
+                (queue_family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+                _vk_can_queue_present(physical_device, i)
+            ) {
                 has_graphics_queue = true;
             }
         }
@@ -309,46 +324,6 @@ b32 _vk_pick_physical_device(void) {
     return true;
 }
 
-u32 _vk_find_queue_family(
-    u32 family_count,
-    VkQueueFamilyProperties* family_props,
-    u32 desired_flags,
-    u32 avoid_count, u32* avoid_families
-) {
-    // First look for a dedicated family
-    for (u32 i = 0; i < family_count; i++) {
-        if (family_props[i].queueFlags & desired_flags) {
-            b32 conflict = false;
-
-            for (u32 j = 0; j < avoid_count; j++) {
-                if (i == avoid_families[j]) {
-                    conflict = true;
-                    break;
-                }
-            }
-            
-            if (!conflict) { return i; }
-        }
-    }
-
-    // If dedicated search failed, fallback to a family in use while 
-    // prioritizing families with higher counts
-    u32 max_count = 0;
-    u32 max_count_family = UINT32_MAX;
-    
-    for (u32 i = 0; i < family_count; i++) {
-        if (
-            (family_props[i].queueFlags & desired_flags) &&
-            family_props[i].queueCount > max_count
-        ) {
-            max_count = family_props[i].queueCount;
-            max_count_family = i;
-        }
-    }
-
-    return max_count_family;
-}
-
 b32 _vk_create_device(void) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
@@ -364,65 +339,64 @@ b32 _vk_create_device(void) {
         vk_state.physical_device, &queue_family_count, family_props
     );
 
-    // graphics, compute, transfer
-    u32 queue_families[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
+    u32 graphics_family = UINT32_MAX, compute_family = UINT32_MAX;
 
-    queue_families[0] = _vk_find_queue_family(
-        queue_family_count, family_props,
-        VK_QUEUE_GRAPHICS_BIT,
-        0, queue_families
-    );
-    queue_families[1] = _vk_find_queue_family(
-        queue_family_count, family_props,
-        VK_QUEUE_COMPUTE_BIT,
-        1, queue_families
-    );
-    queue_families[2] = _vk_find_queue_family(
-        queue_family_count, family_props,
-        VK_QUEUE_TRANSFER_BIT,
-        2, queue_families
-    );
-
-
-    u32 used_families = 0;
-    u32* queue_counts = PUSH_ARRAY(scratch.arena, u32, queue_family_count);
-    for (u32 i = 0; i < 3; i++) {
-        if (queue_counts[queue_families[i]] == 0) {
-            used_families++;
+    // Finding graphics family
+    for (u32 i = 0; i < queue_family_count; i++) {
+        if (
+            (family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+            _vk_can_queue_present(vk_state.physical_device, i)
+        ) {
+            graphics_family = i;
+            break;
         }
-
-        queue_counts[queue_families[i]]++;
     }
 
-    f32 default_priority = 0.5f;
+    if (graphics_family == UINT32_MAX) {
+        error_emit("Unable to find graphics queue family for Vulkan");
+        goto error;
+    }
 
-    VkDeviceQueueCreateInfo* queue_create_infos = PUSH_ARRAY(
-        scratch.arena, VkDeviceQueueCreateInfo, used_families
-    );
-
-    for (
-        u32 i = 0, j = 0;
-        i < 3 && j < used_families;
-        i++, j += (queue_counts[i] != 0)
-    ) {
-        if (queue_counts[i] == 0) { continue; }
-
-        f32* priorities = &default_priority;
-
-        if (queue_counts[i] > 1) {
-            priorities = PUSH_ARRAY(scratch.arena, f32, queue_counts[i]);
-
-            for (u32 k = 0; k < queue_counts[i]; k++) {
-                // Giving higher priority to lower indices
-                priorities[k] = 1.0f - (f32)k / (f32)(queue_counts[i] - 1);
-            }
+    // Finding compute family
+    for (u32 i = 0; i < queue_family_count; i++) {
+        if (
+            (family_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
+            (i != graphics_family || family_props[i].queueCount >= 2)
+        ) {
+            compute_family = i;
+            break;
         }
+    }
 
-        queue_create_infos[j] = (VkDeviceQueueCreateInfo) {
+    if (compute_family == UINT32_MAX) {
+        error_emit("Unable to find compute queue family for Vulkan");
+        goto error;
+    }
+
+    u32 num_families = graphics_family == compute_family ? 1 : 2;
+    VkDeviceQueueCreateInfo queue_create_infos[2] = { 0 };
+    f32 queue_priorities[2] = { 0.5f, 0.5f };
+
+    if (num_families == 1) {
+        queue_create_infos[0] = (VkDeviceQueueCreateInfo){
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = i,
-            .queueCount = queue_counts[i],
-            .pQueuePriorities = priorities,
+            .queueFamilyIndex = graphics_family,
+            .queueCount = 2,
+            .pQueuePriorities = queue_priorities,
+        };
+    } else {
+        queue_create_infos[0] = (VkDeviceQueueCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = graphics_family,
+            .queueCount = 1,
+            .pQueuePriorities = queue_priorities,
+        };
+
+        queue_create_infos[1] = (VkDeviceQueueCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = compute_family,
+            .queueCount = 1,
+            .pQueuePriorities = queue_priorities,
         };
     }
 
@@ -434,7 +408,7 @@ b32 _vk_create_device(void) {
     VkDeviceCreateInfo device_create_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &device_13_features,
-        .queueCreateInfoCount = used_families,
+        .queueCreateInfoCount = num_families,
         .pQueueCreateInfos = queue_create_infos,
         .enabledExtensionCount = ARRAY_LEN(_vk_device_extensions),
         .ppEnabledExtensionNames = _vk_device_extensions,
@@ -447,27 +421,17 @@ b32 _vk_create_device(void) {
 
     if (res != VK_SUCCESS) {
         error_emit("Failed to create Vulkan device");
-        arena_scratch_release(scratch);
-
-        return false;
+        goto error;
     }
 
-    vk_state.graphics_queue = (win_vk_queue){
-        .family = queue_families[0],
+    vk_state.graphics_queue = (win_vk_queue) {
+        .family = graphics_family,
         .index = 0,
     };
-
-    vk_state.compute_queue = (win_vk_queue){
-        .family = queue_families[1],
-        .index = (queue_families[1] == queue_families[0]),
-    };
-
-    vk_state.transfer_queue = (win_vk_queue){
-        .family = queue_families[2],
-        .index = (
-            (queue_families[2] == queue_families[0]) +
-            (queue_families[2] == queue_families[1])
-        ),
+    
+    vk_state.compute_queue = (win_vk_queue) {
+        .family = compute_family,
+        .index = graphics_family == compute_family ? 1 : 0,
     };
 
     vkGetDeviceQueue(
@@ -484,32 +448,11 @@ b32 _vk_create_device(void) {
         &vk_state.compute_queue.queue
     );
 
-    vkGetDeviceQueue(
-        vk_state.device,
-        vk_state.transfer_queue.family,
-        vk_state.transfer_queue.index,
-        &vk_state.transfer_queue.queue
-    );
-
-    info_emitf(
-        "Graphics queue - { f: %u, i: %u }",
-        vk_state.graphics_queue.family,
-        vk_state.graphics_queue.index
-    );
-
-    info_emitf(
-        "Compute queue - { f: %u, i: %u }",
-        vk_state.compute_queue.family,
-        vk_state.compute_queue.index
-    );
-
-    info_emitf(
-        "Transfer queue - { f: %u, i: %u }",
-        vk_state.transfer_queue.family,
-        vk_state.transfer_queue.index
-    );
-
     arena_scratch_release(scratch);
 
     return true;
+
+error:
+    arena_scratch_release(scratch);
+    return false;
 }
