@@ -24,14 +24,14 @@ b32 _win_equip_gfx(mem_arena* arena, window* win) {
         goto error;
     }
 
-    if (!_win_vk_equip_gfx(&win->gfx_info->vk)) {
+    if (!_win_vk_equip_gfx(arena, win, &win->gfx_info->vk)) {
         goto error;
     }
 
     return true;
 
 error:
-    _win_vk_unequip_gfx(&win->gfx_info->vk);
+    _win_vk_unequip_gfx(win, &win->gfx_info->vk);
     arena_temp_end(maybe_temp);
 
     return false;
@@ -40,7 +40,7 @@ error:
 void _win_unequip_gfx(window* win) {
     if (win->gfx_info == NULL) { return; }
 
-    _win_vk_unequip_gfx(&win->gfx_info->vk);
+    _win_vk_unequip_gfx(win, &win->gfx_info->vk);
 }
 
 void win_make_current(window* win) {

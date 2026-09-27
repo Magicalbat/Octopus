@@ -21,13 +21,19 @@ typedef struct {
 // Per-window state
 typedef struct {
     VkSurfaceKHR surface;
+
+    VkSwapchainKHR swapchain;
+    u32 swapchain_img_count;
+    VkImage* swapchain_imgs;
 } win_vk_local_state;
 
 win_vk_global_state vk_state = { 0 };
 
 // The surface must be created before calling this function because surface 
 // creation is platform-dependent
-b32 _win_vk_equip_gfx(win_vk_local_state* win_vk);
+b32 _win_vk_equip_gfx(
+    mem_arena* arena, window* win, win_vk_local_state* win_vk
+);
 
-void _win_vk_unequip_gfx(win_vk_local_state* win_vk);
+void _win_vk_unequip_gfx(window* win, win_vk_local_state* win_vk);
 

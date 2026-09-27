@@ -457,7 +457,99 @@ error:
     return false;
 }
 
-VkSurfaceFormatKHR _win_vk_choose_format(VkSurfaceKHR surface) {
+VkSurfaceFormatKHR _vk_choose_format(VkSurfaceKHR surface);
+VkPresentModeKHR _vk_choose_present_mode(VkSurfaceKHR surface);
+
+b32 _win_vk_equip_gfx(
+    mem_arena* arena, window* win, win_vk_local_state* win_vk
+) {
+    VkSurfaceFormatKHR format = _vk_choose_format(win_vk->surface);
+    VkPresentModeKHR present_mode = _vk_choose_present_mode(win_vk->surface);
+
+    VkSurfaceCapabilitiesKHR capabilities = { 0 };
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+        vk_state.physical_device, win_vk->surface, &capabilities
+    );
+
+    u32 surface_width = CLAMP(
+        win->width,
+        capabilities.minImageExtent.width,
+        capabilities.maxImageExtent.width
+    );
+
+    u32 surface_height = CLAMP(
+        win->height,
+        capabilities.minImageExtent.height,
+        capabilities.maxImageExtent.height
+    );
+
+    u32 min_image_count = MAX(3, capabilities.minImageCount);
+    if (
+        capabilities.maxImageCount > 0 &&
+        min_image_count > capabilities.maxImageCount
+    ) {
+        min_image_count = capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR swapchain_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface = win_vk->surface,
+        .minImageCount = min_image_count,
+        .imageFormat = format.format,
+        .imageColorSpace = format.colorSpace,
+        .imageExtent = (VkExtent2D){
+            .width = surface_width,
+            .height = surface_height
+        },
+        .imageArrayLayers = 1,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .preTransform = capabilities.currentTransform,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = present_mode,
+        .clipped = true,
+    };
+
+    VkResult res = vkCreateSwapchainKHR(
+        vk_state.device, &swapchain_create_info,
+        NULL, &win_vk->swapchain
+    );
+
+    if (res != VK_SUCCESS) {
+        error_emit("Failed to create Vulkan swap chain for window");
+        return false;
+    }
+
+    vkGetSwapchainImagesKHR(
+        vk_state.device, win_vk->swapchain,
+        &win_vk->swapchain_img_count, NULL
+    );
+
+    win_vk->swapchain_imgs = PUSH_ARRAY(
+        arena, VkImage, win_vk->swapchain_img_count
+    );
+
+    vkGetSwapchainImagesKHR(
+        vk_state.device, win_vk->swapchain,
+        &win_vk->swapchain_img_count, win_vk->swapchain_imgs
+    );
+
+    return true;
+}
+
+void _win_vk_unequip_gfx(window* win, win_vk_local_state* win_vk) {
+    if (win == NULL || win_vk == NULL) { return; }
+
+    if (win_vk->swapchain != NULL) {
+        vkDestroySwapchainKHR(vk_state.device, win_vk->swapchain, NULL);
+    }
+
+    if (win_vk->surface != NULL) {
+        vkDestroySurfaceKHR(vk_state.instance, win_vk->surface, NULL);
+    }
+}
+
+VkSurfaceFormatKHR _vk_choose_format(VkSurfaceKHR surface) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     u32 num_formats = 0;
@@ -494,7 +586,7 @@ VkSurfaceFormatKHR _win_vk_choose_format(VkSurfaceKHR surface) {
     return out;
 }
 
-VkPresentModeKHR _win_vk_choose_present_mode(VkSurfaceKHR surface) {
+VkPresentModeKHR _vk_choose_present_mode(VkSurfaceKHR surface) {
     mem_arena_temp scratch = arena_scratch_get(NULL, 0);
 
     u32 num_modes = 0;
@@ -522,21 +614,4 @@ VkPresentModeKHR _win_vk_choose_present_mode(VkSurfaceKHR surface) {
     arena_scratch_release(scratch);
 
     return out;
-}
-
-b32 _win_vk_equip_gfx(win_vk_local_state* win_vk) {
-    VkSurfaceFormatKHR format = _win_vk_choose_format(win_vk->surface);
-    VkPresentModeKHR present_mode = _win_vk_choose_present_mode(
-        win_vk->surface
-    );
-
-    info_emitf("Format: %u %u, Present mode: %u", format.format, format.colorSpace, present_mode);
-}
-
-void _win_vk_unequip_gfx(win_vk_local_state* win_vk) {
-    if (win_vk == NULL) { return; }
-
-    if (win_vk->surface != NULL) {
-        vkDestroySurfaceKHR(vk_state.instance, win_vk->surface, NULL);
-    }
 }
