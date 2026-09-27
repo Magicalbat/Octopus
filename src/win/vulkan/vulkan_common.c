@@ -457,7 +457,80 @@ error:
     return false;
 }
 
+VkSurfaceFormatKHR _win_vk_choose_format(VkSurfaceKHR surface) {
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u32 num_formats = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(
+        vk_state.physical_device, surface,
+        &num_formats, NULL
+    );
+
+    VkSurfaceFormatKHR* formats = PUSH_ARRAY(
+        scratch.arena, VkSurfaceFormatKHR, num_formats
+    );
+    vkGetPhysicalDeviceSurfaceFormatsKHR(
+        vk_state.physical_device, surface,
+        &num_formats, formats
+    );
+
+    VkSurfaceFormatKHR out = formats[0];
+
+    for (u32 i = 0; i < num_formats; i++) {
+        if (
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR &&
+            (
+                formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
+                formats[i].format == VK_FORMAT_R8G8B8A8_SRGB  
+            )
+        ) {
+            out = formats[i];
+            break;
+        }
+    }
+
+    arena_scratch_release(scratch);
+
+    return out;
+}
+
+VkPresentModeKHR _win_vk_choose_present_mode(VkSurfaceKHR surface) {
+    mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+    u32 num_modes = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk_state.physical_device, surface, &num_modes, NULL
+    );
+
+    VkPresentModeKHR* modes = PUSH_ARRAY(
+        scratch.arena, VkPresentModeKHR, num_modes
+    );
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk_state.physical_device, surface, &num_modes, modes
+    );
+
+    // Prefer mailbox but default to FIFO
+    VkPresentModeKHR out = VK_PRESENT_MODE_FIFO_KHR;
+
+    for (u32 i = 0; i < num_modes; i++) {
+        if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+            out = modes[i];
+            break;
+        }
+    }
+
+    arena_scratch_release(scratch);
+
+    return out;
+}
+
 b32 _win_vk_equip_gfx(win_vk_local_state* win_vk) {
+    VkSurfaceFormatKHR format = _win_vk_choose_format(win_vk->surface);
+    VkPresentModeKHR present_mode = _win_vk_choose_present_mode(
+        win_vk->surface
+    );
+
+    info_emitf("Format: %u %u, Present mode: %u", format.format, format.colorSpace, present_mode);
 }
 
 void _win_vk_unequip_gfx(win_vk_local_state* win_vk) {
