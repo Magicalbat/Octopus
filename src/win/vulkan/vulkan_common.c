@@ -534,11 +534,47 @@ b32 _win_vk_equip_gfx(
         &win_vk->swapchain_img_count, win_vk->swapchain_imgs
     );
 
+    win_vk->swapchain_img_views = PUSH_ARRAY(
+        arena, VkImageView, win_vk->swapchain_img_count
+    );
+
+    VkImageViewCreateInfo img_view_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format.format,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1,
+        }
+    };
+
+    for (u32 i = 0; i < win_vk->swapchain_img_count; i++) {
+        img_view_create_info.image = win_vk->swapchain_imgs[i];
+
+        vkCreateImageView(
+            vk_state.device, &img_view_create_info,
+            NULL, &win_vk->swapchain_img_views[i]
+        );
+    }
+
     return true;
 }
 
 void _win_vk_unequip_gfx(window* win, win_vk_local_state* win_vk) {
     if (win == NULL || win_vk == NULL) { return; }
+
+    if (win_vk->swapchain_img_views != NULL) {
+        for (u32 i = 0; i < win_vk->swapchain_img_count; i++) {
+            if (win_vk->swapchain_img_views[i] == NULL) {
+                continue;
+            }
+
+            vkDestroyImageView(
+                vk_state.device, win_vk->swapchain_img_views[i], NULL
+            );
+        }
+    }
 
     if (win_vk->swapchain != NULL) {
         vkDestroySwapchainKHR(vk_state.device, win_vk->swapchain, NULL);

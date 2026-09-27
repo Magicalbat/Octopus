@@ -25,6 +25,7 @@ typedef struct {
     VkSwapchainKHR swapchain;
     u32 swapchain_img_count;
     VkImage* swapchain_imgs;
+    VkImageView* swapchain_img_views;
 } win_vk_local_state;
 
 win_vk_global_state vk_state = { 0 };
