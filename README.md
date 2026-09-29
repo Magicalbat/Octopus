@@ -15,6 +15,8 @@ Octopus will be an application for handwritten note taking
 - `win` (`win_`):
     - Window creation and event handling.
     - Also used to initialize graphics APIs
-- `truetype` (`tt_`):
-    - Functions for working with truetype (.ttf) fonts
+- `shaders`:
+    - This is not C code, but Slang shaders
+    - They are compiled by a separate Makefile rule to a separate spirv/
+        directory
 

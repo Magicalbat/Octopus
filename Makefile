@@ -1,8 +1,8 @@
 
-CC = clang
-CFLAGS = -m64 -std=c11 -Isrc
-DEBUG_CFLAGS = -DDEBUG -g -O0 -fsanitize=address
-RELEASE_CFLAGS = -DNDEBUG -O2
+CC := clang
+CFLAGS := -m64 -std=c11 -Isrc
+DEBUG_CFLAGS := -DDEBUG -g -O0 -fsanitize=address
+RELEASE_CFLAGS := -DNDEBUG -O2
 
 CFLAGS += -Wall -Wextra -pedantic -Wconversion
 CFLAGS += -Wno-gnu-binary-literal -Wno-c23-extensions
@@ -39,21 +39,38 @@ ifeq ($(OS), Windows_NT)
 	endif
 
 	MKDIR_BIN = if not exist bin\$(config) mkdir bin\$(config)
+	MKDIR_BIN += && mkdir bin\$(config)\spirv
 	RM_BIN = rd /s /q bin
 	BIN_EXT = .exe
 else
 	# TODO: vulkan stuff for Linux
 	LFLAGS += -lm -lX11 -lGL -lGLX
 	MKDIR_BIN = mkdir -p bin/$(config)
+	MKDIR_BIN += && mkdir -p bin/$(config)/spirv
 	RM_BIN = rm -r bin
 endif
 
-SRC_DIR = src
-BIN = bin/$(config)/Octopus
+SRC_DIR := src
+BIN := bin/$(config)/Octopus
+
+SLANGC := slangc
+
+SLANG_FLAGS := -target spirv -profile spirv_1_4 -emit-spirv-directly
+SLANG_FLAGS += -fvk-use-entrypoint-name
+
+SHADER_SRC_DIR := $(SRC_DIR)/shaders
+SHADER_IR_DIR := bin/$(config)/spirv
+
+SHADER_SRCS := $(wildcard $(SHADER_SRC_DIR)/*.slang)
+SHADER_IRS := $(patsubst %.slang,$(SHADER_IR_DIR)/%.spv,$(notdir $(SHADER_SRCS)))
 
 all: Octopus
 
-Octopus:
+$(SHADER_IR_DIR)/%.spv: $(SHADER_SRC_DIR)/%.slang
+	@$(MKDIR_BIN)
+	$(SLANGC) $(SLANG_FLAGS) $< -o $@
+
+Octopus: $(SHADER_IRS)
 	@$(MKDIR_BIN)
 	$(CC) $(SRC_DIR)/main.c $(CFLAGS) $(LFLAGS) -o $(BIN)$(BIN_EXT)
 
