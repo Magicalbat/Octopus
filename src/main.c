@@ -9,6 +9,84 @@
 #include "win/win.c"
 #include "debug_draw/debug_draw.c"
 
+#if 1
+
+int main(void) {
+    log_frame_begin();
+
+    plat_init();
+
+    u64 seeds[2] = { 0 };
+    plat_get_entropy(seeds, sizeof(seeds));
+    prng_seed(seeds[0], seeds[1]);
+
+    mem_arena* perm_arena = arena_create(MiB(64), KiB(264), ARENA_FLAG_GROWABLE);
+    mem_arena* frame_arena = arena_create(MiB(16), KiB(264), 0);
+
+    win_gfx_backend_init();
+    window* win = win_create(perm_arena, 1280, 720, STR8_LIT("Octopus"));
+    win_make_current(win);
+
+    // End of setup error frame
+    {
+        mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+        string8 other_logs = log_frame_peek(
+            scratch.arena, LOG_INFO | LOG_WARN, LOG_RES_CONCAT, true
+        );
+
+        if (other_logs.size) {
+            printf("%.*s\n", STR8_FMT(other_logs));
+        }
+
+        arena_scratch_release(scratch);
+
+        string8 err_str = log_frame_end(
+            perm_arena, LOG_ERROR, LOG_RES_CONCAT, true
+        );
+
+        if (err_str.size) {
+            printf("\x1b[31m%.*s\x1b[0m\n", STR8_FMT(err_str));
+            return 1;
+        }
+    }
+
+    while ((win->flags & WIN_FLAG_SHOULD_CLOSE) == 0) {
+        log_frame_begin();
+
+        win_process_events(frame_arena, win);
+
+        win_begin_frame(win);
+
+        win_end_frame(win);
+
+        arena_clear(frame_arena);
+
+        {
+            mem_arena_temp scratch = arena_scratch_get(NULL, 0);
+
+            string8 logs = log_frame_peek(
+                scratch.arena, LOG_ALL, LOG_RES_CONCAT, true
+            );
+
+            if (logs.size) {
+                printf("%.*s\n", STR8_FMT(logs));
+            }
+
+            arena_scratch_release(scratch);
+        }
+    }
+
+    win_destroy(win);
+
+    win_gfx_backend_terminate();
+
+    arena_destroy(perm_arena);
+
+    return 0;
+}
+
+#else
+
 #define _PB_SIZE 64
 
 typedef struct point_bucket {
@@ -344,3 +422,4 @@ void point_list_clear(point_list* pl, point_free_list* pfl) {
     memset(pl, 0, sizeof(point_list));
 }
 
+#endif

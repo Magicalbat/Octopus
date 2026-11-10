@@ -59,7 +59,8 @@ string8 plat_file_read(mem_arena* arena, string8 file_name) {
 
     HANDLE file_handle = CreateFileW(
         (LPCWSTR)file_name16.str, GENERIC_READ,
-        0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
     );
 
     arena_scratch_release(scratch);
@@ -112,7 +113,7 @@ b32 plat_file_write(string8 file_name, const string8_list* list, b32 append) {
     HANDLE file_handle = CreateFileW(
         (LPCWSTR)file_name16.str,
         append ? FILE_APPEND_DATA : GENERIC_WRITE,
-        0, NULL,
+        FILE_SHARE_READ, NULL,
         append ? OPEN_ALWAYS : CREATE_ALWAYS,
         FILE_ATTRIBUTE_NORMAL, NULL
     );

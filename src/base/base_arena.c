@@ -117,50 +117,47 @@ void* arena_push(mem_arena* arena, u64 size, b32 non_zero) {
     return out;
 }
 
-void arena_pop(mem_arena* arena, u64 size) {
-    size = MIN(size, arena_get_pos(arena));
+void arena_pop_to(mem_arena* arena, u64 pos) {
+    u64 cur_pos = arena_get_pos(arena);
+    pos = CLAMP(pos, ARENA_HEADER_SIZE, cur_pos);
 
     mem_arena* current = arena->current;
-    while (current != NULL && size > current->pos) {
+    while (current != NULL && current->base_pos >= pos) {
         mem_arena* prev = current->prev;
 
-        size -= current->pos;
         plat_mem_release(current, current->reserve_size);
 
         current = prev;
     }
 
     arena->current = current;
-
-    size = MIN(current->pos - ARENA_HEADER_SIZE, size);
-    current->pos -= size;
+    current->pos = MAX(pos - current->base_pos, ARENA_HEADER_SIZE);
 
     if (arena->flags & ARENA_FLAG_DECOMMIT) {
         u64 required_commit_pos = current->pos + current->commit_size - 1;
         required_commit_pos -= required_commit_pos % current->commit_size;
+        required_commit_pos = MIN(required_commit_pos, current->reserve_size);
 
-        if (required_commit_pos < arena->commit_pos) {
+        if (required_commit_pos < current->commit_pos) {
             u8* commit_pointer = (u8*)current + required_commit_pos;
 
             if (!plat_mem_decommit(
-                commit_pointer, arena->commit_pos - required_commit_pos
+                commit_pointer, current->commit_pos - required_commit_pos
             )) {
                 plat_fatal_error(
                     "Fatal error: failed to decommit arena memory", 1
                 );
             }
-
-            arena->commit_pos = required_commit_pos;
+            
+            current->commit_pos = required_commit_pos;
         }
     }
 }
 
-void arena_pop_to(mem_arena* arena, u64 pos) {
+void arena_pop(mem_arena* arena, u64 size) {
     u64 cur_pos = arena_get_pos(arena);
-    
-    pos = MIN(pos, cur_pos);
-
-    arena_pop(arena, cur_pos - pos);
+    size = MIN(size, cur_pos);
+    arena_pop_to(arena, cur_pos - size);
 }
 
 void arena_clear(mem_arena* arena) {
